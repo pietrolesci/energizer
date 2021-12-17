@@ -51,7 +51,7 @@ plugins:
       lang: en
   - mkdocstrings:
       watch:
-        - pytorch-energizer
+        - energizer
 extra:
   social:
     - icon: fontawesome/brands/twitter
