@@ -1,3 +1,5 @@
+import pytest
+
 from energizer.data import ActiveDataset
 
 
@@ -48,6 +50,9 @@ def test_reset_at_labelling_step(mock_dataset):
     assert ads.labelled_dataset.indices == list(range(len(mock_dataset)))
     assert ads.has_labelled_data is True
     assert ads.has_unlabelled_data is False
+
+    with pytest.raises(ValueError):
+        assert ads.reset_at_labelling_step(100)
 
 
 def test_label(mock_dataset):
