@@ -13,15 +13,19 @@ nav:
 theme:
   name: material
   language: en
+  font:
+    text: Roboto
   #logo: assets/logo.png
   palette:
     scheme: preference
-    primary: indigo
-    accent: indigo
+    primary: blue
+    accent: yellow
   features:
     - navigation.indexes
     - navigation.instant
     - navigation.tabs.sticky
+  icon:
+    repo: fontawesome/brands/github
 markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:materialx.emoji.twemoji
@@ -67,6 +71,10 @@ extra:
       name: Github
     - icon: material/email
       link: "mailto:pietrolesci@outlook.com"
+  version:
+    provider: mike
+edit_uri: edit/main/docs/
+
   # to enable disqus, uncomment the following and put your disqus id below
   # disqus: disqus_id
 # uncomment the following and put your google tracking id below to enable GA
