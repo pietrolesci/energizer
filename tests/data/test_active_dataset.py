@@ -70,6 +70,12 @@ def test_label(mock_dataset):
     ads.label([0, 0])
     assert ads.labelled_dataset.indices == [0, 1, 2]
 
+    with pytest.raises(ValueError):
+        assert ads.label(list(range(ads.pool_size + 10)))
+
+    with pytest.raises(ValueError):
+        assert ads.label(ads.pool_size + 10)
+
 
 def test_dataset_indexing(mock_dataset):
     ads = ActiveDataset(mock_dataset)
@@ -89,3 +95,19 @@ def test_hf_dataset_indexing(mock_hf_dataset):
         assert ads[i] == mock_hf_dataset[i]
 
     assert ads[[0, 1]] == mock_hf_dataset[[0, 1]]
+
+
+def test_sample(mock_dataset):
+    ads = ActiveDataset(mock_dataset)
+
+    with pytest.raises(ValueError):
+        assert ads.sample_pool_idx(-1)
+
+    with pytest.raises(ValueError):
+        assert ads.sample_pool_idx(0)
+
+    with pytest.raises(ValueError):
+        assert ads.sample_pool_idx(ads.pool_size + 1)
+
+    assert len(ads.sample_pool_idx(ads.pool_size)) == ads.pool_size
+    assert len(ads.sample_pool_idx(1)) == 1
