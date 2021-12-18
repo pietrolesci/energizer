@@ -2,7 +2,29 @@ from typing import Any, List, Union
 
 import datasets
 import numpy as np
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset
+
+
+class Subset:
+    """This is a shallow reimplementation of `torch.data.utils.Subset`."""
+
+    def __init__(self, dataset: Union[Dataset, datasets.Dataset], indices: List[int]) -> None:
+        """Subset of a dataset at specified indices.
+
+        Args:
+            dataset (Union[Dataset, datasets.Dataset]): The whole Dataset
+            indices (List[int]): Indices in the whole set selected for subset
+        """
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx: Union[int, List[int]]) -> Any:
+        if isinstance(idx, list):
+            return self.dataset[[self.indices[i] for i in idx]]
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self) -> int:
+        return len(self.indices)
 
 
 class ActiveDataset:
