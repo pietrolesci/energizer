@@ -41,13 +41,13 @@ class DatasetSubset(Subset):
 
 
 class HFSubset(Subset):
-    """Defines a batch-indexable `Subset` for `torch.data.utils.Dataset`'s."""
+    """Defines a batch-indexable `Subset` for `datasets.Dataset`'s."""
 
     def __init__(self, dataset: datasets.Dataset, indices: List[int]) -> None:
         """Subset of a dataset at specified indices.
 
         Args:
-            dataset (Union[Dataset, datasets.Dataset]): The whole Dataset
+            dataset (datasets.Dataset): An HuggingFace Dataset
             indices (List[int]): Indices in the whole set selected for subset
         """
         self.dataset = dataset
@@ -129,11 +129,8 @@ class ActiveDataset:
     def __getitem__(self, idx: Any) -> Any:
         """Returns element from the `labelled_dataset`.
 
-        It preserves the indexing capability of the underlyting dataset.
-        For example, if the underlying dataset
-        is a `datasets.arrow_dataset.Dataset` then it is possible to index with a `List[int]`.
-        On the other hand, if the underlying dataset is a `torch.utils.data.Dataset`, indexing
-        with a `List[int]` raises a `TypeError`.
+        It allows for batch-indexing since it indexes an instance of the class `Subset`.
+        So, even `torch.utils.data.Dataset`'s can be indexed with `List[int]`.
 
         Args:
             idx (Any): The index to retrieve. Its data type depends on the data type that the
@@ -197,6 +194,19 @@ class ActiveDataset:
         Args:
             pool_idx (List[int]): the index (relative to the pool_dataset, not the overall data) to label.
         """
+        if isinstance(pool_idx, list):
+            if len(np.unique(pool_idx)) > self.pool_size:
+                raise ValueError(
+                    f"Pool has {self.pool_size} instances, cannot label {len(np.unique(pool_idx))} instances."
+                )
+
+            elif max(pool_idx) > self.pool_size:
+                raise ValueError(f"Cannot label instance {max(pool_idx)} for pool dataset of size {self.pool_size}.")
+
+        else:
+            if pool_idx > self.pool_size:
+                raise ValueError(f"Cannot label instance {pool_idx} for pool dataset of size {self.pool_size}.")
+
         labelling_step = self.last_labelling_step
         indices = self._pool_to_oracle(pool_idx)
         self._mask[indices] = labelling_step + 1
@@ -219,12 +229,13 @@ class ActiveDataset:
         self.labelled_dataset.indices = np.where((self._mask > 0) & (self._mask <= labelling_step))[0].tolist()
         self.pool_dataset.indices = np.where(self._mask == 0)[0].tolist()
 
-    # @classmethod
-    # def from_dataset(cls, dataset: Dataset):
-    #     """Creates an active learning dataset from a Pytorch Dataset."""
-    #     return cls(dataset)
+    def sample_pool_idx(self, size: int) -> np.ndarray:
+        """Samples indices from pool uniformly.
 
-    # @classmethod
-    # def from_hf_dataset(cls, dataset: datasets.Dataset):
-    #     """Creates an active learning dataset from an HuggingFace Dataset."""
-    #     return cls(dataset)
+        Args:
+            size (int): The number of indices to sample from the pool. Must be 0 < size <= pool_size
+        """
+        if size <= 0 or size > self.pool_size:
+            raise ValueError(f"`size` must be 0 < size <= {self.pool_size} not {size}.")
+
+        return np.random.permutation(self.pool_size)[:size]
