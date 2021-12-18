@@ -1,4 +1,4 @@
-from typing import Any, List, Union
+from typing import Any, Dict, List, Union
 
 import datasets
 import numpy as np
@@ -8,7 +8,42 @@ from torch.utils.data import Dataset
 class Subset:
     """This is a shallow reimplementation of `torch.data.utils.Subset`."""
 
-    def __init__(self, dataset: Union[Dataset, datasets.Dataset], indices: List[int]) -> None:
+    dataset: Any
+    indices: List[int]
+
+    def __repr__(self) -> str:
+        return f"<Subset of {type(self.dataset)}>"
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        raise NotImplementedError
+
+
+class DatasetSubset(Subset):
+    """Defines a batch-indexable `Subset` for `torch.data.utils.Dataset`'s."""
+
+    def __init__(self, dataset: Dataset, indices: List[int]) -> None:
+        """Subset of a dataset at specified indices.
+
+        Args:
+            dataset (Dataset): A Pytorch Dataset
+            indices (List[int]): Indices in the whole set selected for subset
+        """
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx: Union[int, List[int]]) -> Union[Any, List]:
+        if isinstance(idx, list):
+            return [self.dataset[self.indices[i]] for i in idx]
+        return self.dataset[self.indices[idx]]
+
+
+class HFSubset(Subset):
+    """Defines a batch-indexable `Subset` for `torch.data.utils.Dataset`'s."""
+
+    def __init__(self, dataset: datasets.Dataset, indices: List[int]) -> None:
         """Subset of a dataset at specified indices.
 
         Args:
@@ -18,13 +53,12 @@ class Subset:
         self.dataset = dataset
         self.indices = indices
 
-    def __getitem__(self, idx: Union[int, List[int]]) -> Any:
+    def __getitem__(self, idx: Union[int, List[int]]) -> Union[Dict, List]:
         if isinstance(idx, list):
-            return self.dataset[[self.indices[i] for i in idx]]
+            # HggingFace datasets are indeed indexable by List[int] in their
+            # implementation they report Union[int, slice, str]
+            return self.dataset[[self.indices[i] for i in idx]]  # type: ignore
         return self.dataset[self.indices[idx]]
-
-    def __len__(self) -> int:
-        return len(self.indices)
 
 
 class ActiveDataset:
@@ -81,11 +115,11 @@ class ActiveDataset:
             pool_dataset (Subset): The pool dataset.
         """
         self.dataset = dataset
+        subset_cls = DatasetSubset if isinstance(self.dataset, Dataset) else HFSubset
 
-        # self._mask = np.full((len(dataset),), False)
         self._mask = np.full((len(dataset),), 0)
-        self.labelled_dataset = Subset(self.dataset, [])
-        self.pool_dataset = Subset(self.dataset, [])
+        self.labelled_dataset = subset_cls(self.dataset, [])
+        self.pool_dataset = subset_cls(self.dataset, [])
         self._update_index_map()
 
     def __len__(self):
@@ -184,3 +218,13 @@ class ActiveDataset:
             )
         self.labelled_dataset.indices = np.where((self._mask > 0) & (self._mask <= labelling_step))[0].tolist()
         self.pool_dataset.indices = np.where(self._mask == 0)[0].tolist()
+
+    # @classmethod
+    # def from_dataset(cls, dataset: Dataset):
+    #     """Creates an active learning dataset from a Pytorch Dataset."""
+    #     return cls(dataset)
+
+    # @classmethod
+    # def from_hf_dataset(cls, dataset: datasets.Dataset):
+    #     """Creates an active learning dataset from an HuggingFace Dataset."""
+    #     return cls(dataset)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Tests for `energizer` package."""
 
+import datasets
 import pytest
 from torch.utils.data import Dataset
 
@@ -19,3 +20,11 @@ def mock_dataset():
             return self.dataset[index]
 
     return PytorchDataset()
+
+
+@pytest.fixture
+def mock_hf_dataset():
+    data = [(f"instance_{i}", f"label_{i}") for i in range(10)]
+    dataset = datasets.Dataset.from_dict({"input": [d[0] for d in data], "target": [d[1] for d in data]})
+
+    return dataset
