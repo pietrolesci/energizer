@@ -71,11 +71,21 @@ def test_label(mock_dataset):
     assert ads.labelled_dataset.indices == [0, 1, 2]
 
 
-def test_indexing(mock_dataset):
+def test_dataset_indexing(mock_dataset):
     ads = ActiveDataset(mock_dataset)
     ads.label([0, 1, 2])
 
     for i in [0, 1, 2]:
         assert ads[i] == mock_dataset[i]
 
-    assert [ads[i] for i in [0, 1]] == [mock_dataset[i] for i in [0, 1]]
+    assert ads[[0, 1]] == [mock_dataset[i] for i in [0, 1]]
+
+
+def test_hf_dataset_indexing(mock_hf_dataset):
+    ads = ActiveDataset(mock_hf_dataset)
+    ads.label([0, 1, 2])
+
+    for i in [0, 1, 2]:
+        assert ads[i] == mock_hf_dataset[i]
+
+    assert ads[[0, 1]] == mock_hf_dataset[[0, 1]]
