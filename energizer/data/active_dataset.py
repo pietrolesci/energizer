@@ -17,7 +17,7 @@ class Subset:
     def __len__(self):
         return len(self.indices)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: Union[int, List[int]]):
         raise NotImplementedError
 
 
