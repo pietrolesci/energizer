@@ -246,6 +246,8 @@ class ActiveDataset:
             val_split (Optional[float]): The proportion of the number of instances to add to the validation set.
                 This is considered only when `len(pool_idx) > 1`.
         """
+        if not isinstance(pool_idx, int) and not isinstance(pool_idx, list):
+            raise ValueError(f"`pool_idx` must be of type `int` or `List[int]`, not {type(pool_idx)}.")
         if isinstance(pool_idx, list):
             if len(np.unique(pool_idx)) > self.pool_size:
                 raise ValueError(
@@ -300,7 +302,7 @@ class ActiveDataset:
         self.train_dataset.indices = indices[~val_mask].tolist()
         self.val_dataset.indices = indices[val_mask].tolist()
 
-    def sample_pool_idx(self, size: int) -> np.ndarray:
+    def sample_pool_idx(self, size: int) -> List[int]:
         """Samples indices from pool uniformly.
 
         Args:
@@ -309,4 +311,4 @@ class ActiveDataset:
         if size <= 0 or size > self.pool_size:
             raise ValueError(f"`size` must be 0 < size <= {self.pool_size} not {size}.")
 
-        return np.random.permutation(self.pool_size)[:size]
+        return np.random.permutation(self.pool_size)[:size].tolist()
