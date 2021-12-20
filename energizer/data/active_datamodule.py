@@ -123,34 +123,6 @@ class ActiveDataModule(LightningDataModule):
             persistent_workers=self.persistent_workers,
         )
 
-    @property
-    def train_dataset(self):
-        """Returns the train dataset from the underlying active dataset."""
-        return self._active_dataset.train_dataset
-
-    @property
-    def pool_dataset(self):
-        """Returns the pool dataset from the underlying active dataset."""
-        return self._active_dataset.pool_dataset
-
-    @property
-    def val_dataset(self):
-        """Returns the validation dataset.
-
-        It returns the underlying active dataset if `val_split` is True or if `val_dataset` is provided.
-        """
-        if self._val_dataset:
-            return self._val_dataset
-        elif self.val_split and self.val_split > 0:
-            return self._active_dataset.val_dataset
-        else:
-            return None
-
-    @property
-    def test_dataset(self):
-        """Returns the test dataset from the underlying active dataset."""
-        return self._test_dataset
-
     def train_dataloader(self) -> DataLoader:
         """Returns the train dataloader."""
         return self._make_dataloader(self.train_dataset)
@@ -170,6 +142,88 @@ class ActiveDataModule(LightningDataModule):
     def pool_dataloader(self) -> DataLoader:
         """Returns the pool dataloader."""
         return self._make_dataloader(self.pool_dataset)
+
+    @property
+    def train_dataset(self) -> EnergizerSubset:
+        """Returns the train dataset from the underlying active dataset."""
+        return self._active_dataset.train_dataset
+
+    @property
+    def pool_dataset(self) -> EnergizerSubset:
+        """Returns the pool dataset from the underlying active dataset."""
+        return self._active_dataset.pool_dataset
+
+    @property
+    def val_dataset(self) -> Optional[Union[EnergizerSubset, Dataset, datasets.Dataset]]:
+        """Returns the validation dataset.
+
+        It returns the underlying active dataset if `val_split` is True or if `val_dataset` is provided.
+        """
+        if self._val_dataset:
+            return self._val_dataset
+        elif self.val_split and self.val_split > 0:
+            return self._active_dataset.val_dataset
+        else:
+            return None
+
+    @property
+    def test_dataset(self) -> Optional[Union[Dataset, datasets.Dataset]]:
+        """Returns the test dataset from the underlying active dataset."""
+        return self._test_dataset
+
+    @property
+    def train_size(self) -> int:
+        """Returns the length of the `labelled_dataset` that has been assigned to training."""
+        return self._active_dataset.train_size
+
+    @property
+    def val_size(self) -> int:
+        """Returns the length of the `labelled_dataset` that has been assigned to validation."""
+        return self._active_dataset.val_size
+
+    @property
+    def total_labelled_size(self) -> int:
+        """Returns the number of all the labelled instances."""
+        return self._active_dataset.total_labelled_size
+
+    @property
+    def pool_size(self) -> int:
+        """Returns the length of the `pool_dataset`."""
+        return self._active_dataset.pool_size
+
+    @property
+    def has_labelled_data(self) -> bool:
+        """Checks whether there are labelled data available."""
+        return self._active_dataset.has_labelled_data
+
+    @property
+    def has_unlabelled_data(self) -> bool:
+        """Checks whether there are data to be labelled."""
+        return self._active_dataset.has_unlabelled_data
+
+    @property
+    def last_labelling_step(self) -> int:
+        """Returns the last active learning step."""
+        return self._active_dataset.last_labelling_step
+
+    def reset_at_labelling_step(self, labelling_step: int) -> None:
+        """Resets the dataset at the state in which it was after the last `labelling_step`.
+
+        To bring it back to the latest labelling step, simply run
+        `obj.reset_at_labellling_step(obj.last_labelling_step)`.
+
+        Args:
+            labelling_step (int): The labelling step at which the dataset status should be brought.
+        """
+        self._active_dataset.reset_at_labelling_step(labelling_step)
+
+    def sample_pool_idx(self, size: int) -> List[int]:
+        """Samples indices from pool uniformly.
+
+        Args:
+            size (int): The number of indices to sample from the pool. Must be 0 < size <= pool_size
+        """
+        return self._active_dataset.sample_pool_idx(size)
 
     def label(self, pool_idx: Union[int, List[int]], val_split: Optional[float] = None) -> None:
         """Convenience method that calls the underlying self._active_dataset.label method.
