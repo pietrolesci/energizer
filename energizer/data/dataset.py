@@ -1,8 +1,10 @@
+from copy import deepcopy
 from typing import Any, Dict, List, Optional, Union
 
 import datasets
 import numpy as np
 from numpy.random import default_rng
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch.utils.data import Dataset
 
 
@@ -12,8 +14,12 @@ class EnergizerSubset:
     It serves as base class for the source-specific implementation of Subset.
     """
 
-    dataset: Any
-    indices: List[int]
+    def __init__(self, dataset: Any, indices: List[int]) -> None:
+        if not isinstance(indices, list):
+            raise MisconfigurationException(f"Indices must be of type `List[int], not {type(indices)}")
+
+        self.dataset = dataset
+        self.indices = indices
 
     def __repr__(self) -> str:
         return (
@@ -37,8 +43,7 @@ class TorchSubset(EnergizerSubset):
             dataset (Dataset): A Pytorch Dataset
             indices (List[int]): Indices in the whole set selected for subset
         """
-        self.dataset = dataset
-        self.indices = indices
+        super().__init__(dataset, indices)
 
     def __getitem__(self, idx: Union[int, List[int]]) -> Union[Any, List]:
         if isinstance(idx, list):
@@ -46,7 +51,7 @@ class TorchSubset(EnergizerSubset):
         return self.dataset[self.indices[idx]]
 
 
-class HFSubset(EnergizerSubset):
+class HuggingFaceSubset(EnergizerSubset):
     """Defines a batch-indexable `Subset` for `datasets.Dataset`'s."""
 
     def __init__(self, dataset: datasets.Dataset, indices: List[int]) -> None:
@@ -56,8 +61,7 @@ class HFSubset(EnergizerSubset):
             dataset (datasets.Dataset): An HuggingFace Dataset
             indices (List[int]): Indices in the whole set selected for subset
         """
-        self.dataset = dataset
-        self.indices = indices
+        super().__init__(dataset, indices)
 
     def __getitem__(self, idx: Union[int, List[int]]) -> Union[Dict, List]:
         if isinstance(idx, list):
@@ -161,15 +165,15 @@ class ActiveDataset:
         """
         self.dataset = dataset
         self.seed = seed
-        subset_cls = TorchSubset if isinstance(self.dataset, Dataset) else HFSubset
+        self._subset_cls = TorchSubset if isinstance(self.dataset, Dataset) else HuggingFaceSubset
 
         self._mask = np.zeros((len(dataset),), dtype=int)
         self._val_mask = np.array([], dtype=np.bool)
         self._rng = default_rng(self.seed)
 
-        self.train_dataset = subset_cls(self.dataset, [])
-        self.val_dataset = subset_cls(self.dataset, [])
-        self.pool_dataset = subset_cls(self.dataset, [])
+        self.train_dataset = self._subset_cls(self.dataset, [])
+        self.val_dataset = self._subset_cls(self.dataset, [])
+        self.pool_dataset = self._subset_cls(self.dataset, [])
         self._update_index_map()
 
     def __repr__(self) -> str:
@@ -264,19 +268,32 @@ class ActiveDataset:
         if val_split and (val_split < 0 or val_split >= 1):
             raise ValueError(f"`val_split` should 0 <= `val_split` < 1, not {val_split}.")
 
-        labelling_step = self.last_labelling_step
+        # acquire labels
+        current_labelling_step = self.last_labelling_step + 1
         indices = self._pool_to_oracle(pool_idx)
-        self._mask[indices] = labelling_step + 1
+        self._mask[indices] = current_labelling_step
+
+        # split between training and validation
+        val_mask = np.full(
+            (
+                len(
+                    indices,
+                )
+            ),
+            False,
+            dtype=bool,
+        )
 
         if val_split and len(indices) > 1:
+
             how_many = int(np.floor(len(indices) * val_split).item())
             if how_many == 0:
                 how_many += 1
-            val_mask = ([True] * how_many) + ([False] * (len(indices) - how_many))
+            val_mask[:how_many] = True
             val_mask = self._rng.permutation(val_mask)
             self._val_mask = np.append(self._val_mask, val_mask)
         else:
-            self._val_mask = np.append(self._val_mask, [False] * len(indices))
+            self._val_mask = np.append(self._val_mask, val_mask)
 
         self._update_index_map()
 
@@ -307,8 +324,36 @@ class ActiveDataset:
 
         Args:
             size (int): The number of indices to sample from the pool. Must be 0 < size <= pool_size
+
+        Returns:
+            The list of indices from the pool to label.
         """
         if size <= 0 or size > self.pool_size:
             raise ValueError(f"`size` must be 0 < size <= {self.pool_size} not {size}.")
 
         return np.random.permutation(self.pool_size)[:size].tolist()
+
+    def curriculum_dataset(self) -> EnergizerSubset:
+        """Returns an EnergizerSubset with the labelled instances, in order of labelling.
+
+        An instance of EnergizerSubset (based on the underlying dataset type) where the
+        indices are the indices of the labelled instances. They are ordered based on when
+        they have been labelled. For example, instances labelled first during training will
+        appear as first.
+
+        Note that the order is preserved up to the round of labellization. This means that if
+        two instances are labelled in the same round of labellization, their order does not follow
+        any specific logic related to algorithm. Instead, it follows the convention used in the
+        function `numpy.argsort`: it handles the tie by returning the index of the item which appears
+        last in the array.
+
+        Returns:
+            An instance of EnergizerSubset (based on the underlying dataset type).
+        """
+        mask = deepcopy(self._mask)
+        BIG_NUMBER = len(mask) + 1e3
+        mask[mask == 0] = BIG_NUMBER  # put 0's at the end
+        indices = np.argsort(mask)
+        indices = indices[mask[indices] < BIG_NUMBER]  # filter the not labelled (i.e., 0's)
+
+        return self._subset_cls(self.dataset, indices.tolist())
