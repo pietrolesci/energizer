@@ -30,7 +30,7 @@ from pytorch_lightning.utilities.model_helpers import is_overridden
 
 from energizer import data
 from energizer.data import ActiveDataModule
-from energizer.strategies import LeastConfidence
+from energizer.strategies import EnergizerStrategy
 
 
 class ActiveLearningLoop(Loop):
@@ -71,7 +71,7 @@ class ActiveLearningLoop(Loop):
 
     def __init__(
         self,
-        al_module,
+        strategy: EnergizerStrategy,
         query_size: int = 2,
         label_epoch_frequency: int = 1,
         reset_weights: bool = True,
@@ -80,6 +80,7 @@ class ActiveLearningLoop(Loop):
     ) -> None:
         """
         Args:
+            strategy (EnergizerStrategy): An active learning strategy.
             label_epoch_frequency (int): Number of epoch to run before requesting labellization.
             reset_weights (bool): Whether to reset the weights to their initial state at
                 the end of each labelling iteration.
@@ -90,7 +91,7 @@ class ActiveLearningLoop(Loop):
                 train for a minimum number of iterations by resampling the available data.
         """
         super().__init__()
-        self.al_module = al_module
+        self.strategy = strategy
         self.query_size = query_size
         self.label_epoch_frequency = label_epoch_frequency
         self.reset_weights = reset_weights
@@ -103,7 +104,7 @@ class ActiveLearningLoop(Loop):
         self.pool_loop: Optional[PredictionLoop] = None
         # self.labelling_loop = None
         self.lightning_module: Optional[LightningModule] = None
-        self.initial_module_state_dict: Optional[Dict[str, torch.Tensor]] = None
+        self.strategy_state_dict: Optional[Dict[str, torch.Tensor]] = None
 
     @property
     def done(self) -> bool:
@@ -141,15 +142,15 @@ class ActiveLearningLoop(Loop):
                 f"ActiveLearningLoop requires the ActiveDataModule, not {type(self.trainer.datamodule)}."
             )
         self.lightning_module = self.trainer.lightning_module
-        self.initial_module_state_dict = deepcopy(self.lightning_module.state_dict())
-        self.al_module.connect(self.lightning_module, self.query_size)
+        self.strategy_state_dict = deepcopy(self.lightning_module.state_dict())
+        self.strategy.connect(self.lightning_module, self.query_size)
         self.trainer.datamodule._min_steps_per_epoch = self.min_steps_per_epoch
 
         if not self.fit_loop or not self.test_loop or not self.pool_loop:
             raise MisconfigurationException("`ActiveLearningLoop` must be connected to a `Trainer`.")
 
     def on_advance_start(self, *args: Any, **kwargs: Any) -> None:
-        self.al_module._reset()
+        self.strategy._reset()
         self.progress.increment_ready()
 
     def advance(self, *args: Any, **kwargs: Any) -> None:
@@ -172,7 +173,7 @@ class ActiveLearningLoop(Loop):
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_predicting_pool()
             self.pool_loop.run()  # type: ignore
-            indices = self.al_module.indices.tolist()
+            indices = self.strategy.indices.tolist()  # type: ignore
 
             # print("Indices Pool:", indices, flush=True)
             # print("Pool Indices:", self.trainer.datamodule.pool_dataset.indices, flush=True)
@@ -187,7 +188,7 @@ class ActiveLearningLoop(Loop):
         """Reset the LightningModule."""
         self._reset_fitting()  # reset the model to load the correct state_dict
         if self.reset_weights:
-            self.trainer.lightning_module.load_state_dict(self.initial_module_state_dict)
+            self.trainer.lightning_module.load_state_dict(self.strategy_state_dict)
         self.progress.increment_completed()
 
     def _reset_fitting(self) -> None:
@@ -210,7 +211,7 @@ class ActiveLearningLoop(Loop):
         self._reset_pool_dataloader()
         self.trainer.state.fn = TrainerFn.PREDICTING
         self.trainer.predicting = True
-        self._connect_model(self.al_module)
+        self._connect_model(self.strategy)
 
     def _connect_model(self, model: LightningModule):
         self.trainer.training_type_plugin.connect(model)
