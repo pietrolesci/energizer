@@ -81,7 +81,7 @@ class ActiveDataModule(LightningDataModule):
         self._predict_dataset = predict_dataset
 
         # this will be overwritten in the ActiveLearningLoop
-        self._min_steps_per_epoch = None
+        self._min_steps_per_epoch: Optional[int] = None
 
         # check val_dataset and val_split
         if self._val_dataset and self.val_split:
