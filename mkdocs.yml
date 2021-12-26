@@ -1,3 +1,5 @@
+# docs here: https://squidfunk.github.io/mkdocs-material/
+
 site_name: Pytorch-Energizer
 site_url: https://pietrolesci.github.io/pytorch-energizer
 repo_url: https://github.com/pietrolesci/pytorch-energizer
@@ -21,9 +23,13 @@ theme:
     primary: blue
     accent: yellow
   features:
-    - navigation.indexes
+    # - navigation.indexes
     - navigation.instant
-    - navigation.tabs.sticky
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    # - navigation.tabs.sticky
+    # - toc.integrate
   icon:
     repo: fontawesome/brands/github
 markdown_extensions:
@@ -73,6 +79,7 @@ extra:
       link: "mailto:pietrolesci@outlook.com"
   version:
     provider: mike
+    default: stable
 edit_uri: edit/main/docs/
 
   # to enable disqus, uncomment the following and put your disqus id below
