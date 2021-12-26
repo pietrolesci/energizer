@@ -2,6 +2,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+*/lightning_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
