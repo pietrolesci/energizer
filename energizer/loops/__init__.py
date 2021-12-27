@@ -12,25 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from copy import deepcopy
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops import Loop
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.dataloader.prediction_loop import PredictionLoop
-from pytorch_lightning.loops.epoch.prediction_epoch_loop import PredictionEpochLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
-from pytorch_lightning.trainer.connectors.data_connector import _DataLoaderSource
 from pytorch_lightning.trainer.progress import Progress
-from pytorch_lightning.trainer.states import RunningStage, TrainerFn, TrainerStatus
+from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.model_helpers import is_overridden
 
-from energizer import data
 from energizer.data import ActiveDataModule
-from energizer.strategies import EnergizerStrategy
+from energizer.strategies.base import EnergizerStrategy
 
 
 class ActiveLearningLoop(Loop):
@@ -121,10 +117,13 @@ class ActiveLearningLoop(Loop):
         """Connects to the default fit_loop of the trainer."""
         # attach the loop for training and validation
         self.fit_loop = trainer.fit_loop
+
         # attach the loop for testing
         self.test_loop = trainer.test_loop
+
         # attach the loop for evaluation on the pool
-        self.pool_loop = trainer.predict_loop
+        self.pool_loop = trainer.test_loop  # trainer.predict_loop
+
         # patch arguments
         self.max_epochs = self.fit_loop.max_epochs
         self.fit_loop.max_epochs = self.label_epoch_frequency
@@ -150,7 +149,7 @@ class ActiveLearningLoop(Loop):
             raise MisconfigurationException("`ActiveLearningLoop` must be connected to a `Trainer`.")
 
     def on_advance_start(self, *args: Any, **kwargs: Any) -> None:
-        self.strategy._reset()
+        self.strategy.reset()
         self.progress.increment_ready()
 
     def advance(self, *args: Any, **kwargs: Any) -> None:
@@ -209,8 +208,10 @@ class ActiveLearningLoop(Loop):
     def _reset_predicting_pool(self):
         """Reset pool dataloader, and states."""
         self._reset_pool_dataloader()
-        self.trainer.state.fn = TrainerFn.PREDICTING
-        self.trainer.predicting = True
+        # self.trainer.state.fn = TrainerFn.PREDICTING
+        # self.trainer.predicting = True
+        self.trainer.state.fn = TrainerFn.TESTING
+        self.trainer.testing = True
         self._connect_model(self.strategy)
 
     def _connect_model(self, model: LightningModule):
@@ -219,5 +220,7 @@ class ActiveLearningLoop(Loop):
     def _reset_pool_dataloader(self) -> None:
         # Hack
         dataloader = self.trainer.datamodule.pool_dataloader()
-        self.trainer.num_predict_batches = [len(dataloader)]
-        self.trainer.predict_dataloaders = [dataloader]
+        # self.trainer.num_predict_batches = [len(dataloader)]
+        # self.trainer.predict_dataloaders = [dataloader]
+        self.trainer.num_test_batches = [len(dataloader)]
+        self.trainer.test_dataloaders = [dataloader]
