@@ -241,7 +241,22 @@ class ActiveDataset:
         return [self.pool_dataset.indices[pool_idx]]
 
     def label(self, pool_idx: Union[int, List[int]], val_split: Optional[float] = None) -> None:
-        """Adds instances to the `labelled_dataset`.
+        """Adds instances to the `train_dataset` and, optionally, to the `val_dataset`.
+
+        Note (1): indices are sorted. For example, assuming this is the first labelling iteration so
+        that pool indices and oracle indices coincide, `label([0, 8, 7])` will add `[0, 7, 8]` to the
+        `train_dataset.indices`.
+
+        Note (2): when `val_split` is used, the validation dataset will always receive at least one instance
+        if at least two indices are passed to be labelled. This is to avoid that the validation dataset
+        remains empty.
+
+        Note (3): when a list of indices is passed, only the unique values are counted. That is
+        `pool_idx = [0, 0]` will only label instance 0. It is not recursively applied so that
+        there are multiple calls to `label`.
+
+        Note (4): if `val_split` is passed, but only one instance is labelled, the instance will always be
+        to the train dataset and thus the validation set will always be empty.
 
         Args:
             pool_idx (List[int]): The index (relative to the pool_dataset, not the overall data) to label.
@@ -274,15 +289,9 @@ class ActiveDataset:
         self._mask[indices] = current_labelling_step
 
         # split between training and validation
-        val_mask = np.full(
-            (
-                len(
-                    indices,
-                )
-            ),
-            False,
-            dtype=bool,
-        )
+        # fmt: off
+        val_mask = np.full((len(indices,)), False, dtype=bool)
+        # fmt: on
 
         if val_split and len(indices) > 1:
 

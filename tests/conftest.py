@@ -2,6 +2,7 @@
 """Tests for `energizer` package."""
 
 import datasets
+import numpy as np
 import pytest
 from torch.utils.data import Dataset
 
@@ -11,7 +12,7 @@ def mock_dataset():
     class PytorchDataset(Dataset):
         def __init__(self):
             super().__init__()
-            self.dataset = [(f"instance_{i}", f"label_{i}") for i in range(10)]
+            self.dataset = list(zip(range(10), np.random.randint(0, 1, 10)))
 
         def __len__(self):
             return len(self.dataset)
@@ -24,7 +25,12 @@ def mock_dataset():
 
 @pytest.fixture
 def mock_hf_dataset():
-    data = [(f"instance_{i}", f"label_{i}") for i in range(10)]
+    data = list(zip(range(10), np.random.randint(0, 1, 10)))
     dataset = datasets.Dataset.from_dict({"input": [d[0] for d in data], "target": [d[1] for d in data]})
 
     return dataset
+
+
+@pytest.fixture
+def dataset_arg(request):
+    return request.getfixturevalue(request.param)
