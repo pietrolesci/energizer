@@ -48,7 +48,7 @@ class ActiveDataModule(LightningDataModule):
             val_split (Optional[float]): The proportion of labelled data to add to the validation set at each
                 labelling iteration.
             test_dataset (Optional[Union[Dataset, datasets.Dataset]]): The test dataset.
-            test_dataset (Optional[Union[Dataset, datasets.Dataset]]): The prediction dataset.
+            predict_dataset (Optional[Union[Dataset, datasets.Dataset]]): The prediction dataset.
             batch_size (int): The batch size used to train the model. The batch size for evaluating the
                 model on the pool is automatically set by the `ActiveTrainer` and exploits the maximum available
                 bandwidth.
@@ -93,21 +93,21 @@ class ActiveDataModule(LightningDataModule):
                 f"Validation dataset is not specfied and `val_split == {self.val_split}`, therefore at each training "
                 f"step {self.val_split} of the labelled data will be added to the validation dataset."
             )
-        elif not self._val_dataset and self.val_split == 0:
+        elif not self._val_dataset and (self.val_split == 0 or self.val_split is None):
             print("`val_dataset` is None and `val_split == 0` or is None, no validation will be performed.")
 
         # initial labelling
         if self.initial_labels is not None:
             if isinstance(self.initial_labels, int):
-                self.initial_labels = self._active_dataset.sample_pool_idx(self.initial_labels)
+                self.initial_labels = self.sample_pool_idx(self.initial_labels)
             self.label(self.initial_labels)  # type: ignore
 
-        if not self._active_dataset.has_labelled_data:
+        if not self.has_labelled_data:
             print("Cold-starting: The training dataset does not contain any labelled instance.")
 
         # setup dataloaders
         self.train_dataloader = partial(self._make_dataloader, self.train_dataset, RunningStage.TRAINING)
-        self.pool_dataloader = partial(self._make_dataloader, self.pool_dataset, RunningStage.PREDICTING)
+        self.pool_dataloader = partial(self._make_dataloader, self.pool_dataset, RunningStage.TESTING)
 
         if self.val_dataset:
             self.val_dataloader = partial(self._make_dataloader, self.val_dataset, RunningStage.VALIDATING)
@@ -121,15 +121,17 @@ class ActiveDataModule(LightningDataModule):
         self.save_hyperparameters("num_classes", "batch_size", "shuffle", "val_split", "initial_labels", "seed")
 
     def prepare_data(self) -> None:
+        """Nothing to prepare."""
         pass
 
     def setup(self, stage=None) -> None:
+        """Nothing to setup."""
         pass
 
     def _make_dataloader(
         self, dataset: Union[EnergizerSubset, Dataset, datasets.Dataset], running_stage: RunningStage
     ) -> DataLoader:
-        if running_stage in (RunningStage.TRAINING, RunningStage.VALIDATING) and isinstance(dataset, EnergizerSubset):
+        if running_stage == RunningStage.TRAINING:
             sampler = FixedLengthSampler(
                 dataset, n_steps=self._min_steps_per_epoch, shuffle=self.shuffle, seed=self.seed
             )
@@ -184,12 +186,12 @@ class ActiveDataModule(LightningDataModule):
 
     @property
     def train_size(self) -> int:
-        """Returns the length of the `labelled_dataset` that has been assigned to training."""
+        """Returns the length of the `train_dataset` that has been assigned to training."""
         return self._active_dataset.train_size
 
     @property
     def val_size(self) -> int:
-        """Returns the length of the `labelled_dataset` that has been assigned to validation."""
+        """Returns the length of the `val_dataset` that has been assigned to validation."""
         return self._active_dataset.val_size
 
     @property
@@ -267,6 +269,27 @@ class ActiveDataModule(LightningDataModule):
                 This is considered only when `len(pool_idx) > 1`.
         """
         self._active_dataset.label(pool_idx, self.val_split)
+
+    def curriculum_dataset(self) -> EnergizerSubset:
+        """Convenience method that calls the underlying self._active_dataset.curriculum_dataset method.
+
+        Returns an EnergizerSubset with the labelled instances, in order of labelling.
+
+        An instance of EnergizerSubset (based on the underlying dataset type) where the
+        indices are the indices of the labelled instances. They are ordered based on when
+        they have been labelled. For example, instances labelled first during training will
+        appear as first.
+
+        Note that the order is preserved up to the round of labellization. This means that if
+        two instances are labelled in the same round of labellization, their order does not follow
+        any specific logic related to algorithm. Instead, it follows the convention used in the
+        function `numpy.argsort`: it handles the tie by returning the index of the item which appears
+        last in the array.
+
+        Returns:
+            An instance of EnergizerSubset (based on the underlying dataset type).
+        """
+        return self._active_dataset.curriculum_dataset()
 
 
 class FixedLengthSampler(Sampler):

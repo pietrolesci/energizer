@@ -15,6 +15,7 @@ class EnergizerSubset:
     """
 
     def __init__(self, dataset: Any, indices: List[int]) -> None:
+        """Initializes a subset, akin the `torch.data.utils.Subset`."""
         if not isinstance(indices, list):
             raise MisconfigurationException(f"Indices must be of type `List[int], not {type(indices)}")
 
@@ -188,12 +189,12 @@ class ActiveDataset:
 
     @property
     def train_size(self) -> int:
-        """Returns the length of the `labelled_dataset` that has been assigned to training."""
+        """Returns the length of the `train_dataset` that has been assigned to training."""
         return len(self.train_dataset)
 
     @property
     def val_size(self) -> int:
-        """Returns the length of the `labelled_dataset` that has been assigned to validation."""
+        """Returns the length of the `val_dataset` that has been assigned to validation."""
         return len(self.val_dataset)
 
     @property
