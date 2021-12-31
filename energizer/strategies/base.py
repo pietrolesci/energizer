@@ -4,7 +4,7 @@ import torch
 from pytorch_lightning import LightningModule, Trainer
 from torch import Tensor
 
-from energizer.inference import EnergizerInference
+from energizer.inference.inference_modules import EnergizerInference
 
 
 class EnergizerStrategy(LightningModule):
