@@ -169,7 +169,7 @@ class ActiveDataset:
         self._subset_cls = TorchSubset if isinstance(self.dataset, Dataset) else HuggingFaceSubset
 
         self._mask = np.zeros((len(dataset),), dtype=int)
-        self._val_mask = np.array([], dtype=np.bool)
+        self._val_mask = np.array([], dtype=bool)
         self._rng = default_rng(self.seed)
 
         self.train_dataset = self._subset_cls(self.dataset, [])
