@@ -1,7 +1,7 @@
 from torch import Tensor
 
 import energizer.functional as F
-from energizer.inference import Deterministic, EnergizerInference
+from energizer.inference.inference_modules import Deterministic, EnergizerInference
 from energizer.strategies.base import EnergizerStrategy
 
 
