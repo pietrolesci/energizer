@@ -1,24 +1,10 @@
-# Copyright The PyTorch Lightning team.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 from copy import deepcopy
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops import Loop
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
-from pytorch_lightning.loops.dataloader.prediction_loop import PredictionLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.progress import Progress
 from pytorch_lightning.trainer.states import TrainerFn
@@ -73,9 +59,11 @@ class ActiveLearningLoop(Loop):
         total_budget: int = -1,
         min_steps_per_epoch: int = None,
     ) -> None:
-        """
+        """The active learning loop.
+
         Args:
             strategy (EnergizerStrategy): An active learning strategy.
+            query_size (int): Number of instances to label at each iteration.
             label_epoch_frequency (int): Number of epoch to run before requesting labellization.
             reset_weights (bool): Whether to reset the weights to their initial state at
                 the end of each labelling iteration.
@@ -195,6 +183,9 @@ class ActiveLearningLoop(Loop):
         self.strategy.reset()
         self.progress.increment_ready()
 
+        print("\nEPOCH", flush=True)
+        print("Active learning dataset:", self.trainer.datamodule._active_dataset)
+
     def advance(self, *args: Any, **kwargs: Any) -> None:
         """Run one iteration of the active learning loop.
 
@@ -221,33 +212,29 @@ class ActiveLearningLoop(Loop):
             1. Label instances
         """
         self.progress.increment_started()
-        print("\nEPOCH", flush=True)
-        print("Active learning dataset:", self.trainer.datamodule._active_dataset)
 
         if self.trainer.datamodule.has_labelled_data:
             # training and validation
             self._reset_fitting()
             self.fit_loop.run()  # type: ignore
 
-            # testing
+            # testing - when testing we don't need gradients
             self._reset_testing()
-            metrics = self.test_loop.run()  # type: ignore
-            if metrics:
-                self.trainer.logger.log_metrics(metrics[0], step=self.trainer.global_step)
+            with torch.inference_mode():
+                self.test_loop.run()  # type: ignore
+            # metrics = self.test_loop.run()  # type: ignore
+            # if metrics:
+            #     self.trainer.logger.log_metrics(metrics[0], step=self.trainer.global_step)
 
         # pool evaluation
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_pool()
-            self.pool_loop.run()  # type: ignore
-            indices = self.strategy.indices.tolist()  # type: ignore
-
-            # print("Indices Pool:", indices, flush=True)
-            # print("Pool Indices:", self.trainer.datamodule.pool_dataset.indices, flush=True)
-            # print("Indices Oracle:", self.trainer.datamodule._active_dataset._pool_to_oracle(indices), flush=True)
-            # print()
+            with torch.inference_mode():
+                self.pool_loop.run()  # type: ignore
+                indices = self.strategy.indices.tolist()  # type: ignore
 
             # labelling
-            self.trainer.datamodule.label(indices)
+            self.labelling_loop(indices)
         self.progress.increment_processed()
 
     def on_advance_end(self) -> None:
@@ -256,6 +243,10 @@ class ActiveLearningLoop(Loop):
         if self.reset_weights:
             self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
         self.progress.increment_completed()
+
+    def on_run_end(self):
+        print("\nEPOCH", flush=True)
+        print("Active learning dataset:", self.trainer.datamodule._active_dataset)
 
     def _reset_fitting(self) -> None:
         """Reset training and validation dataloaders and states and attach the original LightningModule."""
@@ -280,8 +271,6 @@ class ActiveLearningLoop(Loop):
         version of the model, called `strategy`, is used.
         """
         self._reset_pool_dataloader()
-        # self.trainer.state.fn = TrainerFn.PREDICTING
-        # self.trainer.predicting = True
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
         self._attach_model(self.strategy)
@@ -295,3 +284,6 @@ class ActiveLearningLoop(Loop):
     def _attach_model(self, model: LightningModule):
         """Attach a LightningModule to use during a loop."""
         self.trainer.training_type_plugin.connect(model)
+
+    def labelling_loop(self, indices: List[int]):
+        self.trainer.datamodule.label(indices)
