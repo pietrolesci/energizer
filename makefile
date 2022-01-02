@@ -4,8 +4,8 @@ sources = energizer
 test: format lint unittest
 
 format:
-	isort $(sources) tests
-	black $(sources) tests
+	isort $(sources) tests examples
+	black $(sources) tests examples
 
 lint:
 	flake8 $(sources) tests
@@ -25,3 +25,4 @@ clean:
 	rm -rf *.egg-info
 	rm -rf .tox dist site
 	rm -rf coverage.xml .coverage
+	rm -rf */lightning_logs/
