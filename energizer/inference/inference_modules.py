@@ -15,9 +15,15 @@ class EnergizerInference(LightningModule):
         self.module: Optional[LightningModule] = None
 
     def forward(self, *args, **kwargs) -> Any:
+        """Must be redefined to implement the forward pass of the specific inference module."""
         raise NotImplementedError
 
     def connect(self, module: LightningModule) -> None:
+        """Deferred initialization of the inference module.
+
+        Wrap original model with the inference module. A module cannot be passed directly in
+        the inference module constructor.
+        """
         self.module = module
 
 
@@ -28,6 +34,7 @@ class Deterministic(EnergizerInference):
         super().__init__()
 
     def forward(self, *args, **kwargs) -> Any:
+        """Simply calls the forward method of the underlying module. Here for consistency."""
         return self.module(*args, **kwargs)  # type: ignore
 
 
@@ -41,8 +48,9 @@ class MCDropout(EnergizerInference):
         prob: Optional[float] = None,
         inplace: bool = True,
     ) -> None:
-        """Instantiates a new module that is the same as `module` but with the dropout layers patched such that they are
-        active even during evaluation.
+        """Instantiates a new module (same as `module`) with patched dropout layers.
+
+        The patched such that they are active even during evaluation.
 
         Args:
             num_inference_iters (int): The number of forward passes to perform.
@@ -58,6 +66,11 @@ class MCDropout(EnergizerInference):
         self.inplace = inplace
 
     def connect(self, module: LightningModule) -> None:
+        """Provide the original module to the inference module.
+
+        It calls the `connect` method of the base class and, additionally, it patches the dropout layers of the original
+        module so that they remain active even during evaluation.
+        """
         super().connect(module)
         patch_dropout_layers(
             module=self.module,
@@ -68,6 +81,11 @@ class MCDropout(EnergizerInference):
         )
 
     def forward(self, *args, **kwargs) -> Tensor:
+        """Performs `num_inference_iters` forward passes using the underlying module and keeping the dropout layers active..
+
+        Returns:
+            A tensor of dimension `(B: batch_size, C: num_classes, S: num_samples)`.
+        """
         out = []
         for _ in range(self.num_inference_iters):
             out.append(self.module(*args, **kwargs))  # type: ignore
