@@ -37,20 +37,15 @@ def expected_entropy(logits: Tensor) -> Tensor:
     r"""Computes the expected Shannon's entropy in nats.
 
     It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes)`.
-
     This function implements the following steps, for each element along the `B: batch_size` dimension:
 
     - Converts logits in probabilities along the `C: num_classes` dimension
-
     $$p_{bcs} = e^{l_{bcs}} / \sum_j e^{l_{bjs}}$$
 
-
     - Computes Shannon's entropy along the `C: num_classes` dimension
-
     $$\mathrm{H}_{bs}\left(\mathrm{p}(X) \right) = - \sum_c p_{bcs} \log(p_{bcs})$$
 
     - Computes the average Shannon's entropy along the `S: num_samples` dimension
-
     $$\frac{1}{S} \sum_s \mathrm{H}_{bs}\left(\mathrm{p}(X)\right)$$
 
     where $l_{bcs}$ is the logit for class $c$ for the $b$-th element in the batch in the $s$-th sample,
@@ -62,7 +57,6 @@ def expected_entropy(logits: Tensor) -> Tensor:
     Returns:
         The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size, 1)`.
     """
-
     probs = softmax(logits, dim=-2)
     entropies = torch.sum(entr(probs), dim=-2)
     return torch.mean(entropies, dim=-1)
