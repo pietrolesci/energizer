@@ -6,10 +6,9 @@ from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch import Tensor
 
 from energizer.inference.inference_modules import EnergizerInference
-from energizer.strategies.hooks import PoolHooksMixin
 
 
-class EnergizerStrategy(LightningModule, PoolHooksMixin):
+class EnergizerStrategy(LightningModule):
     """Base class for a strategy that is a thin wrapper around `LightningModule`.
 
     It defines the `pool_*` methods and hooks that the user can redefine.
@@ -99,8 +98,10 @@ class EnergizerStrategy(LightningModule, PoolHooksMixin):
         # finally returns the tuple (values, indices)
         ```
         """
+        x, _ = batch
+
         # compute logits
-        logits = self(batch)
+        logits = self(x)
 
         # compute scores
         logits = self.on_before_objective(logits)
@@ -116,7 +117,6 @@ class EnergizerStrategy(LightningModule, PoolHooksMixin):
         """Aggregate results across machines and update states."""
         # values = torch.cat([out[0] for out in outputs], dim=0)
         # indices = torch.cat([out[1] for out in outputs], dim=0)
-
         values, indices = outputs
 
         all_values = torch.cat([self.values, values], dim=0)
@@ -131,7 +131,7 @@ class EnergizerStrategy(LightningModule, PoolHooksMixin):
 
     def test_step(
         self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
-    ) -> Tuple[Tuple[Tensor, Tensor], int]:
+    ) -> Tuple[Tuple[Optional[Tensor], Optional[Tensor]], int]:
         """Call the `pool_step` method and performs bookkeeping.
 
         This method allows to abstract away some of the underlying logic to transform indices relative to
@@ -140,21 +140,22 @@ class EnergizerStrategy(LightningModule, PoolHooksMixin):
         It performs the `pool_step` and modifies the indices that are returned from the `pool_step` (which
         are relative to the batch) in indices relative to the pool dataset.
         """
-        if isinstance(batch, Mapping):
-            batch_size = batch[list(batch.keys())[0]].shape[0]
-        elif isinstance(batch, Sequence):
-            batch_size = batch[0].shape[0]
-        else:
-            raise MisconfigurationException(f"Batch of type {type(batch)} not supported, use Mapping or Sequence.")
-        return self.pool_step(batch, batch_idx, dataloader_idx), batch_size
+        outputs = self.pool_step(batch, batch_idx, dataloader_idx)
+        if outputs:
+            if isinstance(batch, Mapping):
+                batch_size = batch[list(batch.keys())[0]].shape[0]
+            elif isinstance(batch, Sequence):
+                batch_size = batch[0].shape[0]
+            else:
+                raise MisconfigurationException(f"Batch of type {type(batch)} not supported, use Mapping or Sequence.")
+
+            return outputs, batch_size
 
     def test_step_end(self, outputs: Tuple[Tuple[Tensor, Tensor], int]) -> None:
-        (values, indices), batch_size = outputs
-
-        # make indices relative to pool
-        indices = self._batch_to_pool(indices, batch_size)
-
-        self.pool_step_end((values, indices))
+        if outputs:
+            (values, indices), batch_size = outputs
+            indices = self._batch_to_pool(indices, batch_size)  # make indices relative to pool
+            self.pool_step_end((values, indices))
 
     def test_epoch_end(self, outputs: Any) -> None:
         self.pool_epoch_end(outputs)
@@ -237,3 +238,34 @@ class EnergizerStrategy(LightningModule, PoolHooksMixin):
         """Call the `poolest_model_train` method and the relative method from each callback."""
         self.on_pool_model_train()
         self._call_callback_hook("on_pool_model_train")
+
+    def _call_callback_hook(self, hook_name, *args, **kwargs):
+        """Call `hook_name` from each callback passed to the trainer."""
+        for callback in self.trainer.callbacks:
+            fn = getattr(callback, hook_name, None)
+            if callable(fn):
+                fn(self, *args, **kwargs)
+
+    def on_pool_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
+        pass
+
+    def on_pool_batch_end(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
+        pass
+
+    def on_pool_epoch_start(self) -> None:
+        pass
+
+    def on_pool_epoch_end(self) -> None:
+        pass
+
+    def on_pool_start(self) -> None:
+        pass
+
+    def on_pool_end(self) -> None:
+        pass
+
+    def on_pool_model_eval(self) -> None:
+        pass
+
+    def on_pool_model_train(self) -> None:
+        pass
