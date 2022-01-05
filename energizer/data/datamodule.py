@@ -171,8 +171,7 @@ class ActiveDataModule(LightningDataModule):
             return self._val_dataset
         elif self.val_split and self.val_split > 0:
             return self._active_dataset.val_dataset
-        else:
-            return None
+        return None
 
     @property
     def test_dataset(self) -> Optional[Union[Dataset, datasets.Dataset]]:
@@ -192,7 +191,9 @@ class ActiveDataModule(LightningDataModule):
     @property
     def val_size(self) -> int:
         """Returns the length of the `val_dataset` that has been assigned to validation."""
-        return self._active_dataset.val_size
+        if self.val_split:
+            return self._active_dataset.val_size
+        return len(self.val_dataset)  # type: ignore
 
     @property
     def total_labelled_size(self) -> int:
