@@ -1,8 +1,7 @@
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Any, Optional, Tuple
 
 import torch
 from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch import Tensor
 
 from energizer.inference.inference_modules import EnergizerInference
@@ -26,7 +25,7 @@ class EnergizerStrategy(LightningModule):
     that first compute the scores on the entire pool and then optimize them and extrarct the indices.
     """
 
-    def __init__(self, inference_module: Optional[EnergizerInference]) -> None:
+    def __init__(self, inference_module: EnergizerInference) -> None:
         """Initializes a strategy.
 
         Args:
@@ -41,9 +40,9 @@ class EnergizerStrategy(LightningModule):
         self.trainer: Optional[Trainer] = None
         self.query_size: Optional[int] = None
 
-        self._counter: Optional[int] = None
-        self.values: Optional[Tensor] = None
-        self.indices: Optional[Tensor] = None
+        self._counter: Optional[int] = None  # NOTE: this might become buffers or metrics
+        self.values: Optional[Tensor] = None  # NOTE: this might become buffers or metrics
+        self.indices: Optional[Tensor] = None  # NOTE: this might become buffers or metrics
 
     def connect(self, module: LightningModule, query_size: int) -> None:
         """Deferred initialization of the strategy.
@@ -56,8 +55,8 @@ class EnergizerStrategy(LightningModule):
 
         - Assign the `query_size` parameters from the `ActiveLearningLoop`
         """
-        if self.inference_module is not None:
-            self.inference_module.connect(module)
+        # if self.inference_module is not None:
+        self.inference_module.connect(module)
         self.trainer = module.trainer
         self.query_size = query_size
 
@@ -71,7 +70,7 @@ class EnergizerStrategy(LightningModule):
         """Calls the forward method of the inference module."""
         return self.inference_module(*args, **kwargs)  # type: ignore
 
-    def pool_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Tuple[Tensor, Tensor]:
+    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Tuple[Tensor, Tensor, int]:
         """Main entry point to define a custom strategy.
 
         Since the `pool_loop` is a lightning `evalutation_loop`, in particular at `test_loop`, this method will be
@@ -98,10 +97,8 @@ class EnergizerStrategy(LightningModule):
         # finally returns the tuple (values, indices)
         ```
         """
-        x, _ = batch
-
         # compute logits
-        logits = self(x)
+        logits = self(batch)
 
         # compute scores
         logits = self.on_before_objective(logits)
@@ -111,13 +108,12 @@ class EnergizerStrategy(LightningModule):
         # optimize objective
         values, indices = self.optimize_objective(scores)
 
-        return values, indices
+        return values, indices, logits.shape[0]
 
-    def pool_step_end(self, outputs: Tuple[Tensor, Tensor]) -> None:
+    def test_step_end(self, outputs: Tuple[Tensor, Tensor, Tensor]) -> None:
         """Aggregate results across machines and update states."""
-        # values = torch.cat([out[0] for out in outputs], dim=0)
-        # indices = torch.cat([out[1] for out in outputs], dim=0)
-        values, indices = outputs
+        values, indices, batch_size = outputs
+        indices = self._batch_to_pool(indices, batch_size)
 
         all_values = torch.cat([self.values, values], dim=0)
         all_indices = torch.cat([self.indices, indices], dim=0)
@@ -125,40 +121,6 @@ class EnergizerStrategy(LightningModule):
         new_values, idx = self.optimize_objective(all_values)
         self.values.copy_(new_values)  # type: ignore
         self.indices.copy_(all_indices[idx])  # type: ignore
-
-    def pool_epoch_end(self, outputs: Any) -> None:
-        pass
-
-    def test_step(
-        self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
-    ) -> Tuple[Tuple[Optional[Tensor], Optional[Tensor]], int]:
-        """Call the `pool_step` method and performs bookkeeping.
-
-        This method allows to abstract away some of the underlying logic to transform indices relative to
-        the batch in indices relative to the pool dataset
-
-        It performs the `pool_step` and modifies the indices that are returned from the `pool_step` (which
-        are relative to the batch) in indices relative to the pool dataset.
-        """
-        outputs = self.pool_step(batch, batch_idx, dataloader_idx)
-        if outputs:
-            if isinstance(batch, Mapping):
-                batch_size = batch[list(batch.keys())[0]].shape[0]
-            elif isinstance(batch, Sequence):
-                batch_size = batch[0].shape[0]
-            else:
-                raise MisconfigurationException(f"Batch of type {type(batch)} not supported, use Mapping or Sequence.")
-
-            return outputs, batch_size
-
-    def test_step_end(self, outputs: Tuple[Tuple[Tensor, Tensor], int]) -> None:
-        if outputs:
-            (values, indices), batch_size = outputs
-            indices = self._batch_to_pool(indices, batch_size)  # make indices relative to pool
-            self.pool_step_end((values, indices))
-
-    def test_epoch_end(self, outputs: Any) -> None:
-        self.pool_epoch_end(outputs)
 
     def on_before_objective(self, logits: Tensor) -> Tensor:
         """Run before the scores are computed. By default it simply returns its inputs."""
@@ -198,74 +160,3 @@ class EnergizerStrategy(LightningModule):
         if self._counter > pool_size:
             raise RuntimeError("Strategy states must be reset at the end of each labelling iteration.")
         return indices
-
-    def on_test_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        """Call the `poolest_batch_start` method and the relative method from each callback."""
-        self.on_pool_batch_start(batch, batch_idx, dataloader_idx)
-        self._call_callback_hook("on_pool_batch_start", batch, batch_idx, dataloader_idx)
-
-    def on_test_batch_end(self, outputs: Optional[Any], batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        """Call the `poolest_batch_end` method and the relative method from each callback."""
-        self.on_pool_batch_end(batch, batch_idx, dataloader_idx)
-        self._call_callback_hook("on_pool_batch_end", batch, batch_idx, dataloader_idx)
-
-    def on_test_epoch_start(self) -> None:
-        """Call the `poolest_epoch_start` method and the relative method from each callback."""
-        self.on_pool_epoch_start()
-        self._call_callback_hook("on_pool_epoch_start")
-
-    def on_test_epoch_end(self) -> None:
-        """Call the `poolest_epoch_end` method and the relative method from each callback."""
-        self.on_pool_epoch_end()
-        self._call_callback_hook("on_pool_epoch_end")
-
-    def on_test_start(self) -> None:
-        """Call the `poolest_start` method and the relative method from each callback."""
-        self.on_pool_start()
-        self._call_callback_hook("on_pool_start")
-
-    def on_test_end(self) -> None:
-        """Call the `poolest_end` method and the relative method from each callback."""
-        self.on_pool_end()
-        self._call_callback_hook("on_pool_end")
-
-    def on_test_model_eval(self) -> None:
-        """Call the `poolest_model_eval` method and the relative method from each callback."""
-        self.on_pool_model_eval()
-        self._call_callback_hook("on_pool_model_eval")
-
-    def on_test_model_train(self) -> None:
-        """Call the `poolest_model_train` method and the relative method from each callback."""
-        self.on_pool_model_train()
-        self._call_callback_hook("on_pool_model_train")
-
-    def _call_callback_hook(self, hook_name, *args, **kwargs):
-        """Call `hook_name` from each callback passed to the trainer."""
-        for callback in self.trainer.callbacks:
-            fn = getattr(callback, hook_name, None)
-            if callable(fn):
-                fn(self, *args, **kwargs)
-
-    def on_pool_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        pass
-
-    def on_pool_batch_end(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        pass
-
-    def on_pool_epoch_start(self) -> None:
-        pass
-
-    def on_pool_epoch_end(self) -> None:
-        pass
-
-    def on_pool_start(self) -> None:
-        pass
-
-    def on_pool_end(self) -> None:
-        pass
-
-    def on_pool_model_eval(self) -> None:
-        pass
-
-    def on_pool_model_train(self) -> None:
-        pass

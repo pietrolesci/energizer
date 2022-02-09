@@ -9,7 +9,7 @@ from energizer.strategies.base import EnergizerStrategy
 class RandomStrategy(EnergizerStrategy):
     def __init__(self) -> None:
         """Create the RandomStrategy."""
-        super().__init__(None)
+        super().__init__(None)  # type: ignore
 
     def pool_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Tuple[Tensor, Tensor]:
         pass
