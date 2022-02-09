@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 from pytorch_lightning import LightningModule
+from pytorch_lightning.callbacks.progress.base import ProgressBarBase
 from pytorch_lightning.loops import Loop
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
@@ -12,6 +13,8 @@ from pytorch_lightning.trainer.trainer import Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 
 from energizer.data import ActiveDataModule
+from energizer.loops.pool_loop import PoolLoop
+from energizer.loops.utils import EnergizerTQDMProgressBar
 from energizer.strategies.base import EnergizerStrategy
 
 
@@ -52,7 +55,7 @@ class ActiveLearningLoop(Loop):
 
     def __init__(
         self,
-        strategy: EnergizerStrategy,
+        al_strategy: EnergizerStrategy,
         query_size: int = 2,
         label_epoch_frequency: int = 1,
         reset_weights: bool = True,
@@ -63,7 +66,7 @@ class ActiveLearningLoop(Loop):
         """The active learning loop.
 
         Args:
-            strategy (EnergizerStrategy): An active learning strategy.
+            al_strategy (EnergizerStrategy): An active learning strategy.
             query_size (int): Number of instances to label at each iteration.
             label_epoch_frequency (int): Number of epoch to run before requesting labellization.
             reset_weights (bool): Whether to reset the weights to their initial state at
@@ -77,7 +80,7 @@ class ActiveLearningLoop(Loop):
         Note that some of the required attributes will be set when the loop is actually run or connected.
         """
         super().__init__()
-        self.strategy = strategy
+        self.al_strategy = al_strategy
         self.query_size = query_size
         self.label_epoch_frequency = label_epoch_frequency
         self.reset_weights = reset_weights
@@ -88,7 +91,7 @@ class ActiveLearningLoop(Loop):
         self.progress = Progress()
         self.fit_loop: Optional[FitLoop] = None
         self.test_loop: Optional[EvaluationLoop] = None
-        self.pool_loop: Optional[EvaluationLoop] = None
+        self.pool_loop: Optional[PoolLoop] = None
         self.lightning_module: Optional[LightningModule] = None
         self.lightning_module_state_dict: Optional[Dict[str, torch.Tensor]] = None
 
@@ -134,12 +137,6 @@ class ActiveLearningLoop(Loop):
         # attach the loop for training and validation
         self.fit_loop = trainer.fit_loop
 
-        # set the total number of epochs the active learning loop must run
-        if self.total_budget > 0:
-            self.max_epochs = self.total_budget * self.label_epoch_frequency
-        else:
-            self.max_epochs = self.trainer.datamodule.pool_size
-
         # set the total number of epochs the fit loop, within one epoch of the active learning loop, must run
         if self.fit_loop.max_epochs != self.label_epoch_frequency:
             print(
@@ -151,9 +148,15 @@ class ActiveLearningLoop(Loop):
 
         # attach the loop for testing
         self.test_loop = trainer.test_loop
+        self.test_loop.verbose = False
 
         # attach the loop for evaluation on the pool
         self.pool_loop = trainer.test_loop
+        # self.pool_loop = PoolLoop()
+        # self.pool_loop = EvaluationLoop()
+
+        # substitute progress bar
+        # self._patch_progress_bar(trainer)
 
     def __getattr__(self, key):
         """Connect self attributes to `fit_loop` attributes."""
@@ -175,17 +178,32 @@ class ActiveLearningLoop(Loop):
 
         - Initializes the `datamodule` based on the arguments passes in this class constructor
         """
+        # check datamodule
         if not isinstance(self.trainer.datamodule, ActiveDataModule):
             raise MisconfigurationException(
                 f"ActiveLearningLoop requires the ActiveDataModule, not {type(self.trainer.datamodule)}."
             )
+
+        # set the total number of epochs the active learning loop must run
+        if self.total_budget > 0:
+            self.max_epochs = self.total_budget * self.label_epoch_frequency
+        else:
+            self.max_epochs = self.trainer.datamodule.pool_size
+
+        # add `*_pool_*` methods to all callbacks
+        # self._patch_callbacks()
+
+        # register lightning_module
         self.lightning_module = self.trainer.lightning_module
 
+        # state dict to reset the weights
         if self.reset_weights:
             self.lightning_module_state_dict = deepcopy(self.lightning_module.state_dict())
 
-        self.strategy.connect(self.lightning_module, self.query_size)
+        # initialize the strategy linking the lightning_module
+        self.al_strategy.connect(self.lightning_module, self.query_size)
 
+        # overwrite FixedLengthSampler
         self.trainer.datamodule._min_steps_per_epoch = self.min_steps_per_epoch
 
         if not self.fit_loop or not self.test_loop or not self.pool_loop:
@@ -193,11 +211,8 @@ class ActiveLearningLoop(Loop):
 
     def on_advance_start(self, *args: Any, **kwargs: Any) -> None:
         """Reset the strategy internal states and increment progress."""
-        self.strategy.reset()
+        self.al_strategy.reset()
         self.progress.increment_ready()
-
-        print("\nEPOCH", flush=True)
-        print("Active learning dataset:", self.trainer.datamodule._active_dataset)
 
     def advance(self, *args: Any, **kwargs: Any) -> None:
         """Run one iteration of the active learning loop.
@@ -234,15 +249,14 @@ class ActiveLearningLoop(Loop):
             # testing - when testing we don't need gradients
             if self.test_after_labelling_epoch:
                 self._reset_testing()
-                with torch.inference_mode():
-                    self.test_loop.run()  # type: ignore
+                self.test_loop.run()  # type: ignore
 
         # pool evaluation
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_pool()
             with torch.inference_mode():
                 self.pool_loop.run()  # type: ignore
-                indices = self.strategy.indices.tolist()  # type: ignore
+                indices = self.al_strategy.indices.tolist()  # type: ignore
 
             # labelling
             self.labelling_loop(indices)
@@ -256,8 +270,7 @@ class ActiveLearningLoop(Loop):
         self.progress.increment_completed()
 
     def on_run_end(self):
-        print("\nEPOCH", flush=True)
-        print("Active learning dataset:", self.trainer.datamodule._active_dataset)
+        pass
 
     def _reset_fitting(self) -> None:
         """Reset training and validation dataloaders and states and attach the original LightningModule."""
@@ -284,7 +297,7 @@ class ActiveLearningLoop(Loop):
         self._reset_pool_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
-        self._attach_model(self.strategy)
+        self._attach_model(self.al_strategy)
 
     def _reset_pool_dataloader(self) -> None:
         # Hack
@@ -294,7 +307,32 @@ class ActiveLearningLoop(Loop):
 
     def _attach_model(self, model: LightningModule):
         """Attach a LightningModule to use during a loop."""
-        self.trainer.training_type_plugin.connect(model)
+        self.trainer.strategy.connect(model)
 
     def labelling_loop(self, indices: List[int]):
         self.trainer.datamodule.label(indices)
+
+    # def _patch_callbacks(self):
+    #     """Patches all callbacks to have `on_pool_*` methods."""
+    #     hook_names = [
+    #         "on_pool_batch_start",
+    #         "on_pool_batch_end",
+    #         "on_pool_epoch_start",
+    #         "on_pool_epoch_end",
+    #         "on_pool_start",
+    #         "on_pool_end",
+    #         "on_pool_model_eval",
+    #         "on_pool_model_train",
+    #     ]
+
+    #     def void(*args, **kwargs):
+    #         pass
+
+    #     for callback in self.trainer.callbacks:
+    #         for hook_name in hook_names:
+    #             if not hasattr(callback, hook_name):
+    #                 setattr(callback, hook_name, void)
+
+    def _patch_progress_bar(self, trainer):
+        trainer.callbacks = [c for c in trainer.callbacks if not isinstance(c, ProgressBarBase)]
+        trainer.callbacks.append(EnergizerTQDMProgressBar())

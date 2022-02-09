@@ -56,7 +56,9 @@ torchvision = {version = "^0.11.2", optional = true}
 torch = "^1.10.1"
 datasets = "^1.16.1"
 ipykernel = "^6.6.0"
-pytorch-lightning = "^1.5.7"
+pytorch-lightning = {git = "https://github.com/PyTorchLightning/pytorch-lightning.git", rev = "59a7ba7"}
+rich = "^11.0.0"
+ipywidgets = "^7.6.5"
 
 [tool.poetry.extras]
 test = [

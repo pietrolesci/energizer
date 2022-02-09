@@ -85,7 +85,7 @@ class MarginStrategy(EnergizerStrategy):
         confidence_top2 = F.confidence(logits, k=2)
 
         # since it's a minimization
-        return (confidence_top2[:, 0] - confidence_top2[:, 1]).neg()
+        return -(confidence_top2[:, 0] - confidence_top2[:, 1])
 
 
 class EntropyStrategy(EnergizerStrategy):
