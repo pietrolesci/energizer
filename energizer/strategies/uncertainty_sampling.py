@@ -1,6 +1,6 @@
 from torch import Tensor
 
-import energizer.functional as F
+import energizer.strategies.functional as F
 from energizer.inference.inference_modules import Deterministic, EnergizerInference
 from energizer.strategies.base import EnergizerStrategy
 
@@ -29,9 +29,14 @@ class LeastConfidenceStrategy(EnergizerStrategy):
     """
 
     def __init__(self, inference_module: EnergizerInference = Deterministic()) -> None:
+        """Create the LeastConfident strategy."""
         super().__init__(inference_module)
 
     def objective(self, logits: Tensor) -> Tensor:
+        r"""Compute the least confidence scores.
+
+        $$1 - p(y_{max}|x, \theta)$$ or $$1 - \mathrm{E}_{p(\theta| D)} p(y_{max}|x, \theta)$$
+        """
         if logits.ndim == 3:
             confidence = F.expected_confidence(logits, k=1)
             return 1.0 - confidence
@@ -65,16 +70,22 @@ class MarginStrategy(EnergizerStrategy):
     """
 
     def __init__(self, inference_module: EnergizerInference = Deterministic()) -> None:
+        """Create the Margin strategy."""
         super().__init__(inference_module)
 
     def objective(self, logits: Tensor) -> Tensor:
+        r"""Compute the margin scores.
+
+        $$P(y_1|x, \theta) - P(y_2|x, \theta)$$ or
+        $$\mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
+        """
         if logits.ndim == 3:
             confidence_top2 = F.expected_confidence(logits, k=2)
 
         confidence_top2 = F.confidence(logits, k=2)
 
         # since it's a minimization
-        return (confidence_top2[:, 0] - confidence_top2[:, 1]).neg()
+        return -(confidence_top2[:, 0] - confidence_top2[:, 1])
 
 
 class EntropyStrategy(EnergizerStrategy):
@@ -109,9 +120,15 @@ class EntropyStrategy(EnergizerStrategy):
     """
 
     def __init__(self, inference_module: EnergizerInference) -> None:
+        """Create the Entropy strategy."""
         super().__init__(inference_module)
 
-    def compute_scores(self, logits: Tensor) -> Tensor:
+    def objective(self, logits: Tensor) -> Tensor:
+        r"""Compute the entropy scores.
+
+        $$\mathrm{H}\left(\mathrm{p}(X)\right) = \arg\max_x - \sum_c p_c \; \log p_c$$ or
+        $$\mathrm{E}_{p(\theta| D)} \mathrm{H}\left(\mathrm{p}(X)\right)$$
+        """
         if logits.ndim == 3:
             return F.expected_entropy(logits)
 

@@ -1,22 +1,3 @@
-"""
-This module redefines all dropout layers present in Pytorch such that they remain always on,
-even during evaluation.
-
-This is obtained by overloading the original forward method of the class such that
-
-```python
-# this
-F.dropout(input=input, p=self.p, training=self.training, inplace=self.inplace)
-
-# is turned into
-F.dropout(input=input, p=self.p, training=True, inplace=self.inplace)
-```
-
-that is, the `training` argument is always set to `True`.
-
-Check the original documentation here: https://pytorch.org/docs/stable/nn.html#dropout-layers.
-"""
-
 import contextlib
 from copy import deepcopy
 from itertools import cycle
@@ -50,27 +31,41 @@ class EnergizerDropoutLayer(_DropoutNd):
     that they remain always on even during evaluation. The elements to zero are randomized
     on every forward call during training time.
 
+    This is obtained by overloading the original forward method of the class such that
+
+    ```python
+    # this
+    F.dropout(input=input, p=self.p, training=self.training, inplace=self.inplace)
+
+    # is turned into
+    F.dropout(input=input, p=self.p, training=True, inplace=self.inplace)
+    ```
+
+    that is, the `training` argument is always set to `True`.
+
+    Check the original documentation here: https://pytorch.org/docs/stable/nn.html#dropout-layers.
+
     Optionally, it is possible to guarantee that the dropout mask is consistent during validation
     and testing. That is, during evaluation time, a fixed mask is picked and kept until `reset_mask()`.
-    This is useful to implement techniques like MCDropout that require multiple, say `k`, forward passes
+    This is useful to implement techniques like MCDropout that require multiple, say `S`, forward passes
     with the dropout layers active.
     During testing, this would create additional noise, due to the dropout layers still active. WIth
-    consistent dropout, the same `K` masks are used (i.e., each one of the `K` forward passes will have
+    consistent dropout, the same `S` masks are used (i.e., each one of the `S` forward passes will have
     the same mask unless it is manually reset).
     One of the advantages of the `Energizer` library is that it implements this feature without requiring
-    to keep `K` copies of the mask of each dropout layer in a model. Instead, each time `reset_mask` is
-    called, a dropout layer samples and stores a list of `K` random seeds. This list is cycled over
-    indefinitely. At each one of the `K` forward passes, the `next(seed)` is called and dropout is applied
+    to keep `S` copies of the mask of each dropout layer in a model. Instead, each time `reset_mask` is
+    called, a dropout layer samples and stores a list of `S` random seeds. This list is cycled over
+    indefinitely. At each one of the `S` forward passes, the `next(seed)` is called and dropout is applied
     with that specific seed. Note that this seed only affects the dropout mask generation via the `local_seed`
     context manager. Once the dropout mask is sampled, the random state of pytorch is reset again.
 
-    This memory saving comes at the cost that the number of `K` of forward passes must match the number `K`
+    This memory saving comes at the cost that the number of `S` of forward passes must match the number `S`
     of seeds so that forward pass 1 uses seed 1, etc. If they go out of sync, consistency is destroyed.
     This is not an issue when these dropout layers are accessed via an `Energizer` inference class since
     it takes care of keeping everything in sync. However, this issue must be considered when these dropout
     layers are accessed directly. In order to allow the user to change the number of forward passes
     interactively, the `reset_mask` method accepts an optional argument that allows to change the number
-    (in our example, `K`) of masks that are sampled.
+    (in our example, `S`) of masks that are sampled.
 
     Args:
         p (float): probability of an element to be zeroed. Default: 0.5
@@ -82,6 +77,7 @@ class EnergizerDropoutLayer(_DropoutNd):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False, consistent: bool = False, **consistent_kwargs):
+        """Initialize a new dropout layer."""
         super().__init__(p=p, inplace=inplace)
         self.consistent = consistent
         self.num_inference_iters: Optional[int] = None
@@ -130,6 +126,7 @@ class EnergizerDropoutLayer(_DropoutNd):
         NotImplementedError
 
     def forward(self, x: Tensor) -> Tensor:
+        """Forward pass that is able to select the appropriate modality (consistent or not)."""
         if self.consistent and not self.training:
             return self._consistent_forward(x)
         return self._forward(x)
