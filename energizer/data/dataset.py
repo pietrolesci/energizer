@@ -181,8 +181,7 @@ class ActiveDataset:
         return (
             f"ActiveDataset({{\n    "
             f"original_dataset_size: {len(self.dataset)},\n    "
-            f"train_size: {self.train_size},\n    "
-            f"val_size: {self.val_size},\n    "
+            f"labelled_size: {self.total_labelled_size},\n    "
             f"pool_size: {self.pool_size},\n    "
             f"base_class: {type(self.dataset)},\n}})"
         )
