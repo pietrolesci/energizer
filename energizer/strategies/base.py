@@ -1,10 +1,50 @@
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, Union, Callable
 
 import torch
-from pytorch_lightning import LightningModule, Trainer
+from pytorch_lightning import LightningModule
 from torch import Tensor
+from energizer.inference import EnergizerInference
 
-from energizer.inference.inference_modules import EnergizerInference
+from torchmetrics import Metric
+
+
+class BaseTopK(Metric):
+    def __init__(self, k: int, compute_on_step: bool = True, dist_sync_on_step: bool = False, process_group: Optional[Any] = None, dist_sync_fn: Callable = None) -> None:
+        super().__init__(compute_on_step, dist_sync_on_step, process_group, dist_sync_fn)
+        self.k = k
+        self.add_state("topk_scores", torch.tensor([float("-inf")] * self.k))
+        self.add_state("indices", torch.ones(self.k, dtype=torch.int64).neg())
+        self.add_state("size", torch.tensor(0, dtype=torch.int64))
+
+    def score(self, logits: Tensor) -> Tensor:
+        raise NotImplementedError
+
+    def update(self, scores: Tensor) -> None:        
+        batch_size = scores.numel()
+
+        # indices with respect to the pool dataset
+        current_indices = torch.arange(self.size, self.size + batch_size, 1)
+        
+        # compute topk comparing current batch with the states
+        values = torch.cat([self.topk_scores, scores], dim=0)
+        indices = torch.cat([self.indices, current_indices], dim=0)
+        
+        # aggregation
+        topk_scores, idx = torch.topk(values, k=self.k)
+
+        self.topk_scores.copy_(topk_scores)
+        self.indices.copy_(indices[idx])
+        self.size += batch_size
+
+    def compute(self) -> Tensor:
+        return self.indices
+
+
+class EntropyTopK(BaseTopK):
+    def score(self, logits: Tensor) -> Tensor:
+        return super().score(logits)
+    
+
 
 
 class EnergizerStrategy(LightningModule):
@@ -25,50 +65,23 @@ class EnergizerStrategy(LightningModule):
     that first compute the scores on the entire pool and then optimize them and extrarct the indices.
     """
 
-    def __init__(self, inference_module: EnergizerInference) -> None:
+    def __init__(self, module: LightningModule, inference: Union[str, EnergizerInference]) -> None:
         """Initializes a strategy.
 
         Args:
-            inference_module (EnergizerInference): An inference module that modifies the forward behaviour
+            module (torch.nn.Module): An inference module that modifies the forward behaviour
                 of the underlying module.
-            requires_grad (bool): If True, it keeps track of the gradients while performing the `pool_step`.
-                By default this is set to True and the operations are performed in the new
-                `torch.inference_mode()` context.
         """
         super().__init__()
-        self.inference_module = inference_module
-        self.trainer: Optional[Trainer] = None
+        self.inference = inference
+        self.module = self.inference.prepare(module)
+        
         self.query_size: Optional[int] = None
-
-        self._counter: Optional[int] = None  # NOTE: this might become buffers or metrics
-        self.values: Optional[Tensor] = None  # NOTE: this might become buffers or metrics
-        self.indices: Optional[Tensor] = None  # NOTE: this might become buffers or metrics
-
-    def connect(self, module: LightningModule, query_size: int) -> None:
-        """Deferred initialization of the strategy.
-
-        Method to
-
-        - Connect inference module to the underlying original module
-
-        - Assign the trainer as an attribute
-
-        - Assign the `query_size` parameters from the `ActiveLearningLoop`
-        """
-        # if self.inference_module is not None:
-        self.inference_module.connect(module)
-        self.trainer = module.trainer
-        self.query_size = query_size
-
-    def reset(self) -> None:
-        """Reset the states. This method must be called at the end of each active learning loop."""
-        self._counter = 0
-        self.values = torch.zeros(self.query_size, dtype=torch.float32, device=self.device, requires_grad=False)
-        self.indices = -torch.ones(self.query_size, dtype=torch.int64, device=self.device, requires_grad=False)
+        self.topk = TopK(self.k)
 
     def forward(self, *args, **kwargs) -> Any:
         """Calls the forward method of the inference module."""
-        return self.inference_module(*args, **kwargs)  # type: ignore
+        return self.inference(self.module, *args, **kwargs)
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Tuple[Tensor, Tensor, int]:
         """Main entry point to define a custom strategy.
@@ -97,36 +110,11 @@ class EnergizerStrategy(LightningModule):
         # finally returns the tuple (values, indices)
         ```
         """
-        # compute logits
         logits = self(batch)
+        scores = self.score(logits)
+        return self.topk(scores)
 
-        # compute scores
-        logits = self.on_before_objective(logits)
-        scores = self.objective(logits)
-        scores = self.on_after_objective(scores)
-
-        # optimize objective
-        values, indices = self.optimize_objective(scores)
-
-        return values, indices, logits.shape[0]
-
-    def test_step_end(self, outputs: Tuple[Tensor, Tensor, Tensor]) -> None:
-        """Aggregate results across machines and update states."""
-        values, indices, batch_size = outputs
-        indices = self._batch_to_pool(indices, batch_size)
-
-        all_values = torch.cat([self.values, values], dim=0)
-        all_indices = torch.cat([self.indices, indices], dim=0)
-
-        new_values, idx = self.optimize_objective(all_values)
-        self.values.copy_(new_values)  # type: ignore
-        self.indices.copy_(all_indices[idx])  # type: ignore
-
-    def on_before_objective(self, logits: Tensor) -> Tensor:
-        """Run before the scores are computed. By default it simply returns its inputs."""
-        return logits
-
-    def objective(self, logits: Tensor) -> Tensor:
+    def score(self, logits: Tensor) -> Tensor:
         """Must be redefined with the specific active learning objective, aka the acquisition function.
 
         Args:
@@ -137,26 +125,3 @@ class EnergizerStrategy(LightningModule):
             is then flatten by the `on_after_objective` method.
         """
         raise NotImplementedError
-
-    def on_after_objective(self, scores: Tensor) -> Tensor:
-        """Run after the scores are computed. By default if flattens the scores."""
-        return scores.flatten()
-
-    def optimize_objective(self, scores: Tensor) -> Tuple[Tensor, Tensor]:
-        """Define how the active learning objective is optimized. By default it maximizes it.
-
-        Returns:
-            A tuple of two tensors. Both tensors have length `query_size`. The first element is the tensor
-            of the topk scores and the second element is the tensor of the relative topk indices.
-        """
-        query_size = min(scores.shape[0], self.query_size)
-        return torch.topk(scores, query_size, dim=0)
-
-    def _batch_to_pool(self, indices: Tensor, batch_size: int) -> Tensor:
-        """Transform index relative to the batch in indices relative to the pool."""
-        indices += self._counter
-        self._counter += batch_size  # type: ignore
-        pool_size = self.trainer.datamodule.pool_size  # type: ignore
-        if self._counter > pool_size:
-            raise RuntimeError("Strategy states must be reset at the end of each labelling iteration.")
-        return indices
