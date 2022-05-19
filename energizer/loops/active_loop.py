@@ -29,7 +29,7 @@ class ActiveLearningLoop(Loop):
         if datamodule.has_labelled_data:
 
             # FitLoop
-            for epoch in range(label_epoch_frequency):
+            for epoch in range(n_epochs_between_labelling):
 
                 # TrainingEpochLoop
                 for batch_idx, batch in enumerate(train_dataloader):
@@ -57,18 +57,18 @@ class ActiveLearningLoop(Loop):
         self,
         al_strategy: EnergizerStrategy,
         query_size: int = 2,
-        label_epoch_frequency: int = 1,
+        n_epochs_between_labelling: int = 1,
         reset_weights: bool = True,
         total_budget: int = -1,
         min_steps_per_epoch: int = None,
-        test_after_labelling_epoch: bool = True,
+        test_after_labelling: bool = True,
     ) -> None:
         """The active learning loop.
 
         Args:
             al_strategy (EnergizerStrategy): An active learning strategy.
             query_size (int): Number of instances to label at each iteration.
-            label_epoch_frequency (int): Number of epoch to run before requesting labellization.
+            n_epochs_between_labelling (int): Number of epoch to run before requesting labellization.
             reset_weights (bool): Whether to reset the weights to their initial state at
                 the end of each labelling iteration.
             total_budget (int): Number of instances to acquire before stopping the training loop.
@@ -82,11 +82,11 @@ class ActiveLearningLoop(Loop):
         super().__init__()
         self.al_strategy = al_strategy
         self.query_size = query_size
-        self.label_epoch_frequency = label_epoch_frequency
+        self.n_epochs_between_labelling = n_epochs_between_labelling
         self.reset_weights = reset_weights
         self.total_budget = total_budget
         self.min_steps_per_epoch = min_steps_per_epoch
-        self.test_after_labelling_epoch = test_after_labelling_epoch
+        self.test_after_labelling = test_after_labelling
 
         self.progress = Progress()
         self.fit_loop: Optional[FitLoop] = None
@@ -125,8 +125,8 @@ class ActiveLearningLoop(Loop):
 
         - Extracts the `max_epochs` and uses it as a stopping condition for the `ActiveLearningLoop`
 
-        - Patches the `max_epochs` argument of the `fit_loop` with `label_epoch_frequency` so that
-        during each training phase it trains the model `label_epoch_frequency` times
+        - Patches the `max_epochs` argument of the `fit_loop` with `n_epochs_between_labelling` so that
+        during each training phase it trains the model `n_epochs_between_labelling` times
 
         - Extracts the `test_loop` from the trainer and uses it to test the model
 
@@ -138,13 +138,13 @@ class ActiveLearningLoop(Loop):
         self.fit_loop = trainer.fit_loop
 
         # set the total number of epochs the fit loop, within one epoch of the active learning loop, must run
-        if self.fit_loop.max_epochs != self.label_epoch_frequency:
+        if self.fit_loop.max_epochs != self.n_epochs_between_labelling:
             print(
                 f"You specified `max_epochs={self.fit_loop.max_epochs}` in the `Trainer`"
-                f"but `label_epoch_frequency={self.label_epoch_frequency}`."
-                f"Therefore the fit_loop, within one active learning loop, will run {self.label_epoch_frequency} times."
+                f"but `n_epochs_between_labelling={self.n_epochs_between_labelling}`."
+                f"Therefore the fit_loop, within one active learning loop, will run {self.n_epochs_between_labelling} times."
             )
-        self.fit_loop.max_epochs = self.label_epoch_frequency
+        self.fit_loop.max_epochs = self.n_epochs_between_labelling
 
         # attach the loop for testing
         self.test_loop = trainer.test_loop
@@ -186,7 +186,7 @@ class ActiveLearningLoop(Loop):
 
         # set the total number of epochs the active learning loop must run
         if self.total_budget > 0:
-            self.max_epochs = self.total_budget * self.label_epoch_frequency
+            self.max_epochs = self.total_budget * self.n_epochs_between_labelling
         else:
             self.max_epochs = self.trainer.datamodule.pool_size
 
@@ -223,7 +223,7 @@ class ActiveLearningLoop(Loop):
 
             1. Reset dataloaders, states, and attach original model for training and validation
 
-            1. Run training for `label_epoch_frequency` epochs and each epoch has a least `min_steps_per_epoch` steps
+            1. Run training for `n_epochs_between_labelling` epochs and each epoch has a least `min_steps_per_epoch` steps
 
             1. Run validation
 
@@ -247,7 +247,7 @@ class ActiveLearningLoop(Loop):
             self.fit_loop.run()  # type: ignore
 
             # testing - when testing we don't need gradients
-            if self.test_after_labelling_epoch:
+            if self.test_after_labelling:
                 self._reset_testing()
                 self.test_loop.run()  # type: ignore
 

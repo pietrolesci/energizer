@@ -1,13 +1,42 @@
 import contextlib
 from copy import deepcopy
 from itertools import cycle
-from typing import Generator, Optional
+from typing import Any, Callable, Generator, Optional
+from webbrowser import get
 
 import torch
 import torch.nn.functional as F
+from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.utilities.model_helpers import is_overridden
 from torch import Tensor, nn
 from torch.nn.modules.dropout import _DropoutNd
+
+
+class ModuleWrapperBase:
+    """The ``ModuleWrapperBase`` is a base for classes which wrap a ``LightningModule`` or an instance of
+    ``ModuleWrapperBase``.
+
+    This class ensures that trainer attributes are forwarded to any wrapped or nested
+    ``LightningModule`` instances so that nested calls to ``.log`` are handled correctly. The ``ModuleWrapperBase`` is
+    also stateful. Attached state will be forwarded to any nested ``ModuleWrapperBase`` instances.
+
+    Credits: Pytorch-Lightning Team.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._children = []
+
+    def __setattr__(self, key, value):
+        if isinstance(value, (LightningModule, ModuleWrapperBase)):
+            self._children.append(key)
+        patched_attributes = ["_current_fx_name", "_current_hook_fx_name", "_results", "_data_pipeline_state"]
+        if isinstance(value, Trainer) or key in patched_attributes:
+            if hasattr(self, "_children"):
+                for child in self._children:
+                    setattr(getattr(self, child), key, value)
+        super().__setattr__(key, value)
 
 
 @contextlib.contextmanager
@@ -103,7 +132,7 @@ class EnergizerDropoutLayer(_DropoutNd):
         """
         if num_inference_iters:
             self.num_inference_iters = num_inference_iters
-        self.seeds = cycle(torch.randint(10, 10 ** 8, size=(self.num_inference_iters,)).tolist())
+        self.seeds = cycle(torch.randint(10, 10**8, size=(self.num_inference_iters,)).tolist())
 
     def eval(self) -> None:
         """Reset the mask when put in eval mode."""
@@ -173,7 +202,11 @@ class FeatureAlphaDropout(EnergizerDropoutLayer):
 
 
 def patch_dropout_layers(
-    module: nn.Module, prob: Optional[float] = None, inplace: bool = True, consistent: bool = False, **consistent_kwargs
+    module: nn.Module,
+    prob: Optional[float] = None,
+    inplace: bool = False,
+    consistent: bool = False,
+    **consistent_kwargs,
 ) -> nn.Module:
     """Replace dropout layers in a model with MCDropout layers.
 
@@ -231,7 +264,7 @@ def _patch_dropout(
             if isinstance(child, dropout_layer):
 
                 # NOTE: `eval(dropout_layer.__name__)` works because the __name__ of the original dropout
-                # layers is the same as the __name__ of the patched layers above
+                # layers is the same as the __name__ of the patched layers defined above
                 new_module = eval(dropout_layer.__name__)(
                     p=prob if prob else child.p, inplace=child.inplace, consistent=consistent, **consistent_kwargs
                 )
