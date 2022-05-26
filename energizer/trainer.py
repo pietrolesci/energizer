@@ -45,6 +45,11 @@ class Trainer(Trainer_pl):
         super().__init__(*args, **kwargs)
         self._patch_progress_bar()
 
+        # TODO: create EvaluationLoop() here and fitloop
+        # active_fit_loop = FitLoop()
+        # pool_loop = EvaluationLoop()
+        # test_after_fit_loop = EvaluationLoop()
+
     def active_fit(
         self,
         model: EnergizerStrategy,
@@ -80,7 +85,7 @@ class Trainer(Trainer_pl):
         # run loop
         self.fit(model, datamodule=datamodule)
 
-        # restore original fit loop
+        # TODO: restore original fit loop
         # self.fit_loop = self.fit_loop.fit_loop
         # self.test_loop = self.fit_loop.test_loop
 

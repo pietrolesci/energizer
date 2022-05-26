@@ -83,8 +83,9 @@ class ActiveLearningLoop(Loop):
 
         # attach the loop for pool
         # TODO: is it the correct way to instantiate the pool_loop?
-        self.pool_loop = copy(self.trainer.test_loop)
+        self.pool_loop = copy(self.trainer.test_loop)  # try with deepcopy
         self.pool_loop.verbose = False
+        # self.eval_after_pool = 
         self.trainer.test_loop.verbose = False
         self.trainer.validate_loop.verbose = False
 
@@ -128,6 +129,7 @@ class ActiveLearningLoop(Loop):
         # self.epoch_loop.global_step = 0
         # self.epoch_progress.current.processed = 0
 
+    # TODO: not needed if using different loops
     def _reset_fitting(self) -> None:
         self.trainer.reset_train_dataloader()
         self.trainer.reset_val_dataloader()

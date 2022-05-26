@@ -119,8 +119,11 @@ class EnergizerStrategy(Adapter):
         print("\nbatch_idx:", batch_idx)
         if self.is_on_pool:
             print("len:", len(self.trainer.datamodule.pool_fold))
+            
+            # consider including score into pool_ste to be consistent with PL logic
             outputs = self.pool_step(batch, batch_idx, *args, **kwargs)
             scores = self.score(outputs)
+            
             # TODO: why do I have gradients here?
             print("requires grad:", scores.requires_grad, self.trainer.testing)
             self.accumulation_metric.update(scores)
