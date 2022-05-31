@@ -65,9 +65,8 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
     def __init__(self, query_size: int) -> None:
         super().__init__()
         self.query_size = query_size
-        AccumulateTopK(k=None)
+        self.accumulator = AccumulateTopK(k=query_size)  # need to move this to same device as model
         
-
     def _evaluation_step(self, **kwargs: Any) -> Optional[STEP_OUTPUT]:
         """The evaluation step (pool_step).
 
@@ -79,7 +78,9 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         Returns:
             the outputs of the step
         """
-        return self.trainer._call_strategy_hook("pool_step", *kwargs.values())
+        output = self.trainer._call_strategy_hook("pool_step", *kwargs.values())
+        self.accumulator.update(output)
+        return output
 
     def _evaluation_step_end(self, *args: Any, **kwargs: Any) -> Optional[STEP_OUTPUT]:
         """Calls the `pool_step_end` hook."""

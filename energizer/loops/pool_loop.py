@@ -1,23 +1,26 @@
 import os
-from typing import Any, List, Union
+from typing import Any, List, Union, Tuple
 
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.utilities.types import EPOCH_OUTPUT
-
+from pytorch_lightning.trainer.connectors.logger_connector.result import _OUT_DICT
 from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
 
 
 class PoolEvaluationLoop(EvaluationLoop):
     """Loops over all dataloaders for evaluation."""
 
-    def __init__(self) -> None:
+    def __init__(self, query_size: int) -> None:
         super().__init__(verbose=False)
-        self.epoch_loop = PoolEvaluationEpochLoop()
+        self.epoch_loop = PoolEvaluationEpochLoop(query_size)
 
     def _on_evaluation_start(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_pool_start`` hooks."""
         assert self._results is not None
         self._results.to(device=self.trainer.lightning_module.device)
+        
+        # put accumulator on same device
+        self.epoch_loop.accumulator(device=self.trainer.lightning_module.device)
 
         self.trainer._call_callback_hooks("on_pool_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_start", *args, **kwargs)
@@ -49,6 +52,9 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.trainer._call_callback_hooks("on_pool_epoch_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_epoch_start", *args, **kwargs)
 
+        # call accumulate reset
+        self.epoch_loop.accumulate.reset()
+
     def _evaluation_epoch_end(self, outputs: List[EPOCH_OUTPUT]) -> None:
         """Runs ``pool_epoch_end``"""
         self.trainer._logger_connector._evaluation_epoch_end()
@@ -69,3 +75,14 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.trainer._call_callback_hooks("on_epoch_end")
         self.trainer._call_lightning_module_hook("on_epoch_end")
         self.trainer._logger_connector.on_epoch_end()
+
+    def teardown(self) -> None:
+        super().teardown()
+        # put accumulator on cpu
+        self.epoch_loop.accumulator.cpu()
+
+    def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
+        output = super().on_run_end()
+        indices = self.epoch_loop.accumulator.compute().tolist()
+        return output, indices
+

@@ -41,10 +41,6 @@ class ActiveLearningLoop(FitLoop):
             or self.trainer.lightning_module.query_size > self.trainer.datamodule.pool_size
         )
 
-    def reset(self) -> None:
-        """Nothing to reset in this loop."""
-        pass
-
     def on_run_start(self, *args: Any, **kwargs: Any) -> None:
         """Store the original weights of the model."""
 
@@ -67,8 +63,7 @@ class ActiveLearningLoop(FitLoop):
 
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_testing(is_on_pool=True)  # requires to reset the tracking stage.
-            self.trainer.pool_loop.run()
-            indices = self.trainer.lightning_module.accumulation_metric.compute().tolist()
+            _, indices = self.trainer.pool_loop.run()
             self.labelling_loop(indices)
 
     def on_advance_end(self) -> None:

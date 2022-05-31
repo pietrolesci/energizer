@@ -20,7 +20,7 @@ from energizer.learners.base import Learner
 class TQDMProgressBarPool(TQDMProgressBar):
     @property
     def test_description(self) -> str:
-        if self.trainer.lightning_module.is_on_pool:
+        if hasattr(self.trainer.lightning_module, "is_on_pool") and self.trainer.lightning_module.is_on_pool:
             return "Pool Evaluation"
         return super().test_description
 
@@ -40,24 +40,27 @@ class Trainer(Trainer_pl):
         self,
         query_size: int = 2,
         total_budget: int = -1,
+        min_labelling_iters: int = 0,
+        max_labelling_iters: int = 1000,
         reset_weights: bool = True,
         n_epochs_between_labelling: int = 1,
         test_after_labelling: bool = True,
-        *args,
         **kwargs,
     ) -> None:
+        super().__init__(**kwargs)
         self.query_size = query_size
         self.total_budget = total_budget
         self.reset_weights = reset_weights
         self.n_epochs_between_labelling = n_epochs_between_labelling
+        self.min_labelling_iters = min_labelling_iters
+        self.max_labelling_iters = max_labelling_iters
         self.test_after_labelling = test_after_labelling
 
         # Intialize rest of the trainer
-        super().__init__(*args, **kwargs)
         self.callbacks = patch_progress_bar(self)
 
         # pool evaluation loop
-        self.pool_loop = PoolEvaluationLoop()
+        self.pool_loop = PoolEvaluationLoop(self.query_size)
 
         # fit after each labelling session
         active_fit_loop = FitLoop(min_epochs=self.min_epochs, max_epochs=n_epochs_between_labelling)
@@ -72,6 +75,8 @@ class Trainer(Trainer_pl):
             reset_weights=self.reset_weights,
             total_budget=self.total_budget,
             test_after_labelling=self.test_after_labelling,
+            min_epochs=self.min_labelling_iters,
+            max_epochs=self.max_labelling_iters,
         )
 
     def active_fit(
