@@ -1,14 +1,12 @@
 import contextlib
 from copy import deepcopy
 from itertools import cycle
-from typing import Any, Callable, Generator, Optional
-from webbrowser import get
+from typing import Generator, Optional
 
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.model_helpers import is_overridden
 from torch import Tensor, nn
 from torch.nn.modules.dropout import _DropoutNd
 

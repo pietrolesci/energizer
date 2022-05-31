@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.optim.optimizer import Optimizer
+from pytorch_lightning import LightningModule
 
 
 class ModelHooks:
@@ -14,28 +15,28 @@ class ModelHooks:
     # START/END #
     #############
     def on_fit_start(self) -> None:
-        return self.learner.on_fit_start()
+        return LightningModule.on_fit_start(self.learner)
 
     def on_fit_end(self) -> None:
-        return self.learner.on_fit_end()
+        return LightningModule.on_fit_end(self.learner)
 
     def on_train_start(self) -> None:
-        return self.learner.on_train_start()
+        return LightningModule.on_train_start(self.learner)
 
     def on_train_end(self) -> None:
-        return self.learner.on_train_end()
+        return LightningModule.on_train_end(self.learner)
 
     def on_validation_start(self) -> None:
-        return self.learner.on_validation_start()
+        return LightningModule.on_validation_start(self.learner)
 
     def on_validation_end(self) -> None:
-        return self.learner.on_validation_end()
+        return LightningModule.on_validation_end(self.learner)
 
     def on_test_start(self) -> None:
-        return self.learner.on_test_start()
+        return LightningModule.on_test_start(self.learner)
 
     def on_test_end(self) -> None:
-        return self.learner.on_test_end()
+        return LightningModule.on_test_end(self.learner)
 
     def on_pool_start(self) -> None:
         pass
@@ -44,35 +45,35 @@ class ModelHooks:
         pass
 
     def on_predict_start(self) -> None:
-        return self.learner.on_predict_start()
+        return LightningModule.on_predict_start(self.learner)
 
     def on_predict_end(self) -> None:
-        return self.learner.on_predict_end()
+        return LightningModule.on_predict_end(self.learner)
 
     ###################
     # BATCH START/END #
     ###################
     def on_train_batch_start(self, batch: Any, batch_idx: int) -> Optional[int]:
-        return self.learner.on_train_batch_start(batch, batch_idx)
+        return LightningModule.on_train_batch_start(self.learner, batch, batch_idx)
 
     def on_train_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int) -> None:
-        return self.learner.on_train_batch_end(outputs, batch, batch_idx)
+        return LightningModule.on_train_batch_end(self.learner, outputs, batch, batch_idx)
 
     def on_validation_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        return self.learner.on_validation_batch_start(batch, batch_idx, dataloader_idx)
+        return LightningModule.on_validation_batch_start(self.learner, batch, batch_idx, dataloader_idx)
 
     def on_validation_batch_end(
         self, outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int
     ) -> None:
-        return self.learner.on_validation_batch_end(outputs, batch, batch_idx, dataloader_idx)
+        return LightningModule.on_validation_batch_end(self.learner, outputs, batch, batch_idx, dataloader_idx)
 
     def on_test_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        return self.learner.on_test_batch_start(batch, batch_idx, dataloader_idx)
+        return LightningModule.on_test_batch_start(self.learner, batch, batch_idx, dataloader_idx)
 
     def on_test_batch_end(
         self, outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int
     ) -> None:
-        return self.learner.on_test_batch_end(outputs, batch, batch_idx, dataloader_idx)
+        return LightningModule.on_test_batch_end(self.learner, outputs, batch, batch_idx, dataloader_idx)
 
     def on_pool_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
         pass
@@ -83,25 +84,25 @@ class ModelHooks:
         pass
 
     def on_predict_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        return self.learner.on_predict_batch_start(batch, batch_idx, dataloader_idx)
+        return LightningModule.on_predict_batch_start(self.learner, batch, batch_idx, dataloader_idx)
 
     def on_predict_batch_end(self, outputs: Optional[Any], batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        return self.learner.on_predict_batch_end(outputs, batch, batch_idx, dataloader_idx)
+        return LightningModule.on_predict_batch_end(self.learner, outputs, batch, batch_idx, dataloader_idx)
 
     ##############
     # MODEL EVAL #
     ##############
     def on_validation_model_eval(self) -> None:
-        return self.learner.on_validation_model_eval()
+        return LightningModule.on_validation_model_eval(self.learner)
 
     def on_validation_model_train(self) -> None:
-        return self.learner.on_validation_model_train()
+        return LightningModule.on_validation_model_train(self.learner)
 
     def on_test_model_train(self) -> None:
-        return self.learner.on_test_model_train()
+        return LightningModule.on_test_model_train(self.learner)
 
     def on_test_model_eval(self) -> None:
-        return self.learner.on_test_model_eval()
+        return LightningModule.on_test_model_eval(self.learner)
 
     def on_pool_model_train(self) -> None:
         pass
@@ -110,28 +111,28 @@ class ModelHooks:
         pass
 
     def on_predict_model_eval(self) -> None:
-        return self.learner.on_predict_model_eval()
+        return LightningModule.on_predict_model_eval(self.learner)
 
     ###################
     # EPOCH START/END #
     ###################
     def on_train_epoch_start(self) -> None:
-        return self.learner.on_train_epoch_start()
+        return LightningModule.on_train_epoch_start(self.learner)
 
     def on_train_epoch_end(self) -> None:
-        return self.learner.on_train_epoch_end()
+        return LightningModule.on_train_epoch_end(self.learner)
 
     def on_validation_epoch_start(self) -> None:
-        return self.learner.on_validation_epoch_start()
+        return LightningModule.on_validation_epoch_start(self.learner)
 
     def on_validation_epoch_end(self) -> None:
-        return self.learner.on_validation_epoch_end()
+        return LightningModule.on_validation_epoch_end(self.learner)
 
     def on_test_epoch_start(self) -> None:
-        return self.learner.on_test_epoch_start()
+        return LightningModule.on_test_epoch_start(self.learner)
 
     def on_test_epoch_end(self) -> None:
-        return self.learner.on_test_epoch_end()
+        return LightningModule.on_test_epoch_end(self.learner)
 
     def on_pool_epoch_start(self) -> None:
         pass
@@ -140,54 +141,54 @@ class ModelHooks:
         pass
 
     def on_predict_epoch_start(self) -> None:
-        return self.learner.on_predict_epoch_start()
+        return LightningModule.on_predict_epoch_start(self.learner)
 
     def on_predict_epoch_end(self, results: List[Any]) -> None:
-        return self.learner.on_predict_epoch_end(results)
+        return LightningModule.on_predict_epoch_end(self.learner, results)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
-        return self.learner.on_before_zero_grad(optimizer)
+        return LightningModule.on_before_zero_grad(self.learner, optimizer)
 
     def on_before_backward(self, loss: torch.Tensor) -> None:
-        return self.learner.on_before_backward(loss)
+        return LightningModule.on_before_backward(self.learner, loss)
 
     def on_after_backward(self) -> None:
-        return self.learner.on_after_backward()
+        return LightningModule.on_after_backward(self.learner)
 
     def on_before_optimizer_step(self, optimizer: Optimizer, optimizer_idx: int) -> None:
-        return self.learner.on_before_optimizer_step(optimizer, optimizer_idx)
+        return LightningModule.on_before_optimizer_step(self.learner, optimizer, optimizer_idx)
 
     def configure_sharded_model(self) -> None:
-        return self.learner.configure_sharded_model()
+        return LightningModule.configure_sharded_model(self.learner)
 
 
 class DataHooks:
     """Hooks to be used for data related stuff."""
 
     def prepare_data(self) -> None:
-        return self.learner.prepare_data()
+        return LightningModule.prepare_data(self.learner)
 
     def setup(self, stage: Optional[str] = None) -> None:
-        return self.learner.setup(stage)
+        return LightningModule.setup(self.learner, stage)
 
     def teardown(self, stage: Optional[str] = None) -> None:
-        return self.learner.teardown(stage)
+        return LightningModule.teardown(self.learner, stage)
 
     def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
-        return self.learner.transfer_batch_to_device(batch, device, dataloader_idx)
+        return LightningModule.transfer_batch_to_device(self.learner, batch, device, dataloader_idx)
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
-        return self.learner.on_before_batch_transfer(batch, dataloader_idx)
+        return LightningModule.on_before_batch_transfer(self.learner, batch, dataloader_idx)
 
     def on_after_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
-        return self.learner.on_after_batch_transfer(batch, dataloader_idx)
+        return LightningModule.on_after_batch_transfer(self.learner, batch, dataloader_idx)
 
 
 class CheckpointHooks:
     """Hooks to be used with Checkpointing."""
 
     def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        return self.learner.on_load_checkpoint(checkpoint)
+        return LightningModule.on_load_checkpoint(self.learner, checkpoint)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        return self.learner.on_save_checkpoint(checkpoint)
+        return LightningModule.on_save_checkpoint(self.learner, checkpoint)

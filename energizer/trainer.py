@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from energizer.data.datamodule import ActiveDataModule
 from energizer.loops.pool_loop import PoolEvaluationLoop
 from energizer.loops.active_loop import ActiveLearningLoop
-from energizer.strategies.inference import Learner
+from energizer.learners.base import Learner
 
 
 class TQDMProgressBarPool(TQDMProgressBar):
@@ -25,7 +25,7 @@ class TQDMProgressBarPool(TQDMProgressBar):
         return super().test_description
 
 
-def _patch_progress_bar(trainer: Trainer_pl) -> List:
+def patch_progress_bar(trainer: Trainer_pl) -> List:
     callbacks = []
     for c in trainer.callbacks:
         if not isinstance(c, ProgressBarBase):
@@ -54,7 +54,7 @@ class Trainer(Trainer_pl):
 
         # Intialize rest of the trainer
         super().__init__(*args, **kwargs)
-        self.callbacks = _patch_progress_bar(self)
+        self.callbacks = patch_progress_bar(self)
 
         # pool evaluation loop
         self.pool_loop = PoolEvaluationLoop()
