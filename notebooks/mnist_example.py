@@ -5,8 +5,6 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import transforms
 from torchvision.datasets import MNIST
-from energizer.strategies.functional import entropy
-from energizer.strategies.inference import Deterministic
 
 
 class MNISTDataModule(LightningDataModule):
@@ -98,6 +96,7 @@ class MNISTModel(LightningModule):
         x, y = batch
         logits = self(x)
         loss = self.loss(logits, y)
+        self.log(f"{stage}/loss", loss)
         return {"loss": loss, "logits": logits}
 
     def training_step(self, batch, *args, **kwargs) -> Tensor:

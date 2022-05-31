@@ -1,9 +1,9 @@
 from mnist_example import MNISTModel, MNISTDataModule
-from energizer.strategies.inference import Deterministic
+from energizer.learners.base import Deterministic
 from energizer.trainer import Trainer
 from torch import Tensor
 from pytorch_lightning import LightningModule
-from energizer.strategies.functional import entropy
+from energizer.learners.acquisition_functions import entropy
 
 
 class Learner(Deterministic):
