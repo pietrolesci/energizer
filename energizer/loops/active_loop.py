@@ -5,6 +5,8 @@ from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities.distributed import rank_zero_only
 from pytorch_lightning import Trainer
+import torch
+
 
 class ActiveLearningLoop(FitLoop):
     def __init__(
@@ -43,15 +45,9 @@ class ActiveLearningLoop(FitLoop):
 
     def on_run_start(self, *args: Any, **kwargs: Any) -> None:
         """Store the original weights of the model."""
-
-        # # split train dataset in train and pool folds
-        # self.trainer.datamodule.setup_folds()
-
         # make a copy of the initial state of the model to reset the weights
         if self.reset_weights:
             self.lightning_module_state_dict = deepcopy(self.trainer.lightning_module.state_dict())
-
-        print("DIO", flush=True)
 
     def advance(self, *args: Any, **kwargs: Any) -> None:
         """Used to the run a fitting, testing, and pool evaluation."""
@@ -76,25 +72,30 @@ class ActiveLearningLoop(FitLoop):
 
     def on_run_end(self):
         # make sure we are not on pool when active_fit ends
-        self.trainer.lightning_module.is_on_pool = False
+        self.trainer.datamodule.is_on_pool = False
 
         # enforce training at the end of acquisitions
         self._reset_fitting()
-        self.fit_loop.run()
+        self.trainer.active_fit_loop.run()
 
     def _reset_fitting(self) -> None:
         self.trainer.reset_train_dataloader()
         self.trainer.reset_val_dataloader()
-        self.current_epoch = 0
-        self.global_step = 0
+        # self.current_epoch = 0
+        # self.global_step = 0
         self.trainer.state.fn = TrainerFn.FITTING
         self.trainer.training = True
+        self.trainer.lightning_module.train()
+        torch.set_grad_enabled(True)
+
 
     def _reset_testing(self, is_on_pool: bool = False) -> None:
-        self.trainer.reset_test_dataloader()
         self.trainer.datamodule.is_on_pool = is_on_pool
+        self.trainer.reset_test_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
+        self.trainer.lightning_module.eval()
+        torch.set_grad_enabled(False)
 
     @rank_zero_only
     def labelling_loop(self, indices: List[int]):
