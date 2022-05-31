@@ -1,19 +1,20 @@
-import sys
-from argparse import ArgumentParser
-from gc import callbacks
-from typing import Optional
+from typing import Optional, List
 
-from pytorch_lightning import LightningDataModule, LightningModule
+from pytorch_lightning import LightningDataModule
 from pytorch_lightning import Trainer as Trainer_pl
 from pytorch_lightning.callbacks.progress.base import ProgressBarBase
-from pytorch_lightning.callbacks.progress.tqdm_progress import Tqdm, TQDMProgressBar
+from pytorch_lightning.callbacks.progress.tqdm_progress import TQDMProgressBar
+from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
+from pytorch_lightning.loops.epoch.training_epoch_loop import TrainingEpochLoop
+from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from torch.utils.data import DataLoader
 
-from energizer.datamodule import ActiveDataModule
-from energizer.loop import ActiveLearningLoop
-from energizer.strategies.strategies import EnergizerStrategy
+from energizer.data.datamodule import ActiveDataModule
+from energizer.loops.pool_loop import PoolEvaluationLoop
+from energizer.loops.active_loop import ActiveLearningLoop
+from energizer.strategies.inference import Learner
 
 
 class TQDMProgressBarPool(TQDMProgressBar):
@@ -22,6 +23,16 @@ class TQDMProgressBarPool(TQDMProgressBar):
         if self.trainer.lightning_module.is_on_pool:
             return "Pool Evaluation"
         return super().test_description
+
+
+def _patch_progress_bar(trainer: Trainer_pl) -> List:
+    callbacks = []
+    for c in trainer.callbacks:
+        if not isinstance(c, ProgressBarBase):
+            callbacks.append(c)
+        else:
+            callbacks.append(TQDMProgressBarPool(process_position=c.process_position, refresh_rate=c.refresh_rate))
+    return callbacks
 
 
 class Trainer(Trainer_pl):
@@ -43,30 +54,34 @@ class Trainer(Trainer_pl):
 
         # Intialize rest of the trainer
         super().__init__(*args, **kwargs)
-        self._patch_progress_bar()
+        self.callbacks = _patch_progress_bar(self)
 
-        # TODO: create EvaluationLoop() here and fitloop
-        # active_fit_loop = FitLoop()
-        # pool_loop = EvaluationLoop()
-        # test_after_fit_loop = EvaluationLoop()
+        # pool evaluation loop
+        self.pool_loop = PoolEvaluationLoop()
+
+        # fit after each labelling session
+        active_fit_loop = FitLoop(min_epochs=self.min_epochs, max_epochs=n_epochs_between_labelling)
+        training_epoch_loop = TrainingEpochLoop(min_steps=self.min_steps, max_steps=self.max_steps)
+        active_fit_loop.connect(epoch_loop=training_epoch_loop)
+        self.active_fit_loop = active_fit_loop
+
+        # test after labelling and fitting
+        self.active_test_loop = EvaluationLoop(verbose=False)
+
+        self.active_learning_loop = ActiveLearningLoop(
+            reset_weights=self.reset_weights,
+            total_budget=self.total_budget,
+            test_after_labelling=self.test_after_labelling,
+        )
 
     def active_fit(
         self,
-        model: EnergizerStrategy,
+        model: Learner,
         train_dataloader: Optional[DataLoader] = None,
         val_dataloaders: Optional[DataLoader] = None,
         test_dataloaders: Optional[DataLoader] = None,
         datamodule: Optional[LightningDataModule] = None,
     ) -> None:
-
-        # overwrite standard fit loop
-        self.fit_loop = ActiveLearningLoop(
-            n_epochs_between_labelling=self.n_epochs_between_labelling,
-            reset_weights=self.reset_weights,
-            total_budget=self.total_budget,
-            test_after_labelling=self.test_after_labelling,
-            fit_loop=self.fit_loop,
-        )
 
         # construct active learning pool and train data splits
         if train_dataloader is not None or datamodule is not None and not isinstance(datamodule, ActiveDataModule):
@@ -83,26 +98,4 @@ class Trainer(Trainer_pl):
             )
 
         # run loop
-        self.fit(model, datamodule=datamodule)
-
-        # TODO: restore original fit loop
-        # self.fit_loop = self.fit_loop.fit_loop
-        # self.test_loop = self.fit_loop.test_loop
-
-    @classmethod
-    def add_argparse_args(cls, parent_parser: ArgumentParser, **kwargs) -> ArgumentParser:
-        """Alter the argparser to also include the new arguments"""
-        parser = super().add_argparse_args(parent_parser, **kwargs)
-        parser.add_argument("--num_folds", type=int, default=5)
-        parser.add_argument("--shuffle", type=bool, default=False)
-        parser.add_argument("--stratified", type=bool, default=False)
-        return parser
-
-    def _patch_progress_bar(self):
-        callbacks = []
-        for c in self.callbacks:
-            if not isinstance(c, ProgressBarBase):
-                callbacks.append(c)
-            else:
-                callbacks.append(TQDMProgressBarPool(process_position=c.process_position, refresh_rate=c.refresh_rate))
-        self.callbacks = callbacks
+        self.active_learning_loop.run()

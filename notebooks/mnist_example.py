@@ -5,6 +5,8 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import transforms
 from torchvision.datasets import MNIST
+from energizer.strategies.functional import entropy
+from energizer.strategies.inference import Deterministic
 
 
 class MNISTDataModule(LightningDataModule):
@@ -109,7 +111,3 @@ class MNISTModel(LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.SGD(self.parameters(), lr=0.01)
-
-    def pool_step(self, batch, *args, **kwargs):
-        x, _ = batch
-        return self(x)

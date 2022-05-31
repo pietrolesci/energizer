@@ -83,6 +83,56 @@ def confidence(logits: Tensor, k: int = 1) -> Tensor:
     return torch.topk(probs, k=k, dim=-1).values
 
 
+def least_confidence(logits: Tensor, k: int = 1) -> Tensor:
+    r"""Implements the least confidence acquisition function.
+
+    References: http://burrsettles.com/pub/settles.activelearning.pdf.
+
+    This strategy allows an active learner to select the unlabeled data
+    samples for which the model is least confident (i.e., most uncertain)
+    in prediction or class assignment.
+
+    It selects an instance $x$ such that
+
+    $$\arg \max_{x} \; 1 - p(y_{max}|x, \theta)$$
+
+    where $y_{max} = \arg\max_y p(y|x, \theta)$, i.e. the class label with the
+    highest posterior probability under the model $\theta$. One way to interpret
+    this uncertainty measure is the expected 0/1-loss, i.e., the model's belief
+    that it will mislabel $x$.
+
+    If samples from a posterior distributions are provided, it computes
+
+    $$\arg \max_{x} \; 1 - \mathrm{E}_{p(\theta| D)} p(y_{max}|x, \theta)$$
+    """
+    return 1.0 - confidence(logits, k=k)
+
+
+def expected_least_confidence(logits: Tensor, k: int = 1) -> Tensor:
+    r"""Implements the least confidence acquisition function.
+
+    References: http://burrsettles.com/pub/settles.activelearning.pdf.
+
+    This strategy allows an active learner to select the unlabeled data
+    samples for which the model is least confident (i.e., most uncertain)
+    in prediction or class assignment.
+
+    It selects an instance $x$ such that
+
+    $$\arg \max_{x} \; 1 - p(y_{max}|x, \theta)$$
+
+    where $y_{max} = \arg\max_y p(y|x, \theta)$, i.e. the class label with the
+    highest posterior probability under the model $\theta$. One way to interpret
+    this uncertainty measure is the expected 0/1-loss, i.e., the model's belief
+    that it will mislabel $x$.
+
+    If samples from a posterior distributions are provided, it computes
+
+    $$\arg \max_{x} \; 1 - \mathrm{E}_{p(\theta| D)} p(y_{max}|x, \theta)$$
+    """
+    return 1.0 - expected_confidence(logits, k=k)
+
+
 def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
     r"""Computes the expected confidence based on logits.
 
@@ -104,3 +154,57 @@ def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
     probs = softmax(logits, dim=-2)
     confidence = torch.topk(probs, k=k, dim=-2).values
     return torch.mean(confidence, dim=-1)
+
+
+def margin_confidence(logits: Tensor) -> Tensor:
+    r"""Implements the margin strategy.
+
+    Reference: http://burrsettles.com/pub/settles.activelearning.pdf.
+
+    Margin sampling aims to correct for a shortcoming in least
+    confident strategy, by incorporating the posterior of the second most likely label.
+    Intuitively, instances with large margins are easy, since the classifier has little
+    doubt in differentiating between the two most likely class labels. Instances with
+    small margins are more ambiguous, thus knowing the true label would help the
+    model discriminate more effectively between them.
+
+    It selects an instance $x$ such that
+
+    $$\arg\min_{x} P(y_1|x, \theta) - P(y_2|x, \theta)$$
+
+    where $y_1$ and $y_2$ are the first and second most probable class labels under the
+    model defined by $\theta$, respectively.
+
+    If samples from a posterior distributions are provided, it computes
+
+    $$\arg\min_{x} \mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
+    """
+    confidence_top2 = confidence(logits, k=2)
+    return -(confidence_top2[:, 0] - confidence_top2[:, 1])
+
+
+def expected_margin_confidence(logits: Tensor):
+    r"""Implements the margin strategy.
+
+    Reference: http://burrsettles.com/pub/settles.activelearning.pdf.
+
+    Margin sampling aims to correct for a shortcoming in least
+    confident strategy, by incorporating the posterior of the second most likely label.
+    Intuitively, instances with large margins are easy, since the classifier has little
+    doubt in differentiating between the two most likely class labels. Instances with
+    small margins are more ambiguous, thus knowing the true label would help the
+    model discriminate more effectively between them.
+
+    It selects an instance $x$ such that
+
+    $$\arg\min_{x} P(y_1|x, \theta) - P(y_2|x, \theta)$$
+
+    where $y_1$ and $y_2$ are the first and second most probable class labels under the
+    model defined by $\theta$, respectively.
+
+    If samples from a posterior distributions are provided, it computes
+
+    $$\arg\min_{x} \mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
+    """
+    confidence_top2 = expected_confidence(logits, k=2)
+    return -(confidence_top2[:, 0] - confidence_top2[:, 1])
