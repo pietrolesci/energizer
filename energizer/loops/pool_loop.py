@@ -20,11 +20,14 @@ class PoolEvaluationLoop(EvaluationLoop):
         self._results.to(device=self.trainer.lightning_module.device)
         
         # put accumulator on same device
-        self.epoch_loop.accumulator(device=self.trainer.lightning_module.device)
+        self.epoch_loop.accumulator.to(device=self.trainer.lightning_module.device)
 
-        self.trainer._call_callback_hooks("on_pool_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_start", *args, **kwargs)
-        self.trainer._call_strategy_hook("on_pool_start", *args, **kwargs)
+        try:
+            self.trainer._call_callback_hooks("on_pool_start", *args, **kwargs)
+            self.trainer._call_strategy_hook("on_pool_start", *args, **kwargs)
+        except AttributeError:
+            pass
 
     def _on_evaluation_model_eval(self) -> None:
         """Sets model to eval mode."""
@@ -36,9 +39,12 @@ class PoolEvaluationLoop(EvaluationLoop):
 
     def _on_evaluation_end(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_{validation/test}_end`` hook."""
-        self.trainer._call_callback_hooks("on_pool_end", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_end", *args, **kwargs)
-        self.trainer._call_strategy_hook("on_pool_end", *args, **kwargs)
+        try:
+            self.trainer._call_callback_hooks("on_pool_end", *args, **kwargs)
+            self.trainer._call_strategy_hook("on_pool_end", *args, **kwargs)
+        except AttributeError:
+            pass
 
         # reset the logger connector state
         self.trainer._logger_connector.reset_results()
@@ -46,14 +52,20 @@ class PoolEvaluationLoop(EvaluationLoop):
     def _on_evaluation_epoch_start(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_epoch_start`` and ``on_pool_epoch_start`` hooks."""
         self.trainer._logger_connector.on_epoch_start()
-        self.trainer._call_callback_hooks("on_epoch_start", *args, **kwargs)
+        try:
+            self.trainer._call_callback_hooks("on_epoch_start", *args, **kwargs)
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_epoch_start", *args, **kwargs)
 
-        self.trainer._call_callback_hooks("on_pool_epoch_start", *args, **kwargs)
+        try:
+            self.trainer._call_callback_hooks("on_pool_epoch_start", *args, **kwargs)
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_pool_epoch_start", *args, **kwargs)
 
-        # call accumulate reset
-        self.epoch_loop.accumulate.reset()
+        # manually reset accumulation metric
+        self.epoch_loop.accumulator.reset()
 
     def _evaluation_epoch_end(self, outputs: List[EPOCH_OUTPUT]) -> None:
         """Runs ``pool_epoch_end``"""
@@ -69,10 +81,16 @@ class PoolEvaluationLoop(EvaluationLoop):
 
     def _on_evaluation_epoch_end(self) -> None:
         """Runs ``on_pool_epoch_end`` hook."""
-        self.trainer._call_callback_hooks("on_pool_epoch_end")
+        try:
+            self.trainer._call_callback_hooks("on_pool_epoch_end")
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_pool_epoch_end")
 
-        self.trainer._call_callback_hooks("on_epoch_end")
+        try:
+            self.trainer._call_callback_hooks("on_epoch_end")
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_epoch_end")
         self.trainer._logger_connector.on_epoch_end()
 

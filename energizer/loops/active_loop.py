@@ -4,7 +4,7 @@ from typing import Any, List
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities.distributed import rank_zero_only
-
+from pytorch_lightning import Trainer
 
 class ActiveLearningLoop(FitLoop):
     def __init__(
@@ -37,19 +37,21 @@ class ActiveLearningLoop(FitLoop):
         return (
             not self.trainer.datamodule.has_unlabelled_data
             or (self.total_budget > 0 and self.trainer.datamodule.labelled_size >= self.total_budget)
-            or self.progress.current.completed >= self.max_epochs
-            or self.trainer.lightning_module.query_size > self.trainer.datamodule.pool_size
+            or self.epoch_progress.current.completed >= self.max_epochs
+            or self.trainer.query_size > self.trainer.datamodule.pool_size
         )
 
     def on_run_start(self, *args: Any, **kwargs: Any) -> None:
         """Store the original weights of the model."""
 
-        # split train dataset in train and pool folds
-        self.trainer.datamodule.setup_folds()
+        # # split train dataset in train and pool folds
+        # self.trainer.datamodule.setup_folds()
 
         # make a copy of the initial state of the model to reset the weights
         if self.reset_weights:
             self.lightning_module_state_dict = deepcopy(self.trainer.lightning_module.state_dict())
+
+        print("DIO", flush=True)
 
     def advance(self, *args: Any, **kwargs: Any) -> None:
         """Used to the run a fitting, testing, and pool evaluation."""
@@ -97,3 +99,9 @@ class ActiveLearningLoop(FitLoop):
     @rank_zero_only
     def labelling_loop(self, indices: List[int]):
         self.trainer.datamodule.label(indices)
+
+    def attach_trainer(self, trainer: Trainer):
+        self.trainer = trainer
+        self.trainer.pool_loop.trainer = trainer
+        self.trainer.active_fit_loop.trainer = trainer
+        self.trainer.active_test_loop.trainer = trainer

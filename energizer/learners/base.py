@@ -26,9 +26,6 @@ class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, Lightni
     def test_step(self, *args, **kwargs) -> None:
         return LightningModule.test_step(self.learner, *args, **kwargs)
 
-    def pool_step(self, *args, **kwargs) -> Tensor:
-        raise NotImplementedError
-
     def training_epoch_end(self, outputs: Any) -> None:
         return LightningModule.training_epoch_end(self.learner, outputs)
 
@@ -38,7 +35,13 @@ class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, Lightni
     def test_epoch_end(self, outputs: Any) -> None:
         return LightningModule.test_epoch_end(self.learner, outputs)
 
-    def pool_step_end(self, *args, **kwargs) -> Optional[Any]:
+    def pool_step(self, *args, **kwargs) -> Tensor:
+        raise NotImplementedError
+
+    def pool_step_end(self, *args, **kwargs) -> Any:
+        pass
+
+    def pool_epoch_end(self, *args, **kwargs) -> Optional[Any]:
         pass
 
     def configure_optimizers(self):

@@ -1,13 +1,16 @@
 from functools import lru_cache
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, Type
 
 from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochLoop
-from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-
+import pytorch_lightning as pl
+from energizer.learners.base import Learner
 import torch
 from torch import Tensor
 from torchmetrics import Metric
+from functools import partial
+from unittest.mock import Mock
+
 
 
 class AccumulateTopK(Metric):
@@ -78,14 +81,18 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         Returns:
             the outputs of the step
         """
-        output = self.trainer._call_strategy_hook("pool_step", *kwargs.values())
+        output = self.trainer._call_lightning_module_hook("pool_step", *kwargs.values())
         self.accumulator.update(output)
         return output
 
     def _evaluation_step_end(self, *args: Any, **kwargs: Any) -> Optional[STEP_OUTPUT]:
         """Calls the `pool_step_end` hook."""
+        # TODO: why the strategy - why it is useful?
+        try:
+            strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
+        except AttributeError:
+            strategy_output = None
         model_output = self.trainer._call_lightning_module_hook("pool_step_end", *args, **kwargs)
-        strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
         output = strategy_output if model_output is None else model_output
         return output
 
@@ -102,7 +109,10 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         """
         self.trainer._logger_connector.on_batch_start(**kwargs)
         kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
+        try:
+            self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_pool_batch_start", *kwargs.values())
 
     def _on_evaluation_batch_end(self, output: Optional[STEP_OUTPUT], **kwargs: Any) -> None:
@@ -115,7 +125,10 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
             dataloader_idx: Index of the dataloader producing the current batch
         """
         kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
+        try:
+            self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
+        except AttributeError:
+            pass
         self.trainer._call_lightning_module_hook("on_pool_batch_end", output, *kwargs.values())
         self.trainer._logger_connector.on_batch_end()
 
@@ -124,3 +137,41 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         """Whether the batch outputs should be stored for later usage."""
         model = self.trainer.lightning_module
         return is_overridden("pool_epoch_end", model)
+
+
+def is_overridden(method_name: str, instance: Optional[object] = None, parent: Optional[Type[object]] = None) -> bool:
+    if instance is None:
+        # if `self.lightning_module` was passed as instance, it can be `None`
+        return False
+
+    if parent is None:
+        if isinstance(instance, Learner):
+            parent = Learner
+        elif isinstance(instance, pl.LightningDataModule):
+            parent = pl.LightningDataModule
+        elif isinstance(instance, pl.Callback):
+            parent = pl.Callback
+        if parent is None:
+            raise ValueError("Expected a parent")
+
+    instance_attr = getattr(instance, method_name, None)
+    if instance_attr is None:
+        return False
+    # `functools.wraps()` support
+    if hasattr(instance_attr, "__wrapped__"):
+        instance_attr = instance_attr.__wrapped__
+    # `Mock(wraps=...)` support
+    if isinstance(instance_attr, Mock):
+        # access the wrapped function
+        instance_attr = instance_attr._mock_wraps
+    # `partial` support
+    elif isinstance(instance_attr, partial):
+        instance_attr = instance_attr.func
+    if instance_attr is None:
+        return False
+
+    parent_attr = getattr(parent, method_name, None)
+    if parent_attr is None:
+        raise ValueError("The parent should define the method")
+
+    return instance_attr.__code__ != parent_attr.__code__

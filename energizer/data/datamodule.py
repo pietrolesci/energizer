@@ -54,6 +54,7 @@ class ActiveDataModule(LightningDataModule):
         self._train_dataloader_stats = None
         self._eval_dataloader_stats = None
         super().__init__()
+        self.setup_folds()
 
     @property
     def is_on_pool(self) -> bool:
@@ -64,6 +65,7 @@ class ActiveDataModule(LightningDataModule):
         self._is_on_pool = value
 
     def get_dataloader_stats(self, dataloader: DataLoader) -> Optional[Dict[str, Any]]:
+        # TODO: look at how lightning does this inspection of the parameters
         if dataloader is not None:
             dataloader = dataloader[0] if isinstance(dataloader, List) else dataloader
             return {
