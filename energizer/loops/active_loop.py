@@ -1,11 +1,13 @@
 from copy import deepcopy
-from typing import Any, List
+from typing import Any, List, Optional
 
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities.distributed import rank_zero_only
-from pytorch_lightning import Trainer
 import torch
+from energizer.loops.pool_loop import PoolEvaluationLoop
+from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
+from pytorch_lightning.loops.fit_loop import FitLoop
 
 
 class ActiveLearningLoop(FitLoop):
@@ -14,13 +16,29 @@ class ActiveLearningLoop(FitLoop):
         reset_weights: bool,
         test_after_labelling: bool,
         total_budget: int,
-        min_epochs: int,
-        max_epochs: int,
+        min_labelling_iters: int,
+        max_labelling_iters: int,
     ):
-        super().__init__(min_epochs=min_epochs, max_epochs=max_epochs)
+        super().__init__(min_epochs=min_labelling_iters, max_epochs=max_labelling_iters)
         self.reset_weights = reset_weights
         self.total_budget = total_budget
         self.test_after_labelling = test_after_labelling
+
+        # pool evaluation loop
+        self.pool_loop: Optional[PoolEvaluationLoop] = None
+
+        # fit after each labelling session
+        self.active_fit_loop: Optional[FitLoop] = None
+
+        # test after labelling and fitting
+        self.active_test_loop: Optional[EvaluationLoop] = None
+
+    def connect(
+        self, pool_loop: PoolEvaluationLoop, active_fit_loop: FitLoop, active_test_loop: EvaluationLoop
+    ) -> None:
+        self.pool_loop = pool_loop
+        self.active_fit_loop = active_fit_loop
+        self.active_test_loop = active_test_loop
 
     @property
     def done(self) -> bool:
@@ -32,9 +50,9 @@ class ActiveLearningLoop(FitLoop):
 
         - The total labelling budget has been reached
 
-        - The maximum number of epochs have been run
+        - The maximum number of labelling iters have been run
 
-        - The `query_size` is bigger than the available instance to label
+        - The `query_size` is bigger than the available instances in the pool
         """
         return (
             not self.trainer.datamodule.has_unlabelled_data
@@ -53,22 +71,22 @@ class ActiveLearningLoop(FitLoop):
         """Used to the run a fitting, testing, and pool evaluation."""
         if self.trainer.datamodule.has_labelled_data:
             self._reset_fitting()  # requires to reset the tracking stage.
-            self.trainer.active_fit_loop.run()
+            self.active_fit_loop.run()
 
             if self.test_after_labelling:
                 self._reset_testing(is_on_pool=False)  # requires to reset the tracking stage.
-                self.trainer.active_test_loop.run()
+                self.active_test_loop.run()
 
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_testing(is_on_pool=True)  # requires to reset the tracking stage.
-            _, indices = self.trainer.pool_loop.run()
+            _, indices = self.pool_loop.run()
             self.labelling_loop(indices)
 
     def on_advance_end(self) -> None:
         """Used to restore the original weights and the optimizers and schedulers states."""
         if self.reset_weights:
             self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
-            self.trainer.accelerator.setup(self.trainer)  # TODO: do I need this?
+            self.trainer.accelerator.setup(self.trainer)  # TODO: do I need this to reset optimizers?
 
     def on_run_end(self):
         # make sure we are not on pool when active_fit ends
@@ -76,7 +94,7 @@ class ActiveLearningLoop(FitLoop):
 
         # enforce training at the end of acquisitions
         self._reset_fitting()
-        self.trainer.active_fit_loop.run()
+        self.active_fit_loop.run()
 
     def _reset_fitting(self) -> None:
         self.trainer.reset_train_dataloader()
@@ -87,7 +105,6 @@ class ActiveLearningLoop(FitLoop):
         self.trainer.training = True
         self.trainer.lightning_module.train()
         torch.set_grad_enabled(True)
-
 
     def _reset_testing(self, is_on_pool: bool = False) -> None:
         self.trainer.datamodule.is_on_pool = is_on_pool
@@ -100,9 +117,3 @@ class ActiveLearningLoop(FitLoop):
     @rank_zero_only
     def labelling_loop(self, indices: List[int]):
         self.trainer.datamodule.label(indices)
-
-    def attach_trainer(self, trainer: Trainer):
-        self.trainer = trainer
-        self.trainer.pool_loop.trainer = trainer
-        self.trainer.active_fit_loop.trainer = trainer
-        self.trainer.active_test_loop.trainer = trainer

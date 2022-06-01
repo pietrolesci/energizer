@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 
 class DataloaderToDataModule(LightningDataModule):
+    """Given individual dataloaders, create a datamodule."""
+
     def __init__(
         self,
         train_dataloader: DataLoader,
@@ -51,9 +53,10 @@ class ActiveDataModule(LightningDataModule):
         if datamodule is not None:
             self.datamodule = datamodule
 
+        super().__init__()
+
         self._train_dataloader_stats = None
         self._eval_dataloader_stats = None
-        super().__init__()
         self.setup_folds()
 
     @property
@@ -65,7 +68,7 @@ class ActiveDataModule(LightningDataModule):
         self._is_on_pool = value
 
     def get_dataloader_stats(self, dataloader: DataLoader) -> Optional[Dict[str, Any]]:
-        # TODO: look at how lightning does this inspection of the parameters
+        # TODO: look at how lightning does this inspection of the parameters, might work better
         if dataloader is not None:
             dataloader = dataloader[0] if isinstance(dataloader, List) else dataloader
             return {

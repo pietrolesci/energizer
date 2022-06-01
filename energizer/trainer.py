@@ -65,30 +65,41 @@ class Trainer(Trainer_pl):
         self.max_labelling_iters = max_labelling_iters
         self.test_after_labelling = test_after_labelling
 
+        self._active_fitting: bool = False
+
         # Intialize rest of the trainer
         self.callbacks = patch_progress_bar(self)
 
         # pool evaluation loop
-        self.pool_loop = PoolEvaluationLoop(self.query_size)
+        pool_loop = PoolEvaluationLoop(self.query_size)
 
         # fit after each labelling session
         active_fit_loop = FitLoop(min_epochs=self.min_epochs, max_epochs=n_epochs_between_labelling)
         training_epoch_loop = TrainingEpochLoop(min_steps=self.min_steps, max_steps=self.max_steps)
         active_fit_loop.connect(epoch_loop=training_epoch_loop)
-        self.active_fit_loop = active_fit_loop
 
         # test after labelling and fitting
-        self.active_test_loop = EvaluationLoop(verbose=False)
+        active_test_loop = EvaluationLoop(verbose=False)  # leave it here in case I need to pick args from init
 
+        # root loop
         self.active_learning_loop = ActiveLearningLoop(
             reset_weights=self.reset_weights,
             total_budget=self.total_budget,
             test_after_labelling=self.test_after_labelling,
-            min_epochs=self.min_labelling_iters,
-            max_epochs=self.max_labelling_iters,
+            min_labelling_iters=self.min_labelling_iters,
+            max_labelling_iters=self.max_labelling_iters,
         )
 
-        self.active_fitting = False
+        # connect with children loops
+        self.active_learning_loop.connect(pool_loop, active_fit_loop, active_test_loop)
+
+    @property
+    def active_fitting(self) -> bool:
+        return self._active_fitting
+
+    @active_fitting.setter
+    def active_fitting(self, active_fitting: bool) -> None:
+        self._active_fitting = active_fitting
 
     def active_fit(
         self,
@@ -131,9 +142,9 @@ class Trainer(Trainer_pl):
             datamodule = train_dataloaders
             train_dataloaders = None
 
-        is_dataloaders = (train_dataloaders is not None or val_dataloaders is not None or test_dataloaders is not None)
+        is_dataloaders = train_dataloaders is not None or val_dataloaders is not None or test_dataloaders is not None
         is_datamodule = datamodule is not None
-       
+
         # If you supply a datamodule you can't supply train_dataloader or val_dataloaders
         if is_dataloaders and is_datamodule:
             raise MisconfigurationException(
@@ -147,12 +158,12 @@ class Trainer(Trainer_pl):
                 test_dataloaders=test_dataloaders,
                 datamodule=datamodule,
             )
-        
+
         if self.test_after_labelling and getattr(datamodule, "test_dataloader", None) is None:
             raise MisconfigurationException(
                 "You specified `test_after_labelling=True` but no test_dataloader was provided."
             )
-        
+
         # links data to the trainer
         self._data_connector.attach_data(model, datamodule=datamodule)
 
@@ -166,7 +177,7 @@ class Trainer(Trainer_pl):
         assert self.state.stopped
         self.training = False
         self.active_fitting = False
-        
+
         return results
 
     def _run_train(self) -> None:
@@ -183,36 +194,6 @@ class Trainer(Trainer_pl):
         self.model.train()
         torch.set_grad_enabled(True)
 
-        self.active_learning_loop.attach_trainer(self)
+        self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
             self.active_learning_loop.run()
-
-    # def active_fit(
-    #     self,
-    #     model: Learner,
-    #     train_dataloader: Optional[DataLoader] = None,
-    #     val_dataloaders: Optional[DataLoader] = None,
-    #     test_dataloaders: Optional[DataLoader] = None,
-    #     datamodule: Optional[LightningDataModule] = None,
-    # ) -> None:
-
-    #     # construct active learning pool and train data splits
-    #     if train_dataloader is not None or datamodule is not None and not isinstance(datamodule, ActiveDataModule):
-    #         datamodule = ActiveDataModule(
-    #             train_dataloader=train_dataloader,
-    #             val_dataloaders=val_dataloaders,
-    #             test_dataloaders=test_dataloaders,
-    #             datamodule=datamodule,
-    #         )
-        
-    #     # attach the loop and the trainer
-    #     self.active_learning_loop.trainer = self
-
-
-    #     if self.test_after_labelling and getattr(datamodule, "test_dataloader", None) is None:
-    #         raise MisconfigurationException(
-    #             "You specified `test_after_labelling=True` but no test_dataloader was provided."
-    #         )
-
-    #     # run loop
-    #     self.active_learning_loop.run()

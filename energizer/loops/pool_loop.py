@@ -18,7 +18,7 @@ class PoolEvaluationLoop(EvaluationLoop):
         """Runs ``on_pool_start`` hooks."""
         assert self._results is not None
         self._results.to(device=self.trainer.lightning_module.device)
-        
+
         # put accumulator on same device
         self.epoch_loop.accumulator.to(device=self.trainer.lightning_module.device)
 
@@ -103,4 +103,3 @@ class PoolEvaluationLoop(EvaluationLoop):
         output = super().on_run_end()
         indices = self.epoch_loop.accumulator.compute().tolist()
         return output, indices
-

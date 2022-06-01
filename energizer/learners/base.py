@@ -8,7 +8,6 @@ from energizer.learners.hooks import CheckpointHooks, DataHooks, ModelHooks
 from energizer.learners.utilities import ModuleWrapperBase, patch_dropout_layers
 
 
-
 class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, LightningModule):
     def __init__(self, learner: LightningModule):
         super().__init__()
