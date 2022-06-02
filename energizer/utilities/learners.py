@@ -1,12 +1,15 @@
 import contextlib
+import random
 from copy import deepcopy
 from itertools import cycle
 from typing import Generator, Optional
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.utilities.seed import _collect_rng_states, _set_rng_states
 from torch import Tensor, nn
 from torch.nn.modules.dropout import _DropoutNd
 
@@ -45,10 +48,20 @@ def local_seed(seed: int) -> Generator[None, None, None]:
     so that the operations that happen in the context do not affect randomness outside
     of it.
     """
-    rng_state = torch.get_rng_state()
+    # collect current states
+    states = _collect_rng_states()
+
+    # set seed in the context
+    random.seed(seed)
+    np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # run code in context
     yield
-    rng_state = torch.set_rng_state(rng_state)
+
+    # reset states when exiting the context
+    _set_rng_states(states)
 
 
 class EnergizerDropoutLayer(_DropoutNd):
