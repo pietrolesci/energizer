@@ -36,7 +36,7 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.trainer._call_lightning_module_hook("on_pool_model_train")
 
     def _on_evaluation_end(self, *args: Any, **kwargs: Any) -> None:
-        """Runs ``on_{validation/test}_end`` hook."""
+        """Runs ``on_pool_end`` hook."""
         self.trainer._call_callback_hooks("on_pool_end", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_end", *args, **kwargs)
         # self.trainer._call_strategy_hook("on_pool_end", *args, **kwargs)

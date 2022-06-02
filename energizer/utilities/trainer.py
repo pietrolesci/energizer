@@ -72,5 +72,5 @@ def patch_callbacks(callbacks: List[Callback]) -> List[Callback]:
             new_callbacks.append(prog_bar)
         else:
             new_callbacks.append(CallBackPoolHooks._add_pool_hooks(c))
-    
+
     return new_callbacks
