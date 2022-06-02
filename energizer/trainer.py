@@ -29,7 +29,6 @@ class Trainer(Trainer_pl):
         min_labelling_iters: int = 0,
         max_labelling_iters: int = 1000,
         reset_weights: bool = True,
-        n_epochs_between_labelling: int = 1,
         test_after_labelling: bool = True,
         **kwargs,
     ) -> None:
@@ -37,7 +36,6 @@ class Trainer(Trainer_pl):
         self.query_size = query_size
         self.total_budget = total_budget
         self.reset_weights = reset_weights
-        self.n_epochs_between_labelling = n_epochs_between_labelling
         self.min_labelling_iters = min_labelling_iters
         self.max_labelling_iters = max_labelling_iters
         self.test_after_labelling = test_after_labelling
@@ -51,7 +49,7 @@ class Trainer(Trainer_pl):
         pool_loop = PoolEvaluationLoop(self.query_size)
 
         # fit after each labelling session
-        active_fit_loop = FitLoop(min_epochs=self.min_epochs, max_epochs=n_epochs_between_labelling)
+        active_fit_loop = FitLoop(min_epochs=self.min_epochs, max_epochs=self.max_epochs)
         training_epoch_loop = TrainingEpochLoop(min_steps=self.min_steps, max_steps=self.max_steps)
         active_fit_loop.connect(epoch_loop=training_epoch_loop)
 
@@ -68,7 +66,7 @@ class Trainer(Trainer_pl):
         )
 
         # connect with children loops
-        self.active_learning_loop.connect(pool_loop, active_fit_loop, active_test_loop)
+        self.active_learning_loop.connect(pool_loop=pool_loop, active_fit_loop=active_fit_loop, active_test_loop=active_test_loop)
 
     @property
     def active_fitting(self) -> bool:

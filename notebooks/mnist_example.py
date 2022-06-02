@@ -61,7 +61,8 @@ class MNISTDataModule(LightningDataModule):
         return self._make_dataloader(self.mnist_train, "train")
 
     def val_dataloader(self):
-        return self._make_dataloader(self.mnist_val, "val")
+        return
+    #     return self._make_dataloader(self.mnist_val, "val")
 
     def test_dataloader(self):
         return self._make_dataloader(self.mnist_test, "test")

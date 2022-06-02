@@ -1,19 +1,116 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
+from attr import has
 
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.progress.base import ProgressBarBase
-from pytorch_lightning.callbacks.progress.tqdm_progress import TQDMProgressBar
+from pytorch_lightning.callbacks.progress.tqdm_progress import TQDMProgressBar, Tqdm, _update_n, convert_inf
 from pytorch_lightning.utilities.types import STEP_OUTPUT
+import importlib
+if importlib.util.find_spec("ipywidgets") is not None:
+    from tqdm.auto import tqdm as _tqdm
+else:
+    from tqdm import tqdm as _tqdm
+import sys
 
+
+# class TQDMProgressBarPool(TQDMProgressBar):
+#     # TODO: this is not working I can still see Testing
+#     @property
+#     def test_description(self) -> str:
+#         if hasattr(self.trainer.datamodule, "is_on_pool") and self.trainer.datamodule.is_on_pool:
+#             return "Pool Evaluation"
+#         return super().test_description
 
 class TQDMProgressBarPool(TQDMProgressBar):
     # TODO: this is not working I can still see Testing
+
+    def __init__(self, refresh_rate: int = 1, process_position: int = 0):
+        super().__init__(refresh_rate, process_position)
+        self._predict_progress_bar: Optional[_tqdm] = None
+
     @property
-    def test_description(self) -> str:
-        if hasattr(self.trainer.datamodule, "is_on_pool") and self.trainer.datamodule.is_on_pool:
-            return "Pool Evaluation"
-        return super().test_description
+    def pool_description(self) -> str:
+        return "Pool"
+
+    @property
+    def pool_batch_idx(self) -> int:
+        """The number of batches processed during testing.
+
+        Use this to update your progress bar.
+        """
+        return self.trainer.active_learning_loop.pool_loop.epoch_loop.batch_progress.current.processed
+
+    @property
+    def total_pool_batches_current_dataloader(self) -> Union[int, float]:
+        """The total number of testing batches, which may change from epoch to epoch for current dataloader.
+
+        Use this to set the total number of iterations in the progress bar. Can return ``inf`` if the test dataloader is
+        of infinite size.
+        """
+        # NOTE: since we are using the flag for the dataloader instead of adding a `pool_dataloader` method
+        return super().total_test_batches_current_dataloader
+
+    @property
+    def pool_progress_bar(self) -> _tqdm:
+        if self._pool_progress_bar is None:
+            raise TypeError(f"The `{self.__class__.__name__}._pool_progress_bar` reference has not been set yet.")
+        return self._pool_progress_bar
+        
+    @pool_progress_bar.setter
+    def pool_progress_bar(self, bar: _tqdm) -> None:
+        self._pool_progress_bar = bar
+    
+    def init_pool_tqdm(self) -> Tqdm:
+        """Override this to customize the tqdm bar for testing."""
+        bar = Tqdm(
+            desc="Pool",
+            position=(2 * self.process_position),
+            disable=self.is_disabled,
+            leave=True,
+            dynamic_ncols=True,
+            file=sys.stdout,
+        )
+        return bar
+
+    def on_pool_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
+        self.pool_progress_bar = self.init_pool_tqdm()
+
+    def on_pool_batch_start(
+        self, trainer: Trainer, pl_module: LightningModule, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
+    ) -> None:
+        if self.has_dataloader_changed(dataloader_idx):
+            return
+        # self._current_eval_dataloader_idx = dataloader_idx or 0
+        self.pool_progress_bar.reset(convert_inf(self.total_pool_batches_current_dataloader))
+        self.pool_progress_bar.set_description(f"{self.pool_description} DataLoader {dataloader_idx}")
+
+    def on_pool_batch_end(self, *_: Any) -> None:
+        if self._should_update(self.pool_batch_idx, self.pool_progress_bar.total):
+            _update_n(self.pool_progress_bar, self.pool_batch_idx, self.refresh_rate)
+
+    def on_pool_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
+        self.pool_progress_bar.close()
+        self.reset_dataloader_idx_tracker()
+
+    def print(self, *args: Any, sep: str = " ", **kwargs: Any) -> None:
+        active_progress_bar = None
+
+        if self._main_progress_bar is not None and not self.main_progress_bar.disable:
+            active_progress_bar = self.main_progress_bar
+        elif self._val_progress_bar is not None and not self.val_progress_bar.disable:
+            active_progress_bar = self.val_progress_bar
+        elif self._test_progress_bar is not None and not self.test_progress_bar.disable:
+            active_progress_bar = self.test_progress_bar
+        elif self._pool_progress_bar is not None and not self.pool_progress_bar.disable:
+            active_progress_bar = self.pool_progress_bar
+        elif self._predict_progress_bar is not None and not self.predict_progress_bar.disable:
+            active_progress_bar = self.predict_progress_bar
+
+        if active_progress_bar is not None:
+            s = sep.join(map(str, args))
+            active_progress_bar.write(s, **kwargs)
+
 
 
 class CallBackPoolHooks:
@@ -53,12 +150,18 @@ class CallBackPoolHooks:
 
     @staticmethod
     def _add_pool_hooks(callback: Callback) -> Callback:
-        callback.on_pool_batch_start = CallBackPoolHooks.on_pool_batch_start
-        callback.on_pool_batch_end = CallBackPoolHooks.on_pool_batch_end
-        callback.on_pool_epoch_start = CallBackPoolHooks.on_pool_epoch_start
-        callback.on_pool_epoch_end = CallBackPoolHooks.on_pool_epoch_end
-        callback.on_pool_start = CallBackPoolHooks.on_pool_start
-        callback.on_pool_end = CallBackPoolHooks.on_pool_end
+        if not hasattr(callback, "on_pool_batch_start"):
+            callback.on_pool_batch_start = CallBackPoolHooks.on_pool_batch_start
+        if not hasattr(callback, "on_pool_batch_end"):
+            callback.on_pool_batch_end = CallBackPoolHooks.on_pool_batch_end
+        if not hasattr(callback, "on_pool_epoch_start"):
+            callback.on_pool_epoch_start = CallBackPoolHooks.on_pool_epoch_start
+        if not hasattr(callback, "on_pool_epoch_end"):
+            callback.on_pool_epoch_end = CallBackPoolHooks.on_pool_epoch_end
+        if not hasattr(callback, "on_pool_start"):
+            callback.on_pool_start = CallBackPoolHooks.on_pool_start
+        if not hasattr(callback, "on_pool_end"):
+            callback.on_pool_end = CallBackPoolHooks.on_pool_end
 
         return callback
 
