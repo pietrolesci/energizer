@@ -2,15 +2,16 @@ from copy import deepcopy
 from typing import Any, List, Optional
 
 import torch
+from pytorch_lightning.loops.base import Loop
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
-from pytorch_lightning.loops.base import Loop
-from pytorch_lightning.trainer.states import TrainerFn
-from pytorch_lightning.utilities.distributed import rank_zero_only, rank_zero_info
-from pytorch_lightning.trainer.progress import Progress
-from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from energizer.loops.pool_loop import PoolEvaluationLoop
 from pytorch_lightning.loops.utilities import _is_max_limit_reached
+from pytorch_lightning.trainer.progress import Progress
+from pytorch_lightning.trainer.states import TrainerFn
+from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_only
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
+
+from energizer.loops.pool_loop import PoolEvaluationLoop
 
 
 class ActiveLearningLoop(Loop):
@@ -78,7 +79,10 @@ class ActiveLearningLoop(Loop):
         """Evaluates when to leave the loop."""
         # `processed` is increased before `on_train_epoch_end`, the hook where checkpoints are typically saved.
         # we use it here because the checkpoint data won't have `completed` increased yet
-        has_labelled_data = not self.trainer.datamodule.has_unlabelled_data or self.trainer.query_size > self.trainer.datamodule.pool_size
+        has_labelled_data = (
+            not self.trainer.datamodule.has_unlabelled_data
+            or self.trainer.query_size > self.trainer.datamodule.pool_size
+        )
         stop_total_budget = _is_max_limit_reached(self.trainer.datamodule.labelled_size, self.total_budget)
         stop_epochs = _is_max_limit_reached(self.epoch_progress.current.processed, self.max_labelling_iters)
         if stop_epochs:
@@ -115,9 +119,9 @@ class ActiveLearningLoop(Loop):
         # make a copy of the initial state of the model to reset the weights
         if self.reset_weights:
             self.lightning_module_state_dict = deepcopy(self.trainer.lightning_module.state_dict())
-        
+
         self.epoch_progress.current.completed = self.epoch_progress.current.processed
-    
+
     def on_advance_start(self, *args: Any, **kwargs: Any) -> None:
         self.epoch_progress.increment_ready()
         self.trainer._logger_connector.on_epoch_start()
@@ -150,19 +154,19 @@ class ActiveLearningLoop(Loop):
     def on_advance_end(self) -> None:
         """Used to restore the original weights and the optimizers and schedulers states."""
         self.trainer._logger_connector.epoch_end_reached()
-        
+
         if self.reset_weights:
             self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
             self.trainer.accelerator.setup(self.trainer)  # TODO: do I need this to reset optimizers?
 
         self.epoch_progress.increment_processed()
-        
+
         self.trainer._call_callback_hooks("on_epoch_end")
         self.trainer._call_lightning_module_hook("on_epoch_end")
 
         self.trainer._logger_connector.on_epoch_end()
         self.epoch_progress.increment_completed()
-        
+
         # if fault tolerant is enabled and process has been notified, exit.
         self.trainer._exit_gracefully_on_signal()
 

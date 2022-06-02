@@ -66,7 +66,9 @@ class Trainer(Trainer_pl):
         )
 
         # connect with children loops
-        self.active_learning_loop.connect(pool_loop=pool_loop, active_fit_loop=active_fit_loop, active_test_loop=active_test_loop)
+        self.active_learning_loop.connect(
+            pool_loop=pool_loop, active_fit_loop=active_fit_loop, active_test_loop=active_test_loop
+        )
 
     @property
     def active_fitting(self) -> bool:

@@ -1,18 +1,19 @@
+import importlib
 from typing import Any, List, Optional, Union
-from attr import has
 
+from attr import has
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.progress.base import ProgressBarBase
-from pytorch_lightning.callbacks.progress.tqdm_progress import TQDMProgressBar, Tqdm, _update_n, convert_inf
+from pytorch_lightning.callbacks.progress.tqdm_progress import Tqdm, TQDMProgressBar, _update_n, convert_inf
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-import importlib
+
 if importlib.util.find_spec("ipywidgets") is not None:
     from tqdm.auto import tqdm as _tqdm
 else:
     from tqdm import tqdm as _tqdm
-import sys
 
+import sys
 
 # class TQDMProgressBarPool(TQDMProgressBar):
 #     # TODO: this is not working I can still see Testing
@@ -21,6 +22,7 @@ import sys
 #         if hasattr(self.trainer.datamodule, "is_on_pool") and self.trainer.datamodule.is_on_pool:
 #             return "Pool Evaluation"
 #         return super().test_description
+
 
 class TQDMProgressBarPool(TQDMProgressBar):
     # TODO: this is not working I can still see Testing
@@ -56,11 +58,11 @@ class TQDMProgressBarPool(TQDMProgressBar):
         if self._pool_progress_bar is None:
             raise TypeError(f"The `{self.__class__.__name__}._pool_progress_bar` reference has not been set yet.")
         return self._pool_progress_bar
-        
+
     @pool_progress_bar.setter
     def pool_progress_bar(self, bar: _tqdm) -> None:
         self._pool_progress_bar = bar
-    
+
     def init_pool_tqdm(self) -> Tqdm:
         """Override this to customize the tqdm bar for testing."""
         bar = Tqdm(
@@ -77,7 +79,12 @@ class TQDMProgressBarPool(TQDMProgressBar):
         self.pool_progress_bar = self.init_pool_tqdm()
 
     def on_pool_batch_start(
-        self, trainer: Trainer, pl_module: LightningModule, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
+        self,
+        trainer: Trainer,
+        pl_module: LightningModule,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: Optional[int] = None,
     ) -> None:
         if self.has_dataloader_changed(dataloader_idx):
             return
@@ -110,7 +117,6 @@ class TQDMProgressBarPool(TQDMProgressBar):
         if active_progress_bar is not None:
             s = sep.join(map(str, args))
             active_progress_bar.write(s, **kwargs)
-
 
 
 class CallBackPoolHooks:
