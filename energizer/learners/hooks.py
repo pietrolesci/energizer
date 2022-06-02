@@ -3,9 +3,9 @@
 from typing import Any, Dict, List, Optional
 
 import torch
+from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.optim.optimizer import Optimizer
-from pytorch_lightning import LightningModule
 
 
 class ModelHooks:

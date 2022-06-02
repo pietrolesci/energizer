@@ -1,47 +1,24 @@
-from typing import Optional, List, Union
+import logging
+from typing import Optional, Union
 
+import torch
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning import Trainer as Trainer_pl
-from pytorch_lightning.callbacks.progress.base import ProgressBarBase
-from pytorch_lightning.callbacks.progress.tqdm_progress import TQDMProgressBar
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.epoch.training_epoch_loop import TrainingEpochLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
+from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.model_helpers import is_overridden
-from pytorch_lightning.trainer.states import RunningStage, TrainerFn, TrainerState, TrainerStatus
-from torch.utils.data import DataLoader
-
-from energizer.data.datamodule import ActiveDataModule
-from energizer.loops.pool_loop import PoolEvaluationLoop
-from energizer.loops.active_loop import ActiveLearningLoop
-from energizer.learners.base import Learner
-import logging
 from pytorch_lightning.utilities.seed import isolate_rng
-import torch
-
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 
+from energizer.data.datamodule import ActiveDataModule
+from energizer.learners.base import Learner
+from energizer.loops.active_loop import ActiveLearningLoop
+from energizer.loops.pool_loop import PoolEvaluationLoop
+from energizer.utilities.trainer import patch_callbacks
+
 log = logging.getLogger(__name__)
-
-
-class TQDMProgressBarPool(TQDMProgressBar):
-    # TODO: this is not working I can still see Testing
-    @property
-    def test_description(self) -> str:
-        if hasattr(self.trainer.datamodule, "is_on_pool") and self.trainer.datamodule.is_on_pool:
-            return "Pool Evaluation"
-        return super().test_description
-
-
-def patch_progress_bar(trainer: Trainer_pl) -> List:
-    callbacks = []
-    for c in trainer.callbacks:
-        if not isinstance(c, ProgressBarBase):
-            callbacks.append(c)
-        else:
-            callbacks.append(TQDMProgressBarPool(process_position=c.process_position, refresh_rate=c.refresh_rate))
-    return callbacks
 
 
 class Trainer(Trainer_pl):
@@ -68,7 +45,7 @@ class Trainer(Trainer_pl):
         self._active_fitting: bool = False
 
         # Intialize rest of the trainer
-        self.callbacks = patch_progress_bar(self)
+        self.callbacks = patch_callbacks(self.callbacks)
 
         # pool evaluation loop
         pool_loop = PoolEvaluationLoop(self.query_size)

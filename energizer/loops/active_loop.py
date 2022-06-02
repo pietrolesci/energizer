@@ -1,13 +1,13 @@
 from copy import deepcopy
 from typing import Any, List, Optional
 
+import torch
+from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities.distributed import rank_zero_only
-import torch
+
 from energizer.loops.pool_loop import PoolEvaluationLoop
-from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
-from pytorch_lightning.loops.fit_loop import FitLoop
 
 
 class ActiveLearningLoop(FitLoop):

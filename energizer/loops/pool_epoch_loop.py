@@ -1,15 +1,15 @@
-from functools import lru_cache
-from typing import Any, Optional, Callable, Type
+from functools import lru_cache, partial
+from typing import Any, Callable, Optional, Type
+from unittest.mock import Mock
 
+import pytorch_lightning as pl
+import torch
 from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochLoop
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-import pytorch_lightning as pl
-from energizer.learners.base import Learner
-import torch
 from torch import Tensor
 from torchmetrics import Metric
-from functools import partial
-from unittest.mock import Mock
+
+from energizer.learners.base import Learner
 
 
 class AccumulateTopK(Metric):
@@ -80,18 +80,18 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         Returns:
             the outputs of the step
         """
+        # NOTE: this should be calling on the strategy to be consistent with PL
+        # output = self.trainer._call_lightning_strategy_hook("pool_step", *kwargs.values())
         output = self.trainer._call_lightning_module_hook("pool_step", *kwargs.values())
         self.accumulator.update(output)
         return output
 
     def _evaluation_step_end(self, *args: Any, **kwargs: Any) -> Optional[STEP_OUTPUT]:
         """Calls the `pool_step_end` hook."""
-        # TODO: why the strategy - why it is useful?
-        try:
-            strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
-        except AttributeError:
-            strategy_output = None
         model_output = self.trainer._call_lightning_module_hook("pool_step_end", *args, **kwargs)
+        # NOTE: this should be calling on the strategy to be consistent with PL
+        # strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
+        strategy_output = None
         output = strategy_output if model_output is None else model_output
         return output
 
@@ -108,10 +108,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         """
         self.trainer._logger_connector.on_batch_start(**kwargs)
         kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        try:
-            self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
-        except AttributeError:
-            pass
+        self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
         self.trainer._call_lightning_module_hook("on_pool_batch_start", *kwargs.values())
 
     def _on_evaluation_batch_end(self, output: Optional[STEP_OUTPUT], **kwargs: Any) -> None:
@@ -124,10 +121,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
             dataloader_idx: Index of the dataloader producing the current batch
         """
         kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        try:
-            self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
-        except AttributeError:
-            pass
+        self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
         self.trainer._call_lightning_module_hook("on_pool_batch_end", output, *kwargs.values())
         self.trainer._logger_connector.on_batch_end()
 

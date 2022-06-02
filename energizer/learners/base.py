@@ -1,11 +1,11 @@
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import torch
 from pytorch_lightning import LightningModule
 from torch import Tensor, nn
 
 from energizer.learners.hooks import CheckpointHooks, DataHooks, ModelHooks
-from energizer.learners.utilities import ModuleWrapperBase, patch_dropout_layers
+from energizer.utilities.learners import ModuleWrapperBase, patch_dropout_layers
 
 
 class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, LightningModule):
