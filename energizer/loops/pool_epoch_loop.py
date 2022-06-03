@@ -3,11 +3,12 @@ from typing import Any, Callable, Optional
 
 import torch
 from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochLoop
+from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import Tensor
 from torchmetrics import Metric
 
-from energizer.utilities.model_helpers import is_overridden
+from energizer.learners.base import Learner
 
 
 class AccumulateTopK(Metric):
@@ -127,4 +128,4 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
     def _should_track_batch_outputs_for_epoch_end(self) -> bool:
         """Whether the batch outputs should be stored for later usage."""
         model = self.trainer.lightning_module
-        return is_overridden("pool_epoch_end", model)
+        return is_overridden("pool_epoch_end", model, Learner)

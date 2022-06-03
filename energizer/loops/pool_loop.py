@@ -1,9 +1,10 @@
 import os
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Sequence, Tuple, Union
 
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.trainer.connectors.logger_connector.result import _OUT_DICT
 from pytorch_lightning.utilities.types import EPOCH_OUTPUT
+from torch.utils.data import DataLoader
 
 from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
 
@@ -14,6 +15,30 @@ class PoolEvaluationLoop(EvaluationLoop):
     def __init__(self, query_size: int) -> None:
         super().__init__(verbose=False)
         self.epoch_loop = PoolEvaluationEpochLoop(query_size)
+
+    @property
+    def dataloaders(self) -> Sequence[DataLoader]:
+        """Returns the validation or test dataloaders."""
+        dataloaders = self.trainer.pool_dataloaders
+        if dataloaders is None:
+            return []
+        return dataloaders
+
+    @property
+    def prefetch_batches(self) -> int:
+        batches = self.trainer.num_pool_batches
+        is_unsized = batches[self.current_dataloader_idx] == float("inf")
+        inter_batch_parallelism = os.getenv("PL_INTER_BATCH_PARALLELISM", "0") == "1"
+        return 1 if is_unsized or inter_batch_parallelism else 0
+
+    def _get_max_batches(self) -> List[int]:
+        """Returns the max number of batches for each dataloader."""
+        return self.trainer.num_pool_batches
+
+    def _reload_evaluation_dataloaders(self) -> None:
+        """Reloads dataloaders if necessary."""
+        if self.trainer.testing:
+            self.trainer.reset_pool_dataloader()
 
     def _on_evaluation_start(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_pool_start`` hooks."""

@@ -183,6 +183,12 @@ class DataHooks:
     def on_after_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         return LightningModule.on_after_batch_transfer(self.learner, batch, dataloader_idx)
 
+    def on_pool_dataloader(self, *_: Any):
+        """To deprecate when PL deprecates the similar ones.
+
+        This is used by PL in trainer._data_connector._request_dataloader
+        """
+
 
 class CheckpointHooks:
     """Hooks to be used with Checkpointing."""

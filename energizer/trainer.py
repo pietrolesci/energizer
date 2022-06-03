@@ -1,4 +1,5 @@
 import logging
+from cgitb import enable
 from typing import Optional, Union
 
 import torch
@@ -8,7 +9,11 @@ from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.epoch.training_epoch_loop import TrainingEpochLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
+from pytorch_lightning.trainer.trainer import _determine_batch_limits
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
+
+# from energizer.utilities.model_helpers import is_overridden
+from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 
@@ -16,7 +21,8 @@ from energizer.data.datamodule import ActiveDataModule
 from energizer.learners.base import Learner
 from energizer.loops.active_loop import ActiveLearningLoop
 from energizer.loops.pool_loop import PoolEvaluationLoop
-from energizer.utilities.trainer import patch_callbacks
+from energizer.utilities.connectors import DataConnector, PoolRunningStage
+from energizer.utilities.trainer_helpers import patch_callbacks
 
 log = logging.getLogger(__name__)
 
@@ -30,22 +36,38 @@ class Trainer(Trainer_pl):
         max_labelling_iters: int = 1000,
         reset_weights: bool = True,
         test_after_labelling: bool = True,
+        limit_pool_batches: Optional[Union[int, float]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+
+        # register inputs
         self.query_size = query_size
         self.total_budget = total_budget
         self.reset_weights = reset_weights
         self.min_labelling_iters = min_labelling_iters
         self.max_labelling_iters = max_labelling_iters
         self.test_after_labelling = test_after_labelling
+        self.limit_pool_batches = limit_pool_batches
+
+        # initialize lightning trainer
+        super().__init__(**kwargs)
+
+        # overwrite dataconnector in trainer
+        self._data_connector = DataConnector(self, self._data_connector.multiple_trainloader_mode)
+        self._data_connector.on_trainer_init(
+            self.check_val_every_n_epoch,
+            self.reload_dataloaders_every_n_epochs,
+            self.prepare_data_per_node,
+        )
+
+        # patch progress bar and add "pool" methods to callbacks
+        # NOTE: this can be done in the _active_fit_impl
+        self.callbacks = patch_callbacks(self.callbacks)
 
         self._active_fitting: bool = False
 
-        # Intialize rest of the trainer
-        self.callbacks = patch_callbacks(self.callbacks)
-
-        # pool evaluation loop
+        # define the loops
+        # pool loop
         pool_loop = PoolEvaluationLoop(self.query_size)
 
         # fit after each labelling session
@@ -56,7 +78,7 @@ class Trainer(Trainer_pl):
         # test after labelling and fitting
         active_test_loop = EvaluationLoop(verbose=False)  # leave it here in case I need to pick args from init
 
-        # root loop
+        # main loop
         self.active_learning_loop = ActiveLearningLoop(
             reset_weights=self.reset_weights,
             total_budget=self.total_budget,
@@ -64,11 +86,25 @@ class Trainer(Trainer_pl):
             min_labelling_iters=self.min_labelling_iters,
             max_labelling_iters=self.max_labelling_iters,
         )
-
-        # connect with children loops
         self.active_learning_loop.connect(
             pool_loop=pool_loop, active_fit_loop=active_fit_loop, active_test_loop=active_test_loop
         )
+
+        self._extend_setup_on_init()
+        self._extend_init_debugging_flags()
+
+    def _extend_init_debugging_flags(self) -> None:
+        if self.fast_dev_run:
+            num_batches = int(self.fast_dev_run)
+            limit_pool_batches = num_batches
+            self.active_fit_loop.max_steps = num_batches
+            self.active_fit_loop.max_epochs = 1
+
+        self.limit_pool_batches = _determine_batch_limits(self.limit_pool_batches, "limit_pool_batches")
+
+    def _extend_setup_on_init(self) -> None:
+        self.num_pool_batches = []
+        self.pool_dataloaders = None
 
     @property
     def active_fitting(self) -> bool:
@@ -174,3 +210,18 @@ class Trainer(Trainer_pl):
         self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
             self.active_learning_loop.run()
+
+    def reset_pool_dataloader(self, model: Optional["pl.LightningModule"] = None) -> None:
+        """Resets the pool dataloader and determines the number of batches.
+
+        Args:
+            model: The ``LightningModule`` if called outside of the trainer scope.
+        """
+        source = self._data_connector._pool_dataloader_source
+        pl_module = self.lightning_module or model
+        has_step = is_overridden("pool_step", pl_module, Learner)
+        enable_pool = self.limit_pool_batches > 0
+        if has_step and enable_pool:
+            self.num_pool_batches, self.pool_dataloaders = self._data_connector._reset_eval_dataloader(
+                PoolRunningStage.POOL, model=pl_module
+            )

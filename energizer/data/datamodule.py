@@ -33,7 +33,6 @@ class DataloaderToDataModule(LightningDataModule):
 class ActiveDataModule(LightningDataModule):
     train_fold: Optional[Dataset] = None
     pool_fold: Optional[Dataset] = None
-    _is_on_pool: bool = False
 
     def __init__(
         self,
@@ -58,14 +57,6 @@ class ActiveDataModule(LightningDataModule):
         self._train_dataloader_stats = None
         self._eval_dataloader_stats = None
         self.setup_folds()
-
-    @property
-    def is_on_pool(self) -> bool:
-        return self._is_on_pool
-
-    @is_on_pool.setter
-    def is_on_pool(self, value) -> None:
-        self._is_on_pool = value
 
     def get_dataloader_stats(self, dataloader: DataLoader) -> Optional[Dict[str, Any]]:
         # TODO: look at how lightning does this inspection of the parameters, might work better
@@ -195,7 +186,7 @@ class ActiveDataModule(LightningDataModule):
         return self.datamodule.val_dataloader()
 
     def test_dataloader(self) -> Optional[DataLoader]:
-        """Pool dataloader."""
-        if self.is_on_pool:
-            return DataLoader(self.pool_fold, **self.eval_dataloader_stats)
         return self.datamodule.test_dataloader()
+
+    def pool_dataloader(self) -> DataLoader:
+        return DataLoader(self.pool_fold, **self.eval_dataloader_stats)

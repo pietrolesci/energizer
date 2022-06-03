@@ -12,6 +12,7 @@ from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_on
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 
 from energizer.loops.pool_loop import PoolEvaluationLoop
+from energizer.trainer import Trainer
 
 
 class ActiveLearningLoop(Loop):
@@ -53,27 +54,6 @@ class ActiveLearningLoop(Loop):
         if self.restarting:
             self.epoch_progress.reset_on_restart()
 
-    # @property
-    # def done(self) -> bool:
-    #     """Check if we are done.
-
-    #     The loop terminates when one of these conditions is satisfied:
-
-    #     - The pool dataloader has no more unlabelled data
-
-    #     - The total labelling budget has been reached
-
-    #     - The maximum number of labelling iters have been run
-
-    #     - The `query_size` is bigger than the available instances in the pool
-    #     """
-    #     return (
-    #         not self.trainer.datamodule.has_unlabelled_data
-    #         or (self.total_budget > 0 and self.trainer.datamodule.labelled_size >= self.total_budget)
-    #         or self.epoch_progress.current.completed >= self.max_epochs
-    #         or self.trainer.query_size > self.trainer.datamodule.pool_size
-    #     )
-
     @property
     def done(self) -> bool:
         """Evaluates when to leave the loop."""
@@ -90,20 +70,6 @@ class ActiveLearningLoop(Loop):
             self.epoch_progress.current.completed = self.epoch_progress.current.processed
 
         self.trainer.should_stop = False
-
-        # should_stop = False
-        # if self.trainer.should_stop:
-        #     # early stopping
-        #     met_min_epochs = self.epoch_progress.current.processed >= self.min_labelling_iters if self.min_labelling_iters else True
-        #     if met_min_epochs:
-        #         should_stop = True
-        #     else:
-        #         rank_zero_info(
-        #             "Trainer was signaled to stop but required minimum epochs"
-        #             f" ({self.min_epochs}) or minimum steps ({self.min_steps}) has"
-        #             " not been met. Training will continue..."
-        #         )
-        # self.trainer.should_stop = should_stop
 
         return stop_epochs or has_labelled_data or stop_total_budget
 
@@ -143,11 +109,11 @@ class ActiveLearningLoop(Loop):
             # print(self.trainer.num_training_batches)
 
             if self.test_after_labelling:
-                self._reset_testing(is_on_pool=False)  # requires to reset the tracking stage.
+                self._reset_testing()  # requires to reset the tracking stage.
                 self.active_test_loop.run()
 
         if self.trainer.datamodule.has_unlabelled_data:
-            self._reset_testing(is_on_pool=True)  # requires to reset the tracking stage.
+            self._reset_pool()  # requires to reset the tracking stage.
             _, indices = self.pool_loop.run()
             self.labelling_loop(indices)
 
@@ -171,9 +137,6 @@ class ActiveLearningLoop(Loop):
         self.trainer._exit_gracefully_on_signal()
 
     def on_run_end(self):
-        # make sure we are not on pool when active_fit ends
-        self.trainer.datamodule.is_on_pool = False
-
         # enforce training at the end of acquisitions
         self._reset_fitting()
         self.active_fit_loop.run()
@@ -191,9 +154,15 @@ class ActiveLearningLoop(Loop):
         self.trainer.lightning_module.train()
         torch.set_grad_enabled(True)
 
-    def _reset_testing(self, is_on_pool: bool = False) -> None:
-        self.trainer.datamodule.is_on_pool = is_on_pool
+    def _reset_testing(self) -> None:
         self.trainer.reset_test_dataloader()
+        self.trainer.state.fn = TrainerFn.TESTING
+        self.trainer.testing = True
+        self.trainer.lightning_module.eval()
+        torch.set_grad_enabled(False)
+
+    def _reset_pool(self) -> None:
+        self.trainer.reset_pool_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
         self.trainer.lightning_module.eval()
