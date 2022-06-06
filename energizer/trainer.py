@@ -137,7 +137,7 @@ class Trainer(Trainer_pl):
         datamodule: Optional[LightningDataModule] = None,
         ckpt_path: Optional[str] = None,
     ) -> None:
-        Trainer._log_api_event("fit")
+        Trainer_pl._log_api_event("fit")
         log.detail(f"{self.__class__.__name__}: trainer fit stage")
         self.active_fitting = True
         self.state.fn = TrainerFn.FITTING
