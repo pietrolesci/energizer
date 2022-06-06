@@ -12,7 +12,6 @@ from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_on
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 
 from energizer.loops.pool_loop import PoolEvaluationLoop
-from energizer.trainer import Trainer
 
 
 class ActiveLearningLoop(Loop):
