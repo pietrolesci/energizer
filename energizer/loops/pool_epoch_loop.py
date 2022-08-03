@@ -6,54 +6,8 @@ from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochL
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import Tensor
-from torchmetrics import Metric
-
+from energizer.metrics import AccumulateTopK
 from energizer.learners.base import Learner
-
-
-class AccumulateTopK(Metric):
-    def __init__(
-        self,
-        k: int,
-        compute_on_step: bool = True,
-        dist_sync_on_step: bool = False,
-        process_group: Optional[Any] = None,
-        dist_sync_fn: Callable = None,
-    ) -> None:
-        super().__init__(compute_on_step, dist_sync_on_step, process_group, dist_sync_fn)
-        self.k = k
-        self.add_state("topk_scores", torch.tensor([float("-inf")] * self.k))
-        self.add_state("indices", torch.ones(self.k, dtype=torch.int64).neg())
-        self.add_state("size", torch.tensor(0, dtype=torch.int64))
-
-    def update(self, scores: Tensor) -> None:
-        batch_size = scores.numel()
-
-        # indices with respect to the pool dataset and scores
-        current_indices = torch.arange(self.size, self.size + batch_size, 1)
-
-        # compute topk comparing current batch with the states
-        all_scores = torch.cat([self.topk_scores, scores], dim=0)
-        all_indices = torch.cat([self.indices, current_indices], dim=0)
-
-        # aggregation
-        topk_scores, idx = torch.topk(all_scores, k=min(self.k, batch_size))
-
-        self.topk_scores.copy_(topk_scores)
-        self.indices.copy_(all_indices[idx])
-        self.size += batch_size
-
-        # print("current batch_size:", batch_size)
-        # print("current_indices:", current_indices)
-        # print("size:", self.size)
-        # print("all_scores:", all_scores)
-        # print("all_indices:", all_indices)
-        # print("top_scores:", topk_scores)
-        # print("top_indices:", all_indices[idx], "\n")
-
-    def compute(self) -> Tensor:
-        # print("compute indices:", self.indices)
-        return self.indices
 
 
 class PoolEvaluationEpochLoop(EvaluationEpochLoop):
