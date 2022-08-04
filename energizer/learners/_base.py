@@ -2,15 +2,37 @@ from typing import Any, Optional
 
 import torch
 from pytorch_lightning import LightningModule
-from torch import Tensor
+from torch import Tensor, nn
 
-from energizer.learners.hooks import ModelHooks
-from energizer.utilities.learner_utils import patch_dropout_layers
+from energizer.learners.hooks import CheckpointHooks, DataHooks, ModelHooks
+from energizer.utilities.learner_utils import ModuleWrapperBase, patch_dropout_layers
 
 
-class Learner(LightningModule, ModelHooks):
-    def __init__(self):
+class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, LightningModule):
+    def __init__(self, learner: Optional[LightningModule] = None):
         super().__init__()
+        self.learner = learner
+
+    def forward(self, *args, **kwargs) -> Any:
+        return self.learner(*args, **kwargs)
+
+    def training_step(self, *args, **kwargs) -> Any:
+        return self.learner.training_step(*args, **kwargs)
+
+    def validation_step(self, *args, **kwargs) -> None:
+        return LightningModule.validation_step(self.learner, *args, **kwargs)
+
+    def test_step(self, *args, **kwargs) -> None:
+        return LightningModule.test_step(self.learner, *args, **kwargs)
+
+    def training_epoch_end(self, outputs: Any) -> None:
+        return LightningModule.training_epoch_end(self.learner, outputs)
+
+    def validation_epoch_end(self, outputs: Any) -> None:
+        return LightningModule.validation_epoch_end(self.learner, outputs)
+
+    def test_epoch_end(self, outputs: Any) -> None:
+        return LightningModule.test_epoch_end(self.learner, outputs)
 
     def pool_step(self, *args, **kwargs) -> Tensor:
         raise NotImplementedError
@@ -20,6 +42,9 @@ class Learner(LightningModule, ModelHooks):
 
     def pool_epoch_end(self, *args, **kwargs) -> Optional[Any]:
         pass
+
+    def configure_optimizers(self):
+        return self.learner.configure_optimizers()
 
 
 class Deterministic(Learner):
@@ -31,6 +56,7 @@ class MCDropout(Learner):
 
     def __init__(
         self,
+        learner: Optional[nn.Module] = None,
         num_inference_iters: Optional[int] = 10,
         consistent: Optional[bool] = False,
         inplace: Optional[bool] = False,
@@ -51,13 +77,13 @@ class MCDropout(Learner):
         self.consistent = consistent
         self.prob = prob
         self.inplace = inplace
-        self = patch_dropout_layers(
-            module=self,
+        learner = patch_dropout_layers(
+            module=learner,
             prob=prob,
             consistent=consistent,
             inplace=inplace,
         )
-        super().__init__()
+        super().__init__(learner)
 
     def forward(self, *args, **kwargs) -> Tensor:
         """Performs `num_inference_iters` forward passes using the underlying learner and keeping the dropout layers active..
@@ -67,6 +93,6 @@ class MCDropout(Learner):
         """
         out = []
         for _ in range(self.num_inference_iters):
-            out.append(self(*args, **kwargs))  # type: ignore
-        # expects shape [num_samples, num_classes, num_iterations]
+            out.append(self.learner(*args, **kwargs))  # type: ignore
+        # expects a shape [num_samples, num_classes, num_iterations]
         return torch.stack(out).permute((1, 2, 0))

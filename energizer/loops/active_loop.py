@@ -9,8 +9,7 @@ from pytorch_lightning.loops.utilities import _is_max_limit_reached
 from pytorch_lightning.trainer.connectors.logger_connector.result import _ResultCollection
 from pytorch_lightning.trainer.progress import Progress
 from pytorch_lightning.trainer.states import TrainerFn
-from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_only
-from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.utilities.distributed import rank_zero_only
 
 from energizer.loops.pool_loop import PoolEvaluationLoop
 
@@ -25,11 +24,11 @@ class ActiveLearningLoop(Loop):
         max_labelling_epochs: int,
     ):
         super().__init__()
+        self.reset_weights = reset_weights
+        self.test_after_labelling = test_after_labelling
+        self.total_budget = total_budget
         self.min_labelling_epochs = min_labelling_epochs
         self.max_labelling_epochs = max_labelling_epochs
-        self.reset_weights = reset_weights
-        self.total_budget = total_budget
-        self.test_after_labelling = test_after_labelling
 
         # labelling iterations tracker
         self.epoch_progress = Progress()
@@ -61,19 +60,21 @@ class ActiveLearningLoop(Loop):
         """Evaluates when to leave the loop."""
         # `processed` is increased before `on_train_epoch_end`, the hook where checkpoints are typically saved.
         # we use it here because the checkpoint data won't have `completed` increased yet
-        has_labelled_data = (
-            not self.trainer.datamodule.has_unlabelled_data
-            or self.trainer.query_size > self.trainer.datamodule.pool_size
+
+        # stop if no more data to label are available
+        stop_no_data_to_label = not (
+            self.trainer.datamodule.has_unlabelled_data and self.trainer.query_size <= self.trainer.datamodule.pool_size
         )
-        stop_total_budget = _is_max_limit_reached(self.trainer.datamodule.labelled_size, self.total_budget)
+
+        # stop if total budget is labelled
+        stop_total_budget = _is_max_limit_reached(self.trainer.datamodule.train_size, self.total_budget)
+
         stop_epochs = _is_max_limit_reached(self.epoch_progress.current.processed, self.max_labelling_epochs)
         if stop_epochs:
             # in case they are not equal, override so `trainer.current_epoch` has the expected value
             self.epoch_progress.current.completed = self.epoch_progress.current.processed
 
-        self.trainer.should_stop = False
-
-        return stop_epochs or has_labelled_data or stop_total_budget
+        return stop_no_data_to_label or stop_total_budget or stop_epochs
 
     @property
     def skip(self) -> bool:

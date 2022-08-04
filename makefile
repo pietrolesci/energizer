@@ -4,14 +4,14 @@ sources = energizer
 test: format lint unittest
 
 format:
-	isort $(sources) tests
-	black $(sources) tests
-	nbqa isort notebooks
-	nbqa black notebooks
+	isort $(sources) tests examples
+	black $(sources) tests examples
+	nbqa isort examples
+	nbqa black examples
 
 lint:
-	flake8 $(sources) tests
-	mypy $(sources) tests
+	flake8 $(sources) tests examples
+	mypy $(sources) tests examples
 
 unittest:
 	pytest

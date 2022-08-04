@@ -52,30 +52,25 @@ class ActiveDataModule(LightningDataModule):
         if datamodule is not None:
             self.datamodule = datamodule
 
+            # set up datamodule by default
+            self.datamodule.setup()
+
         super().__init__()
 
-        self._train_dataloader_stats = None
-        self._eval_dataloader_stats = None
+        self._train_dataloader_args = None
+        self._eval_dataloader_args = None
         self.setup_folds()
 
-    def get_dataloader_stats(self, dataloader: DataLoader) -> Optional[Dict[str, Any]]:
-        # TODO: look at how lightning does this inspection of the parameters, might work better
-        if dataloader is not None:
-            dataloader = dataloader[0] if isinstance(dataloader, List) else dataloader
-            return {
-                "batch_size": dataloader.batch_size,
-                "num_workers": dataloader.num_workers,
-                "collate_fn": dataloader.collate_fn,
-                "pin_memory": dataloader.pin_memory,
-                "drop_last": dataloader.drop_last,
-                "timeout": dataloader.timeout,
-                "worker_init_fn": dataloader.worker_init_fn,
-                "prefetch_factor": dataloader.prefetch_factor,
-                "persistent_workers": dataloader.persistent_workers,
-            }
+    """
+    Properties
+    """
 
     @property
-    def labelled_size(self) -> int:
+    def total_data_size(self) -> int:
+        return self.train_size + self.pool_size
+
+    @property
+    def train_size(self) -> int:
         return len(self.train_fold)
 
     @property
@@ -83,12 +78,12 @@ class ActiveDataModule(LightningDataModule):
         return len(self.pool_fold)
 
     @property
-    def train_dataloader_stats(self) -> Dict[str, Any]:
-        return self._train_dataloader_stats
+    def train_dataloader_args(self) -> Dict[str, Any]:
+        return self._train_dataloader_args
 
     @property
-    def eval_dataloader_stats(self) -> Dict[str, Any]:
-        return self._eval_dataloader_stats
+    def eval_dataloader_args(self) -> Dict[str, Any]:
+        return self._eval_dataloader_args
 
     @property
     def has_labelled_data(self) -> bool:
@@ -105,6 +100,36 @@ class ActiveDataModule(LightningDataModule):
         """Returns the number of the last active learning step."""
         return int(self.train_mask.max())
 
+    @property
+    def stats(self) -> Dict[str, int]:
+        return {
+            "total_data_size": self.total_data_size,
+            "train_size": self.train_size,
+            "pool_size": self.pool_size,
+            "num_train_batches": len(self.train_dataloader()),
+            "num_pool_batches": len(self.pool_dataloader()),
+        }
+
+    """
+    Data preparations
+    """
+
+    def _get_dataloader_args(self, dataloader: DataLoader) -> Optional[Dict[str, Any]]:
+        # TODO: look at how lightning does this inspection of the parameters, might work better
+        if dataloader is not None:
+            dataloader = dataloader[0] if isinstance(dataloader, List) else dataloader
+            return {
+                "batch_size": dataloader.batch_size,
+                "num_workers": dataloader.num_workers,
+                "collate_fn": dataloader.collate_fn,
+                "pin_memory": dataloader.pin_memory,
+                "drop_last": dataloader.drop_last,
+                "timeout": dataloader.timeout,
+                "worker_init_fn": dataloader.worker_init_fn,
+                "prefetch_factor": dataloader.prefetch_factor,
+                "persistent_workers": dataloader.persistent_workers,
+            }
+
     def prepare_data(self) -> None:
         self.datamodule.prepare_data()
 
@@ -114,13 +139,13 @@ class ActiveDataModule(LightningDataModule):
     def setup_folds(self) -> None:
         train_dl = self.datamodule.train_dataloader()
         train_dataset = train_dl.dataset
-        self._train_dataloader_stats = self.get_dataloader_stats(train_dl)
+        self._train_dataloader_args = self._get_dataloader_args(train_dl)
         self.train_fold = Subset(train_dataset, [])
         self.pool_fold = Subset(train_dataset, [])
 
         eval_dl = self.datamodule.test_dataloader() or self.datamodule.val_dataloader()
-        self._eval_dataloader_stats = self.get_dataloader_stats(eval_dl)
-        self._eval_dataloader_stats = self._eval_dataloader_stats or self._train_dataloader_stats
+        self._eval_dataloader_args = self._get_dataloader_args(eval_dl)
+        self._eval_dataloader_args = self._eval_dataloader_args or self._train_dataloader_args
 
         # states
         self.train_mask = np.zeros((len(train_dataset),), dtype=int)
@@ -179,8 +204,12 @@ class ActiveDataModule(LightningDataModule):
         self.pool_pool.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
         self.train_pool.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
 
+    """
+    DataLoaders
+    """
+
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_fold, **self.train_dataloader_stats)
+        return DataLoader(self.train_fold, **self.train_dataloader_args)
 
     def val_dataloader(self) -> Optional[DataLoader]:
         return self.datamodule.val_dataloader()
@@ -189,4 +218,4 @@ class ActiveDataModule(LightningDataModule):
         return self.datamodule.test_dataloader()
 
     def pool_dataloader(self) -> DataLoader:
-        return DataLoader(self.pool_fold, **self.eval_dataloader_stats)
+        return DataLoader(self.pool_fold, **self.eval_dataloader_args)

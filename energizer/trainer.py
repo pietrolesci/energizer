@@ -17,7 +17,7 @@ from energizer.learners.base import Learner
 from energizer.loops.active_loop import ActiveLearningLoop
 from energizer.loops.pool_loop import PoolEvaluationLoop
 from energizer.utilities.connectors import DataConnector, PoolRunningStage
-from energizer.utilities.trainer_helpers import patch_callbacks
+from energizer.utilities.trainer_utils import patch_callbacks
 
 log = logging.getLogger(__name__)
 
@@ -26,11 +26,11 @@ class Trainer(Trainer_pl):
     def __init__(
         self,
         query_size: int = 2,
-        total_budget: int = -1,
-        min_labelling_epochs: int = 0,
-        max_labelling_epochs: int = 1000,
-        reset_weights: bool = True,
-        test_after_labelling: bool = True,
+        reset_weights: Optional[bool] = True,
+        test_after_labelling: Optional[bool] = False,
+        total_budget: Optional[int] = -1,
+        min_labelling_epochs: Optional[int] = 0,
+        max_labelling_epochs: Optional[int] = -1,
         limit_pool_batches: Optional[Union[int, float]] = None,
         **kwargs,
     ) -> None:
@@ -40,15 +40,15 @@ class Trainer(Trainer_pl):
 
         # register inputs
         self.query_size = query_size
-        self.total_budget = total_budget
         self.reset_weights = reset_weights
+        self.test_after_labelling = test_after_labelling
+        self.total_budget = total_budget
         self.min_labelling_epochs = min_labelling_epochs
         self.max_labelling_epochs = max_labelling_epochs
-        self.test_after_labelling = test_after_labelling
         self.limit_pool_batches = limit_pool_batches
 
         # used to decide which `_run_train()` method to run`
-        self._active_fitting: bool = False
+        self.active_fitting: bool = False
 
         # overwrite data_connector in trainer
         self._data_connector = DataConnector(self, self._data_connector.multiple_trainloader_mode)
@@ -83,6 +83,18 @@ class Trainer(Trainer_pl):
         # this needed to be patched
         self._extend_setup_on_init()
         self._extend_init_debugging_flags()
+
+    """
+    Add states, properties, and methods
+    """
+
+    @property
+    def active_fitting(self) -> bool:
+        return self._active_fitting
+
+    @active_fitting.setter
+    def active_fitting(self, active_fitting: bool) -> None:
+        self._active_fitting = active_fitting
 
     @property
     def active_learning_loop(self) -> FitLoop:
@@ -248,18 +260,6 @@ class Trainer(Trainer_pl):
         self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
             self.active_learning_loop.run()
-
-    """
-    Add states properties
-    """
-
-    @property
-    def active_fitting(self) -> bool:
-        return self._active_fitting
-
-    @active_fitting.setter
-    def active_fitting(self, active_fitting: bool) -> None:
-        self._active_fitting = active_fitting
 
     """
     Dispatch properties calls to the right `FitLoop` depending on whether
