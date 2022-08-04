@@ -6,8 +6,9 @@ from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochL
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import Tensor
-from energizer.metrics import AccumulateTopK
+
 from energizer.learners.base import Learner
+from energizer.metrics import AccumulateTopK
 
 
 class PoolEvaluationEpochLoop(EvaluationEpochLoop):

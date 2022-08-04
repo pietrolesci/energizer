@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 
 import torch
-from pytorch_lightning import LightningModule
+from pytorch_lightning import Callback, LightningModule, Trainer
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.optim.optimizer import Optimizer
 
@@ -11,9 +11,58 @@ from torch.optim.optimizer import Optimizer
 class ModelHooks:
     """Hooks to be used in LightningModule."""
 
-    #############
-    # START/END #
-    #############
+    """
+    New hooks
+    """
+
+    def on_pool_start(self) -> None:
+        pass
+
+    def on_pool_end(self) -> None:
+        pass
+
+    def on_pool_epoch_start(self) -> None:
+        pass
+
+    def on_pool_epoch_end(self) -> None:
+        pass
+
+    def on_pool_model_train(self) -> None:
+        pass
+
+    def on_pool_model_eval(self) -> None:
+        pass
+
+    def on_active_learning_start(self) -> None:
+        pass
+
+    def on_active_learning_end(self) -> None:
+        pass
+
+    def on_labelling_epoch_start(self) -> None:
+        pass
+
+    def on_labelling_epoch_end(self) -> None:
+        pass
+
+    def on_pool_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
+        pass
+
+    def on_pool_batch_end(
+        self, outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int
+    ) -> None:
+        pass
+
+    def on_pool_dataloader(self, *_: Any):
+        """To deprecate when PL deprecates the similar ones.
+
+        This is used by PL in trainer._data_connector._request_dataloader
+        """
+
+    """
+    Forward `on_*_{start/end}` hooks
+    """
+
     def on_fit_start(self) -> None:
         return LightningModule.on_fit_start(self.learner)
 
@@ -38,21 +87,16 @@ class ModelHooks:
     def on_test_end(self) -> None:
         return LightningModule.on_test_end(self.learner)
 
-    def on_pool_start(self) -> None:
-        pass
-
-    def on_pool_end(self) -> None:
-        pass
-
     def on_predict_start(self) -> None:
         return LightningModule.on_predict_start(self.learner)
 
     def on_predict_end(self) -> None:
         return LightningModule.on_predict_end(self.learner)
 
-    ###################
-    # BATCH START/END #
-    ###################
+    """
+    Forward `on_*_batch_{start/end}` hooks
+    """
+
     def on_train_batch_start(self, batch: Any, batch_idx: int) -> Optional[int]:
         return LightningModule.on_train_batch_start(self.learner, batch, batch_idx)
 
@@ -75,23 +119,16 @@ class ModelHooks:
     ) -> None:
         return LightningModule.on_test_batch_end(self.learner, outputs, batch, batch_idx, dataloader_idx)
 
-    def on_pool_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        pass
-
-    def on_pool_batch_end(
-        self, outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int
-    ) -> None:
-        pass
-
     def on_predict_batch_start(self, batch: Any, batch_idx: int, dataloader_idx: int) -> None:
         return LightningModule.on_predict_batch_start(self.learner, batch, batch_idx, dataloader_idx)
 
     def on_predict_batch_end(self, outputs: Optional[Any], batch: Any, batch_idx: int, dataloader_idx: int) -> None:
         return LightningModule.on_predict_batch_end(self.learner, outputs, batch, batch_idx, dataloader_idx)
 
-    ##############
-    # MODEL EVAL #
-    ##############
+    """
+    Forward `on_*_model_{train/eval}` hooks
+    """
+
     def on_validation_model_eval(self) -> None:
         return LightningModule.on_validation_model_eval(self.learner)
 
@@ -104,18 +141,13 @@ class ModelHooks:
     def on_test_model_eval(self) -> None:
         return LightningModule.on_test_model_eval(self.learner)
 
-    def on_pool_model_train(self) -> None:
-        pass
-
-    def on_pool_model_eval(self) -> None:
-        pass
-
     def on_predict_model_eval(self) -> None:
         return LightningModule.on_predict_model_eval(self.learner)
 
-    ###################
-    # EPOCH START/END #
-    ###################
+    """
+    Forward `on_*_epoch_{start/end}` hooks
+    """
+
     def on_train_epoch_start(self) -> None:
         return LightningModule.on_train_epoch_start(self.learner)
 
@@ -134,17 +166,15 @@ class ModelHooks:
     def on_test_epoch_end(self) -> None:
         return LightningModule.on_test_epoch_end(self.learner)
 
-    def on_pool_epoch_start(self) -> None:
-        pass
-
-    def on_pool_epoch_end(self) -> None:
-        pass
-
     def on_predict_epoch_start(self) -> None:
         return LightningModule.on_predict_epoch_start(self.learner)
 
     def on_predict_epoch_end(self, results: List[Any]) -> None:
         return LightningModule.on_predict_epoch_end(self.learner, results)
+
+    """
+    Forward optimization-related hooks
+    """
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         return LightningModule.on_before_zero_grad(self.learner, optimizer)
@@ -183,12 +213,6 @@ class DataHooks:
     def on_after_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
         return LightningModule.on_after_batch_transfer(self.learner, batch, dataloader_idx)
 
-    def on_pool_dataloader(self, *_: Any):
-        """To deprecate when PL deprecates the similar ones.
-
-        This is used by PL in trainer._data_connector._request_dataloader
-        """
-
 
 class CheckpointHooks:
     """Hooks to be used with Checkpointing."""
@@ -198,3 +222,55 @@ class CheckpointHooks:
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         return LightningModule.on_save_checkpoint(self.learner, checkpoint)
+
+
+class CallBackActiveLearningHooks:
+    @staticmethod
+    def on_pool_start(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the pool evaluation begins."""
+
+    @staticmethod
+    def on_pool_end(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the pool evaluation ends."""
+
+    @staticmethod
+    def on_pool_epoch_start(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the pool evaluation epoch begins."""
+
+    @staticmethod
+    def on_pool_epoch_end(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the pool evaluation epoch ends."""
+
+    def on_active_learning_start(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when active learning starts."""
+        pass
+
+    def on_active_learning_end(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when active learning ends."""
+        pass
+
+    def on_labelling_epoch_start(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the active learning (labelling) epoch starts."""
+        pass
+
+    def on_labelling_epoch_end(trainer: Trainer, pl_module: LightningModule) -> None:
+        """Called when the pool evaluation ends."""
+        pass
+
+    @staticmethod
+    def on_pool_batch_start(
+        trainer: Trainer, pl_module: LightningModule, batch: Any, batch_idx: int, dataloader_idx: int
+    ) -> None:
+        """Called when the active learning (labelling) epoch begins."""
+
+    @staticmethod
+    def on_pool_batch_end(
+        self,
+        trainer: Trainer,
+        pl_module: LightningModule,
+        outputs: Optional[STEP_OUTPUT],
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: Optional[int] = None,
+    ) -> None:
+        """Called when the pool evaluation batch ends."""

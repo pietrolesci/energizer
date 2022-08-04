@@ -12,9 +12,10 @@ from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
 class PoolEvaluationLoop(EvaluationLoop):
     """Loops over all dataloaders for evaluation."""
 
-    def __init__(self, query_size: int) -> None:
-        super().__init__(verbose=False)
+    def __init__(self, query_size: int, verbose: bool = False) -> None:
+        super().__init__(verbose)
         self.epoch_loop = PoolEvaluationEpochLoop(query_size)
+        # self._results = _ResultCollection(training=False)
 
     @property
     def dataloaders(self) -> Sequence[DataLoader]:
