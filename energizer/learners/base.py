@@ -8,9 +8,21 @@ from energizer.learners.hooks import ModelHooks
 from energizer.utilities.learner_utils import patch_dropout_layers
 
 
-class Learner(LightningModule, ModelHooks):
+class PostInitCaller(type):
+    """Used to call `setup` automatically after `__init__`"""
+    def __call__(cls, *args, **kwargs):
+        """Called when you call MyNewClass() """
+        obj = type.__call__(cls, *args, **kwargs)
+        obj.__post_init__()
+        return obj
+
+
+class Learner(LightningModule, ModelHooks, metaclass=PostInitCaller):
     def __init__(self):
         super().__init__()
+
+    def __post_init__(self) -> None:
+        pass
 
     def pool_step(self, *args, **kwargs) -> Tensor:
         raise NotImplementedError
@@ -20,6 +32,12 @@ class Learner(LightningModule, ModelHooks):
 
     def pool_epoch_end(self, *args, **kwargs) -> Optional[Any]:
         pass
+    
+    def _forward(self, *args, **kwargs) -> Any:
+        return self.forward(*args, **kwargs)
+    
+    def __call__(self, *args, **kwargs) -> Any:
+        return self._forward(*args, **kwargs)
 
 
 class Deterministic(Learner):
@@ -33,7 +51,7 @@ class MCDropout(Learner):
         self,
         num_inference_iters: Optional[int] = 10,
         consistent: Optional[bool] = False,
-        inplace: Optional[bool] = False,
+        inplace: Optional[bool] = True,
         prob: Optional[float] = None,
     ) -> None:
         """Instantiates a new learner (same as `learner`) with patched dropout layers.
@@ -51,15 +69,17 @@ class MCDropout(Learner):
         self.consistent = consistent
         self.prob = prob
         self.inplace = inplace
-        self = patch_dropout_layers(
-            module=self,
-            prob=prob,
-            consistent=consistent,
-            inplace=inplace,
-        )
         super().__init__()
 
-    def forward(self, *args, **kwargs) -> Tensor:
+    def __post_init__(self) -> None:
+        patch_dropout_layers(
+            module=self,
+            prob=self.prob,
+            consistent=self.consistent,
+            inplace=self.inplace,
+        )
+
+    def _forward(self, *args, **kwargs) -> Tensor:
         """Performs `num_inference_iters` forward passes using the underlying learner and keeping the dropout layers active..
 
         Returns:
@@ -67,6 +87,6 @@ class MCDropout(Learner):
         """
         out = []
         for _ in range(self.num_inference_iters):
-            out.append(self(*args, **kwargs))  # type: ignore
+            out.append(self.forward(*args, **kwargs))  # type: ignore
         # expects shape [num_samples, num_classes, num_iterations]
         return torch.stack(out).permute((1, 2, 0))

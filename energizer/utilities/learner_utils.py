@@ -172,7 +172,7 @@ class EnergizerDropoutLayer(_DropoutNd):
         return self._forward(x)
 
 
-class Dropout(EnergizerDropoutLayer):
+class MCDropout(EnergizerDropoutLayer):
     """Patch of `torch.nn.Dropout`."""
 
     def _forward(self, input: Tensor) -> Tensor:
@@ -180,7 +180,7 @@ class Dropout(EnergizerDropoutLayer):
         return F.dropout(input=input, p=self.p, training=True, inplace=self.inplace)
 
 
-class Dropout2d(EnergizerDropoutLayer):
+class MCDropout2d(EnergizerDropoutLayer):
     """Patch of `torch.nn.Dropout2d`."""
 
     def _forward(self, input: Tensor) -> Tensor:
@@ -188,7 +188,7 @@ class Dropout2d(EnergizerDropoutLayer):
         return F.dropout2d(input=input, p=self.p, training=True, inplace=self.inplace)
 
 
-class Dropout3d(EnergizerDropoutLayer):
+class MCDropout3d(EnergizerDropoutLayer):
     """Patch of `torch.nn.Dropout3d`."""
 
     def _forward(self, input: Tensor) -> Tensor:
@@ -196,7 +196,7 @@ class Dropout3d(EnergizerDropoutLayer):
         return F.dropout3d(input=input, p=self.p, training=True, inplace=self.inplace)
 
 
-class AlphaDropout(EnergizerDropoutLayer):
+class MCAlphaDropout(EnergizerDropoutLayer):
     """Patch of `torch.nn.AlphaDropout`."""
 
     def _forward(self, input: Tensor) -> Tensor:
@@ -204,7 +204,7 @@ class AlphaDropout(EnergizerDropoutLayer):
         return F.alpha_dropout(input=input, p=self.p, training=True)
 
 
-class FeatureAlphaDropout(EnergizerDropoutLayer):
+class MCFeatureAlphaDropout(EnergizerDropoutLayer):
     """Patch of `torch.nn.FeatureAlphaDropout`."""
 
     def _forward(self, input: Tensor) -> Tensor:
@@ -276,7 +276,7 @@ def _patch_dropout(
 
                 # NOTE: `eval(dropout_layer.__name__)` works because the __name__ of the original dropout
                 # layers is the same as the __name__ of the patched layers defined above
-                new_module = eval(dropout_layer.__name__)(
+                new_module = eval(f"MC{dropout_layer.__name__}")(
                     p=prob if prob else child.p, inplace=child.inplace, consistent=consistent, **consistent_kwargs
                 )
 
