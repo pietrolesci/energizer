@@ -4,7 +4,7 @@ import torch
 from pytorch_lightning import LightningModule
 from torch import Tensor, nn
 
-from energizer.learners.hooks import CheckpointHooks, DataHooks, ModelHooks
+from energizer.mixin.hooks import CheckpointHooks, DataHooks, ModelHooks
 from energizer.utilities.mcdropout_utils import ModuleWrapperBase, patch_dropout_layers
 
 

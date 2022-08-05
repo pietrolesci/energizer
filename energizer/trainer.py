@@ -13,9 +13,9 @@ from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 
 from energizer.data.datamodule import ActiveDataModule
-from energizer.learners.base import Learner
 from energizer.loops.active_learning_loop import ActiveLearningLoop
 from energizer.loops.pool_loop import PoolEvaluationLoop
+from energizer.mixin.base import Learner
 from energizer.utilities.connectors import DataConnector, PoolRunningStage
 from energizer.utilities.trainer_utils import patch_callbacks
 

@@ -4,7 +4,7 @@ import torch
 from pytorch_lightning import LightningModule
 from torch import Tensor
 
-from energizer.learners.hooks import ModelHooks
+from energizer.mixin.hooks import ModelHooks
 from energizer.utilities.mcdropout_utils import patch_dropout_layers
 
 

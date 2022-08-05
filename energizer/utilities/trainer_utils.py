@@ -4,7 +4,7 @@ from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.progress.base import ProgressBarBase
 
 from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
-from energizer.learners.hooks import CallBackActiveLearningHooks
+from energizer.mixin.hooks import CallBackActiveLearningHooks
 
 
 def patch_callbacks(callbacks: List[Callback]) -> List[Callback]:
