@@ -8,7 +8,7 @@
 
 
 
-An active learning library for Pytorch
+An active learning library for PyTorch
 
 
 * Documentation: <https://pietrolesci.github.io/pytorch-energizer>
@@ -88,7 +88,7 @@ Define the `LightningModule`
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)
 
-    def step(self, batch: Tuple[Tensor, Tensor], batch_idx: int, stage: str) -> Dict[str, Tensor]:
+    def step(self, batch: Tuple[Tensor, Tensor], stage: str) -> Dict[str, Tensor]:
         x, y = batch
         logits = self(x)
         loss = self.loss(logits, y)
@@ -96,13 +96,13 @@ Define the `LightningModule`
         return {"loss": loss, "logits": logits}
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, batch_idx, "train")
+        return self.step(batch, "train")
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, batch_idx, "val")
+        return self.step(batch, "val")
 
     def test_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, batch_idx, "test")
+        return self.step(batch, "test")
 
 +    def pool_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
 +        """A implememntation of the `Entropy` active learning strategy."""
