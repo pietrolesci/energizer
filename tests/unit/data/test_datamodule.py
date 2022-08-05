@@ -14,27 +14,27 @@ def test_len(dataset_arg):
     ads = ActiveDataModule(num_classes=2, train_dataset=dataset_arg)
     ads.prepare_data()  # useless: just pass but for coverage
     ads.setup()  # useless: just pass but for coverage
-    assert ads.total_labelled_size == ads.train_size + ads.val_size
-    assert len(ads.train_dataset) == ads.train_size == ads.val_size == ads.total_labelled_size == 0
+    assert ads.total_train_size == ads.train_size + ads.val_size
+    assert len(ads.train_dataset) == ads.train_size == ads.val_size == ads.total_train_size == 0
     assert len(dataset_arg) == len(ads.pool_dataset) == ads.pool_size
-    assert len(dataset_arg) == ads.total_labelled_size + ads.pool_size
+    assert len(dataset_arg) == ads.total_train_size + ads.pool_size
 
     # one instance in the train dataset
     ads.label(0)
-    assert ads.total_labelled_size == ads.train_size + ads.val_size
-    assert len(ads.train_dataset) == ads.train_size == ads.total_labelled_size == 1
+    assert ads.total_train_size == ads.train_size + ads.val_size
+    assert len(ads.train_dataset) == ads.train_size == ads.total_train_size == 1
     assert ads.val_dataset is None
-    assert len(dataset_arg) - ads.total_labelled_size == len(ads.pool_dataset) == ads.pool_size
-    assert len(dataset_arg) == ads.total_labelled_size + ads.pool_size
+    assert len(dataset_arg) - ads.total_train_size == len(ads.pool_dataset) == ads.pool_size
+    assert len(dataset_arg) == ads.total_train_size + ads.pool_size
 
     # one instance in the train dataset and one in the val dataset
     ads.val_split = 0.5  # hack
     ads.label([0, 1])
-    assert ads.total_labelled_size == ads.train_size + ads.val_size
+    assert ads.total_train_size == ads.train_size + ads.val_size
     assert len(ads.train_dataset) == ads.train_size == 2
     assert len(ads.val_dataset) == ads.val_size == 1
-    assert len(dataset_arg) - ads.total_labelled_size == len(ads.pool_dataset) == ads.pool_size
-    assert len(dataset_arg) == ads.total_labelled_size + ads.pool_size
+    assert len(dataset_arg) - ads.total_train_size == len(ads.pool_dataset) == ads.pool_size
+    assert len(dataset_arg) == ads.total_train_size + ads.pool_size
 
 
 @pytest.mark.parametrize("dataset_arg", ["mock_dataset", "mock_hf_dataset"], indirect=True)
