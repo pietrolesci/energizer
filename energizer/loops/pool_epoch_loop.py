@@ -1,11 +1,9 @@
 from functools import lru_cache
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-import torch
 from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochLoop
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-from torch import Tensor
 
 from energizer.learners.base import Learner
 from energizer.metrics import AccumulateTopK

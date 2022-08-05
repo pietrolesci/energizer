@@ -7,37 +7,10 @@ from typing import Generator, Optional
 import numpy as np
 import torch
 import torch.nn.functional as F
-from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.utilities.seed import _collect_rng_states, _set_rng_states
 from torch import Tensor, nn
 from torch.nn.modules.dropout import _DropoutNd
-
-
-class ModuleWrapperBase:
-    """The ``ModuleWrapperBase`` is a base for classes which wrap a ``LightningModule`` or an instance of
-    ``ModuleWrapperBase``.
-
-    This class ensures that trainer attributes are forwarded to any wrapped or nested
-    ``LightningModule`` instances so that nested calls to ``.log`` are handled correctly. The ``ModuleWrapperBase`` is
-    also stateful. Attached state will be forwarded to any nested ``ModuleWrapperBase`` instances.
-
-    Credits: Pytorch-Lightning Team.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self._children = []
-
-    def __setattr__(self, key, value):
-        if isinstance(value, (LightningModule, ModuleWrapperBase)):
-            self._children.append(key)
-        patched_attributes = ["_current_fx_name", "_current_hook_fx_name", "_results", "_data_pipeline_state"]
-        if isinstance(value, Trainer) or key in patched_attributes:
-            if hasattr(self, "_children"):
-                for child in self._children:
-                    setattr(getattr(self, child), key, value)
-        super().__setattr__(key, value)
 
 
 @contextlib.contextmanager

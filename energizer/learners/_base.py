@@ -5,7 +5,7 @@ from pytorch_lightning import LightningModule
 from torch import Tensor, nn
 
 from energizer.learners.hooks import CheckpointHooks, DataHooks, ModelHooks
-from energizer.utilities.learner_utils import ModuleWrapperBase, patch_dropout_layers
+from energizer.utilities.mcdropout_utils import ModuleWrapperBase, patch_dropout_layers
 
 
 class Learner(ModuleWrapperBase, ModelHooks, DataHooks, CheckpointHooks, LightningModule):

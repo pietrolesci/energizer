@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Union
 
 import torch
-from pytorch_lightning import LightningDataModule
+from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning import Trainer as Trainer_pl
 from pytorch_lightning.loops import EvaluationLoop, FitLoop, PredictionLoop, TrainingEpochLoop
 from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
@@ -14,7 +14,7 @@ from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADER
 
 from energizer.data.datamodule import ActiveDataModule
 from energizer.learners.base import Learner
-from energizer.loops.active_loop import ActiveLearningLoop
+from energizer.loops.active_learning_loop import ActiveLearningLoop
 from energizer.loops.pool_loop import PoolEvaluationLoop
 from energizer.utilities.connectors import DataConnector, PoolRunningStage
 from energizer.utilities.trainer_utils import patch_callbacks
@@ -160,7 +160,8 @@ class Trainer(Trainer_pl):
         # if you supply a datamodule you can't supply train_dataloader or val_dataloaders
         if is_dataloaders and is_datamodule:
             raise MisconfigurationException(
-                "You cannot pass `train_dataloader` or `val_dataloaders` or `test_dataloaders` to `trainer.active_fit(datamodule=...)`"
+                "You cannot pass `train_dataloader` or `val_dataloaders` or ",
+                "`test_dataloaders` to `trainer.active_fit(datamodule=...)`",
             )
 
         elif is_dataloaders or (is_datamodule and not isinstance(datamodule, ActiveDataModule)):
@@ -196,7 +197,7 @@ class Trainer(Trainer_pl):
 
         return results
 
-    def reset_pool_dataloader(self, model: Optional["pl.LightningModule"] = None) -> None:
+    def reset_pool_dataloader(self, model: Optional[LightningModule] = None) -> None:
         """Resets the pool dataloader and determines the number of batches.
 
         This method is exactly the same as `trainer.reset_test_dataloader`.

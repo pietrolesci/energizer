@@ -1,3 +1,3 @@
-from energizer.loops.active_loop import ActiveLearningLoop
+from energizer.loops.active_learning_loop import ActiveLearningLoop
 
 __all__ = ["ActiveLearningLoop"]
