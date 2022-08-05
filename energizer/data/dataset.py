@@ -181,7 +181,7 @@ class ActiveDataset:
         return (
             f"ActiveDataset({{\n    "
             f"original_dataset_size: {len(self.dataset)},\n    "
-            f"labelled_size: {self.total_labelled_size},\n    "
+            f"train_size: {self.total_train_size},\n    "
             f"pool_size: {self.pool_size},\n    "
             f"base_class: {type(self.dataset)},\n}})"
         )
@@ -197,7 +197,7 @@ class ActiveDataset:
         return len(self.val_dataset)
 
     @property
-    def total_labelled_size(self) -> int:
+    def total_train_size(self) -> int:
         """Returns the number of all the labelled instances."""
         return self.train_size + self.val_size
 
@@ -209,7 +209,7 @@ class ActiveDataset:
     @property
     def has_labelled_data(self) -> bool:
         """Checks whether there are labelled data available."""
-        return self.total_labelled_size > 0
+        return self.total_train_size > 0
 
     @property
     def has_unlabelled_data(self) -> bool:

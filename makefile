@@ -10,8 +10,8 @@ format:
 	nbqa black examples
 
 lint:
-	flake8 $(sources) tests
-	mypy $(sources) tests
+	flake8 $(sources) tests examples
+	mypy $(sources) tests examples
 
 unittest:
 	pytest
