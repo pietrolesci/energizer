@@ -40,11 +40,11 @@ class Learner(LightningModule, ModelHooks, metaclass=PostInitCaller):
         return self._forward(*args, **kwargs)
 
 
-class Deterministic(Learner):
+class DeterministicMixin(Learner):
     pass
 
 
-class MCDropout(Learner):
+class MCDropoutMixin(Learner):
     """Implements the MCDropout inference method in [PUT REFERENCES]."""
 
     def __init__(
