@@ -5,7 +5,7 @@ from pytorch_lightning import LightningModule
 from torch import Tensor
 
 from energizer.mixin.hooks import ModelHooks
-from energizer.utilities.mcdropout_utils import patch_dropout_layers
+from energizer.mixin.mcdropout_utils import patch_dropout_layers
 
 
 class PostInitCaller(type):
