@@ -1,8 +1,8 @@
 import logging
 from typing import List, Optional, Union
 
-import torch
 import pytorch_lightning as pl
+import torch
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.progress.base import ProgressBarBase
 from pytorch_lightning.loops import EvaluationLoop, FitLoop, PredictionLoop, TrainingEpochLoop
@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 Preliminary components needed to add support for `pool_dataloader`
 and pool-related hooks
 """
+
+
 class PoolRunningStage(LightningEnum):
     POOL = "pool"
 
@@ -81,6 +83,7 @@ def patch_callbacks(callbacks: List[Callback]) -> List[Callback]:
 """
 New trainer implementation
 """
+
 
 class Trainer(pl.Trainer):
     def __init__(
