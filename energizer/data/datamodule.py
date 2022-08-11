@@ -36,7 +36,7 @@ class ActiveDataModule(LightningDataModule):
 
     def __init__(
         self,
-        train_dataloader: Optional[DataLoader] = None,
+        train_dataloader: DataLoader,
         val_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
         test_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
         datamodule: Optional[LightningDataModule] = None,
@@ -56,7 +56,6 @@ class ActiveDataModule(LightningDataModule):
             self.datamodule.setup()
 
         super().__init__()
-
         self._train_dataloader_args = None
         self._eval_dataloader_args = None
         self.setup_folds()
@@ -219,3 +218,83 @@ class ActiveDataModule(LightningDataModule):
 
     def pool_dataloader(self) -> DataLoader:
         return DataLoader(self.pool_fold, **self.eval_dataloader_args)
+
+
+"""
+To have the `pool_dataloader` return batches without the label
+"""
+
+
+class ActiveDatamodule2(ActiveDataModule):
+    def __init__(
+        self,
+        input_idx_or_keys: Union[int, str, List[str]],
+        train_dataloader: DataLoader,
+        val_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
+        test_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
+        datamodule: Optional[LightningDataModule] = None,
+    ):
+        super().__init__(train_dataloader, val_dataloaders, test_dataloaders, datamodule)
+        self.input_idx_or_keys = input_idx_or_keys
+
+    def setup_folds(self) -> None:
+        train_dl = self.datamodule.train_dataloader()
+        train_dataset = train_dl.dataset
+        self._train_dataloader_args = self._get_dataloader_args(train_dl)
+        self.train_fold = Subset(train_dataset, [])
+        self.pool_fold = (
+            TupleSubset(train_dataset, [], self.input_idx_or_keys)
+            if isinstance(self.input_idx_or_keys, int)
+            else DictSubset(train_dataset, [], self.input_idx_or_keys)
+        )
+
+        eval_dl = self.datamodule.test_dataloader() or self.datamodule.val_dataloader()
+        self._eval_dataloader_args = self._get_dataloader_args(eval_dl)
+        self._eval_dataloader_args = self._eval_dataloader_args or self._train_dataloader_args
+
+        # states
+        self.train_mask = np.zeros((len(train_dataset),), dtype=int)
+        self.setup_fold_index()
+
+
+class EnergizerSubset:
+    """This is a shallow reimplementation of `torch.data.utils.Subset`.
+    It serves as base class for the source-specific implementation of Subset.
+    """
+
+    def __init__(self, dataset: Any, indices: List[int]) -> None:
+        """Initializes a subset, akin the `torch.data.utils.Subset`."""
+        if not isinstance(indices, list):
+            raise MisconfigurationException(f"Indices must be of type `List[int], not {type(indices)}")
+
+        self.dataset = dataset
+        self.indices = indices
+
+    def __repr__(self) -> str:
+        return (
+            f"Subset({{\n    "
+            f"original_size: {len(self.dataset)},\n    "
+            f"subset_size: {len(self.indices)},\n    "
+            f"base_class: {type(self.dataset)},\n}})"
+        )
+
+    def __len__(self):
+        return len(self.indices)
+
+
+class TupleSubset(EnergizerSubset):
+    def __init__(self, dataset: Any, indices: List[int], input_idx: int) -> None:
+        super().__init__(dataset, indices)
+        self.input_idx = input_idx
+
+    def __getitem__(self, idx: int) -> Any:
+        return self.dataset[self.indices[idx]][self.input_idx]
+
+
+class DictSubset(EnergizerSubset):
+    def __init__(self, dataset: Any, indices: List[int], keys_list: List[str]) -> None:
+        super().__init__(dataset, indices)
+        self.keys_list = [keys_list] if isinstance(keys_list, str) else keys_list
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        return {key: self.dataset[self.indices[idx]][key] for key in self.keys_list}
