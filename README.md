@@ -1,6 +1,5 @@
 # Pytorch-Energizer
 
-
 [![pypi](https://img.shields.io/pypi/v/pytorch-energizer.svg)](https://pypi.org/project/pytorch-energizer/)
 [![python](https://img.shields.io/pypi/pyversions/pytorch-energizer.svg)](https://pypi.org/project/pytorch-energizer/)
 [![Build Status](https://github.com/pietrolesci/pytorch-energizer/actions/workflows/dev.yml/badge.svg)](https://github.com/pietrolesci/pytorch-energizer/actions/workflows/dev.yml)
