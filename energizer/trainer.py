@@ -15,13 +15,15 @@ from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
 from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
 from energizer.data.datamodule import ActiveDataModule
 from energizer.loops.active_learning_loop import ActiveLearningLoop
 from energizer.loops.pool_loop import PoolEvaluationLoop
 from energizer.mixin.base import Learner
 from energizer.mixin.hooks import CallBackActiveLearningHooks
+
+from energizer.query_strategies.base import BaseQueryStrategy
 
 log = logging.getLogger(__name__)
 
@@ -121,9 +123,6 @@ class Trainer(pl.Trainer):
             reload_dataloaders_every_n_epochs=self.reload_dataloaders_every_n_epochs,
         )
 
-        # pool loop
-        pool_loop = PoolEvaluationLoop(self.query_size, verbose=False)
-
         # fit after each labelling session
         fit_loop = FitLoop(min_epochs=self.fit_loop.min_epochs, max_epochs=self.fit_loop.max_epochs)
         training_epoch_loop = TrainingEpochLoop(min_steps=self.fit_loop.min_steps, max_steps=self.fit_loop.max_steps)
@@ -140,7 +139,7 @@ class Trainer(pl.Trainer):
             min_labelling_epochs=self.min_labelling_epochs,
             max_labelling_epochs=self.max_labelling_epochs,
         )
-        active_learning_loop.connect(pool_loop=pool_loop, fit_loop=fit_loop, test_loop=test_loop)
+        active_learning_loop.connect(pool_loop=None, fit_loop=fit_loop, test_loop=test_loop)
         self.active_learning_loop = active_learning_loop  # also attaches the trainer
 
         # this needed to be patched
@@ -148,7 +147,7 @@ class Trainer(pl.Trainer):
         self._extend_init_debugging_flags()
 
     """
-    Add states, properties, and methods
+    Properties
     """
 
     @property
@@ -169,27 +168,47 @@ class Trainer(pl.Trainer):
         loop.trainer = self
         self._active_learning_loop = loop
 
+    @property
+    def model_reference(self) -> BaseQueryStrategy:
+        return self._model_reference
+
+    @model_reference.setter
+    def model_reference(self, BaseQueryStrategy: BaseQueryStrategy):
+        """Attach a custom model_reference to this Trainer."""
+        self._model_reference = BaseQueryStrategy
+
     """
     New `active_fit` method
     """
 
     def active_fit(
         self,
-        model: Learner,
+        model: BaseQueryStrategy,
         train_dataloaders: Optional[Union[TRAIN_DATALOADERS, "pl.LightningDataModule"]] = None,
         val_dataloaders: Optional[EVAL_DATALOADERS] = None,
         test_dataloaders: Optional[EVAL_DATALOADERS] = None,
         datamodule: Optional["pl.LightningDataModule"] = None,
         ckpt_path: Optional[str] = None,
     ) -> None:
-        self.strategy.model = model
+        # set up model reference
+        self.model_reference = model
+        self.model_reference.query_size = self.query_size
+        self.active_learning_loop.pool_loop = self.model_reference.pool_loop
+        
+        """
+        NOTE: this creates the `self.lightning_module` attribute on the trainer
+        it is set in the `fit` method, but we do not set it here and let the
+        loop components do it        
+        """
+        # self.strategy.model = model
+        
         self._call_and_handle_interrupt(
-            self._active_fit_impl, model, train_dataloaders, val_dataloaders, test_dataloaders, datamodule, ckpt_path
+            self._active_fit_impl, self.model_reference, train_dataloaders, val_dataloaders, test_dataloaders, datamodule, ckpt_path
         )
 
     def _active_fit_impl(
         self,
-        model: Learner,
+        model: BaseQueryStrategy,
         train_dataloaders: Optional[Union[TRAIN_DATALOADERS, "pl.LightningDataModule"]] = None,
         val_dataloaders: Optional[EVAL_DATALOADERS] = None,
         test_dataloaders: Optional[EVAL_DATALOADERS] = None,
@@ -213,9 +232,9 @@ class Trainer(pl.Trainer):
         self._last_val_dl_reload_epoch = float("-inf")
         self._last_test_dl_reload_epoch = float("-inf")
 
-        # check inputs
-        if not isinstance(model, Learner):
-            raise MisconfigurationException("model must be a `Learner` not a `LightningModule`.")
+        # # check inputs
+        # if not isinstance(model, BaseQueryStrategy):
+        #     raise MisconfigurationException("model must be a `BaseQueryStrategy` not a `LightningModule`.")
 
         # if a datamodule comes in as the second arg, then fix it for the user
         if isinstance(train_dataloaders, pl.LightningDataModule):
@@ -253,7 +272,9 @@ class Trainer(pl.Trainer):
             ckpt_path, model_provided=True, model_connected=self.lightning_module is not None
         )
 
-        results = self._run(model, ckpt_path=self.ckpt_path)
+        # NOTE: pass the underlying `LightningModule` to `_run` so that it finds
+        # the `training_step` method etc
+        results = self._run(model.model, ckpt_path=self.ckpt_path)
 
         assert self.state.stopped
         self.training = False
@@ -274,9 +295,10 @@ class Trainer(pl.Trainer):
         """
         # source = self._data_connector._pool_dataloader_source
         pl_module = self.lightning_module or model
-        has_step = is_overridden("pool_step", pl_module, Learner)
+        # has_step = is_overridden("pool_step", pl_module, BaseQueryStrategy)
         enable_pool = self.limit_pool_batches > 0
-        if has_step and enable_pool:
+        # if has_step and enable_pool:
+        if enable_pool:
             self.num_pool_batches, self.pool_dataloaders = self._data_connector._reset_eval_dataloader(
                 PoolRunningStage.POOL, model=pl_module
             )
@@ -324,7 +346,6 @@ class Trainer(pl.Trainer):
         self.model.train()
         torch.set_grad_enabled(True)
 
-        # TODO: apparently here it's too late to attach a trainer
         self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
             self.active_learning_loop.run()
@@ -417,6 +438,14 @@ class Trainer(pl.Trainer):
 
         if self.predicting:
             return self.predict_loop
+
+    def set_lightning_module(self, use_underlying_lightning_module: bool = True) -> None:
+        if use_underlying_lightning_module:
+            self.strategy.model = self.model_reference.model
+            rank_zero_info("Using underlying `LightningModule`")
+        else:
+            self.strategy.model = self.model_reference
+            rank_zero_info("Using `BaseQueryStrategy`")
 
     # @property
     # def _results(self):

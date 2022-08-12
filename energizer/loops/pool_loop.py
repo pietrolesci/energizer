@@ -1,5 +1,5 @@
 import os
-from typing import Any, List, Sequence, Tuple, Union
+from typing import Any, List, Sequence, Tuple, Union, Optional
 
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.trainer.connectors.logger_connector.result import _OUT_DICT
@@ -7,12 +7,31 @@ from pytorch_lightning.utilities.types import EPOCH_OUTPUT
 from torch.utils.data import DataLoader
 
 from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
+from pytorch_lightning.loops.loop import Loop
+
+
+class PoolNoEvalLoop(Loop):
+    """Calls the `query` method directly, without running on the pool."""
+
+    def reset(self) -> None:
+        pass
+
+    def advance(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def done(self) -> bool:
+        return True
+
+    def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
+        output = super().on_run_end()
+        indices = self.trainer.lightning_module.query()
+        return output, indices
 
 
 class PoolEvaluationLoop(EvaluationLoop):
     """Loops over all dataloaders for evaluation."""
 
-    def __init__(self, query_size: int, verbose: bool = False) -> None:
+    def __init__(self, query_size: Optional[int] = None, verbose: Optional[bool] = False) -> None:
         super().__init__(verbose)
         self.epoch_loop = PoolEvaluationEpochLoop(query_size)
         # self._results = _ResultCollection(training=False)
@@ -46,12 +65,8 @@ class PoolEvaluationLoop(EvaluationLoop):
         assert self._results is not None
         self._results.to(device=self.trainer.lightning_module.device)
 
-        # put accumulator on same device
-        self.epoch_loop.accumulator.to(device=self.trainer.lightning_module.device)
-
         self.trainer._call_callback_hooks("on_pool_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_start", *args, **kwargs)
-        # self.trainer._call_strategy_hook("on_pool_start", *args, **kwargs)
 
     def _on_evaluation_model_eval(self) -> None:
         """Sets model to eval mode."""
@@ -65,22 +80,18 @@ class PoolEvaluationLoop(EvaluationLoop):
         """Runs ``on_pool_end`` hook."""
         self.trainer._call_callback_hooks("on_pool_end", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_end", *args, **kwargs)
-        # self.trainer._call_strategy_hook("on_pool_end", *args, **kwargs)
 
         # reset the logger connector state
         self.trainer._logger_connector.reset_results()
 
     def _on_evaluation_epoch_start(self, *args: Any, **kwargs: Any) -> None:
-        """Runs ``on_epoch_start`` and ``on_pool_epoch_start`` hooks."""
+        """Runs `on_pool_epoch_start` hook."""
         self.trainer._logger_connector.on_epoch_start()
-        self.trainer._call_callback_hooks("on_epoch_start", *args, **kwargs)
-        self.trainer._call_lightning_module_hook("on_epoch_start", *args, **kwargs)
-
         self.trainer._call_callback_hooks("on_pool_epoch_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_epoch_start", *args, **kwargs)
 
         # manually reset accumulation metric
-        self.epoch_loop.accumulator.reset()
+        # self.trainer.lightning_module.accumulator.reset()
 
     def _evaluation_epoch_end(self, outputs: List[EPOCH_OUTPUT]) -> None:
         """Runs ``pool_epoch_end``"""
@@ -98,17 +109,9 @@ class PoolEvaluationLoop(EvaluationLoop):
         """Runs ``on_pool_epoch_end`` hook."""
         self.trainer._call_callback_hooks("on_pool_epoch_end")
         self.trainer._call_lightning_module_hook("on_pool_epoch_end")
-
-        self.trainer._call_callback_hooks("on_epoch_end")
-        self.trainer._call_lightning_module_hook("on_epoch_end")
         self.trainer._logger_connector.on_epoch_end()
-
-    def teardown(self) -> None:
-        super().teardown()
-        # put accumulator on cpu
-        self.epoch_loop.accumulator.cpu()
 
     def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
         output = super().on_run_end()
-        indices = self.epoch_loop.accumulator.compute().tolist()
+        indices = self.trainer.lightning_module.query()
         return output, indices

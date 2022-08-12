@@ -9,18 +9,19 @@ from energizer.mixin.mcdropout_utils import patch_dropout_layers
 
 
 class PostInitCaller(type):
-    """Used to call `setup` automatically after `__init__`"""
+    """Used to call `setup` automatically after `__init__`."""
 
     def __call__(cls, *args, **kwargs):
-        """Called when you call MyNewClass()"""
+        """Called when you call `MyNewClass()`."""
         obj = type.__call__(cls, *args, **kwargs)
         obj.__post_init__()
         return obj
 
 
 class Learner(LightningModule, ModelHooks, metaclass=PostInitCaller):
-    def __init__(self):
+    def __init__(self, model: LightningModule) -> None:
         super().__init__()
+        self.model = model
 
     def __post_init__(self) -> None:
         pass
@@ -35,7 +36,7 @@ class Learner(LightningModule, ModelHooks, metaclass=PostInitCaller):
         pass
 
     def _forward(self, *args, **kwargs) -> Any:
-        return self.forward(*args, **kwargs)
+        return self.model.forward(*args, **kwargs)
 
     def __call__(self, *args, **kwargs) -> Any:
         return self._forward(*args, **kwargs)
@@ -50,6 +51,7 @@ class MCDropoutMixin(Learner):
 
     def __init__(
         self,
+        model: LightningModule,
         num_inference_iters: Optional[int] = 10,
         consistent: Optional[bool] = False,
         prob: Optional[float] = None,
@@ -68,11 +70,11 @@ class MCDropoutMixin(Learner):
         self.num_inference_iters = num_inference_iters
         self.consistent = consistent
         self.prob = prob
-        super().__init__()
+        super().__init__(model)
 
     def __post_init__(self) -> None:
         patch_dropout_layers(
-            module=self,
+            module=self.model,
             prob=self.prob,
             consistent=self.consistent,
             inplace=True,
@@ -86,6 +88,6 @@ class MCDropoutMixin(Learner):
         """
         out = []
         for _ in range(self.num_inference_iters):
-            out.append(self.forward(*args, **kwargs))  # type: ignore
+            out.append(self.model.forward(*args, **kwargs))  # type: ignore
         # expects shape [num_samples, num_classes, num_iterations]
         return torch.stack(out).permute((1, 2, 0))

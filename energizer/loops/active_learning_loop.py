@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import List, Optional
+from typing import List, Optional, Any
 
 import torch
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
@@ -93,6 +93,8 @@ class ActiveLearningLoop(Loop):
 
     def on_run_start(self) -> None:
         """Store the original weights of the model."""
+        # set query_strategy as lightning_module to access hooks
+        self.trainer.set_lightning_module(False)
 
         self.epoch_progress.current.completed = self.epoch_progress.current.processed
 
@@ -106,11 +108,6 @@ class ActiveLearningLoop(Loop):
         self.trainer._call_lightning_module_hook("on_active_learning_start")
 
     def on_advance_start(self) -> None:
-
-        # TODO: check if this is needed
-        # reset outputs here instead of in `reset` as they are not accumulated between epochs
-        self._outputs = []
-
         self.epoch_progress.increment_ready()
 
         # TODO: check this connector
@@ -123,6 +120,9 @@ class ActiveLearningLoop(Loop):
 
     def advance(self) -> None:  # type: ignore[override]
         """Runs the active learning loop: training, testing, and pool evaluation."""
+        # TODO: here you need to grab the results from each loop
+        # consider that each of them has its own `_results` property
+
         if self.trainer.datamodule.has_labelled_data:
             self._reset_fitting()  # required to reset the tracking stage
             self.fit_loop.run()
@@ -164,10 +164,14 @@ class ActiveLearningLoop(Loop):
         self._reset_fitting()
         self.fit_loop.run()
 
+        self._reset_evaluating_pool()
         self.trainer._call_callback_hooks("on_active_learning_end")
         self.trainer._call_lightning_module_hook("on_active_learning_end")
 
+        # NOTE: here you can return something
+
     def _reset_fitting(self) -> None:
+        self.trainer.set_lightning_module(True)
         self.trainer.reset_train_dataloader()
         self.trainer.reset_val_dataloader()
         self.trainer.state.fn = TrainerFn.FITTING
@@ -176,6 +180,7 @@ class ActiveLearningLoop(Loop):
         torch.set_grad_enabled(True)
 
     def _reset_testing(self) -> None:
+        self.trainer.set_lightning_module(True)
         self.trainer.reset_test_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
@@ -183,6 +188,7 @@ class ActiveLearningLoop(Loop):
         torch.set_grad_enabled(False)
 
     def _reset_evaluating_pool(self) -> None:
+        self.trainer.set_lightning_module(False)
         self.trainer.reset_pool_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
