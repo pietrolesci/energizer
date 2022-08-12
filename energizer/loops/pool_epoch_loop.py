@@ -5,7 +5,7 @@ from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochL
 from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 
-from energizer.metrics import AccumulateTopK
+from energizer.loops.topk_accumulator import AccumulateTopK
 from energizer.mixin.base import Learner
 
 
@@ -22,7 +22,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         self.accumulator = AccumulateTopK(k=query_size)  # need to move this to same device as model
 
     def _evaluation_step(self, **kwargs: Any) -> Optional[STEP_OUTPUT]:
-        """The evaluation step (pool_step).
+        """The evaluation step (`pool_step`).
 
         Args:
             batch: The current batch to run through the step.
