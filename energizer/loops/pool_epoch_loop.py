@@ -6,20 +6,28 @@ from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 
 from energizer.loops.topk_accumulator import AccumulateTopK
-from energizer.mixin.base import Learner
+
+# from energizer.mixin.base import Learner
 
 
 class PoolEvaluationEpochLoop(EvaluationEpochLoop):
     """This is the loop performing the evaluation.
 
-    It mainly loops over the given dataloader and runs the validation or test step (depending on the trainer's current
-    state).
+    It mainly loops over the given dataloader and runs the `pool_step` method.
     """
 
-    def __init__(self, query_size: int) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.query_size = query_size
-        self.accumulator = AccumulateTopK(k=query_size)  # need to move this to same device as model
+
+    @property
+    def accumulator(self) -> AccumulateTopK:
+        """Returns the `AccumulateTopK` metric."""
+        return self._accumulator
+
+    @accumulator.setter
+    def accumulator(self, accumulator: AccumulateTopK) -> None:
+        # need to move this to same device as model
+        self._accumulator = accumulator
 
     def _evaluation_step(self, **kwargs: Any) -> Optional[STEP_OUTPUT]:
         """The evaluation step (`pool_step`).
@@ -48,7 +56,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         return output
 
     def _on_evaluation_batch_start(self, **kwargs: Any) -> None:
-        """Calls the ``on_pool_batch_start`` hook.
+        """Calls the `on_pool_batch_start` hook.
 
         Args:
             batch: The current batch to run through the step
@@ -64,7 +72,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         self.trainer._call_lightning_module_hook("on_pool_batch_start", *kwargs.values())
 
     def _on_evaluation_batch_end(self, output: Optional[STEP_OUTPUT], **kwargs: Any) -> None:
-        """The ``on_pool_batch_end`` hook.
+        """The `on_pool_batch_end` hook.
 
         Args:
             output: The output of the performed step
@@ -80,5 +88,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
     @lru_cache(1)
     def _should_track_batch_outputs_for_epoch_end(self) -> bool:
         """Whether the batch outputs should be stored for later usage."""
+        from energizer.query_strategies.base import AccumulatorStrategy
+
         model = self.trainer.lightning_module
-        return is_overridden("pool_epoch_end", model, Learner)
+        return is_overridden("pool_epoch_end", model, AccumulatorStrategy)

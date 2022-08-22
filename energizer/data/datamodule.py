@@ -99,16 +99,6 @@ class ActiveDataModule(LightningDataModule):
         """Returns the number of the last active learning step."""
         return int(self.train_mask.max())
 
-    @property
-    def stats(self) -> Dict[str, int]:
-        return {
-            "total_data_size": self.total_data_size,
-            "train_size": self.train_size,
-            "pool_size": self.pool_size,
-            "num_train_batches": len(self.train_dataloader()),
-            "num_pool_batches": len(self.pool_dataloader()),
-        }
-
     """
     Data preparations
     """
@@ -127,6 +117,7 @@ class ActiveDataModule(LightningDataModule):
                 "worker_init_fn": dataloader.worker_init_fn,
                 "prefetch_factor": dataloader.prefetch_factor,
                 "persistent_workers": dataloader.persistent_workers,
+                "shuffle": False,  # be explicit about it
             }
 
     def prepare_data(self) -> None:
@@ -134,6 +125,10 @@ class ActiveDataModule(LightningDataModule):
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.datamodule.setup(stage)
+
+    """
+    Helper methods
+    """
 
     def setup_folds(self) -> None:
         train_dl = self.datamodule.train_dataloader()
@@ -148,30 +143,6 @@ class ActiveDataModule(LightningDataModule):
 
         # states
         self.train_mask = np.zeros((len(train_dataset),), dtype=int)
-        self.setup_fold_index()
-
-    def label(self, pool_idx: Union[int, List[int]]) -> None:
-        """Moves instances at index `pool_idx` from the `train_fold` to the `pool_fold`.
-
-        Args:
-            pool_idx (List[int]): The index (relative to the pool_fold, not the overall data) to label.
-        """
-        assert isinstance(pool_idx, int) or isinstance(pool_idx, list), ValueError(
-            f"`pool_idx` must be of type `int` or `List[int]`, not {type(pool_idx)}."
-        )
-
-        pool_idx = [pool_idx] if isinstance(pool_idx, int) else pool_idx
-
-        if len(np.unique(pool_idx)) > len(self.pool_fold):
-            raise ValueError(
-                f"Pool has {len(self.pool_fold)} instances, cannot label {len(np.unique(pool_idx))} instances."
-            )
-        if max(pool_idx) > len(self.pool_fold):
-            raise ValueError(f"Cannot label instance {max(pool_idx)} for pool dataset of size {len(self.pool_fold)}.")
-
-        # acquire labels
-        indices = self.pool_to_original(pool_idx)
-        self.train_mask[indices] = self.last_labelling_step + 1  # current labelling step
         self.setup_fold_index()
 
     def pool_to_original(self, pool_idx: List[int]) -> List[int]:
@@ -202,6 +173,43 @@ class ActiveDataModule(LightningDataModule):
             )
         self.pool_pool.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
         self.train_pool.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
+
+    """
+    Main methods
+    """
+
+    def get_statistics(self) -> Dict[str, int]:
+        return {
+            "total_data_size": self.total_data_size,
+            "train_size": self.train_size,
+            "pool_size": self.pool_size,
+            "num_train_batches": len(self.train_dataloader()),
+            "num_pool_batches": len(self.pool_dataloader()),
+        }
+
+    def label(self, pool_idx: Union[int, List[int]]) -> None:
+        """Moves instances at index `pool_idx` from the `train_fold` to the `pool_fold`.
+
+        Args:
+            pool_idx (List[int]): The index (relative to the pool_fold, not the overall data) to label.
+        """
+        assert isinstance(pool_idx, int) or isinstance(pool_idx, list), ValueError(
+            f"`pool_idx` must be of type `int` or `List[int]`, not {type(pool_idx)}."
+        )
+
+        pool_idx = [pool_idx] if isinstance(pool_idx, int) else pool_idx
+
+        if len(np.unique(pool_idx)) > len(self.pool_fold):
+            raise ValueError(
+                f"Pool has {len(self.pool_fold)} instances, cannot label {len(np.unique(pool_idx))} instances."
+            )
+        if max(pool_idx) > len(self.pool_fold):
+            raise ValueError(f"Cannot label instance {max(pool_idx)} for pool dataset of size {len(self.pool_fold)}.")
+
+        # acquire labels
+        indices = self.pool_to_original(pool_idx)
+        self.train_mask[indices] = self.last_labelling_step + 1  # current labelling step
+        self.setup_fold_index()
 
     """
     DataLoaders

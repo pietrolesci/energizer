@@ -12,17 +12,19 @@ from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
 from pytorch_lightning.trainer.trainer import _determine_batch_limits
 from pytorch_lightning.utilities import LightningEnum
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.model_helpers import is_overridden
+
+# from pytorch_lightning.utilities.model_helpers import is_overridden
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
 from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+
 from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
 from energizer.data.datamodule import ActiveDataModule
-from energizer.loops.active_learning_loop import ActiveLearningLoop
-from energizer.loops.pool_loop import PoolEvaluationLoop
-from energizer.mixin.base import Learner
-from energizer.mixin.hooks import CallBackActiveLearningHooks
+from energizer.loops.active_learning_loop import ActiveLearningLoop, LabellingIterOutputs
 
+# from energizer.loops.pool_loop import PoolEvaluationLoop
+# from energizer.mixin.base import Learner
+from energizer.mixin.hooks import CallBackActiveLearningHooks
 from energizer.query_strategies.base import BaseQueryStrategy
 
 log = logging.getLogger(__name__)
@@ -189,21 +191,27 @@ class Trainer(pl.Trainer):
         test_dataloaders: Optional[EVAL_DATALOADERS] = None,
         datamodule: Optional["pl.LightningDataModule"] = None,
         ckpt_path: Optional[str] = None,
-    ) -> None:
+    ) -> List[LabellingIterOutputs]:
         # set up model reference
         self.model_reference = model
         self.model_reference.query_size = self.query_size
         self.active_learning_loop.pool_loop = self.model_reference.pool_loop
-        
+
         """
         NOTE: this creates the `self.lightning_module` attribute on the trainer
         it is set in the `fit` method, but we do not set it here and let the
         loop components do it        
         """
         # self.strategy.model = model
-        
-        self._call_and_handle_interrupt(
-            self._active_fit_impl, self.model_reference, train_dataloaders, val_dataloaders, test_dataloaders, datamodule, ckpt_path
+
+        return self._call_and_handle_interrupt(
+            self._active_fit_impl,
+            self.model_reference,
+            train_dataloaders,
+            val_dataloaders,
+            test_dataloaders,
+            datamodule,
+            ckpt_path,
         )
 
     def _active_fit_impl(
@@ -326,7 +334,7 @@ class Trainer(pl.Trainer):
     Patch `_run_train` implementation
     """
 
-    def _run_train(self) -> None:
+    def _run_train(self) -> List[LabellingIterOutputs]:
         """Method that depending on `self.active_fitting` selects which loop to run.
 
         If `self.active_fitting is False` it runs the usual `fit_loop`, otherwise
@@ -348,7 +356,9 @@ class Trainer(pl.Trainer):
 
         self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
-            self.active_learning_loop.run()
+            results = self.active_learning_loop.run()
+
+        return results
 
     """
     Dispatch properties calls to the right `FitLoop` depending on whether
@@ -442,10 +452,10 @@ class Trainer(pl.Trainer):
     def set_lightning_module(self, use_underlying_lightning_module: bool = True) -> None:
         if use_underlying_lightning_module:
             self.strategy.model = self.model_reference.model
-            rank_zero_info("Using underlying `LightningModule`")
+            rank_zero_info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
         else:
             self.strategy.model = self.model_reference
-            rank_zero_info("Using `BaseQueryStrategy`")
+            rank_zero_info(f"Using `{self.lightning_module.__class__.__name__}`")
 
     # @property
     # def _results(self):

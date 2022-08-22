@@ -79,14 +79,17 @@ class CallBackActiveLearningHooks:
     def on_active_learning_start(trainer: Trainer, pl_module: LightningModule) -> None:
         """Called when active learning starts."""
         pass
+
     @staticmethod
     def on_active_learning_end(trainer: Trainer, pl_module: LightningModule) -> None:
         """Called when active learning ends."""
         pass
+
     @staticmethod
     def on_labelling_epoch_start(trainer: Trainer, pl_module: LightningModule) -> None:
         """Called when the active learning (labelling) epoch starts."""
         pass
+
     @staticmethod
     def on_labelling_epoch_end(trainer: Trainer, pl_module: LightningModule) -> None:
         """Called when the pool evaluation ends."""

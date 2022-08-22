@@ -1,17 +1,21 @@
 import os
-from typing import Any, List, Sequence, Tuple, Union, Optional
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
+from pytorch_lightning.loops.loop import Loop
 from pytorch_lightning.trainer.connectors.logger_connector.result import _OUT_DICT
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
 from pytorch_lightning.utilities.types import EPOCH_OUTPUT
 from torch.utils.data import DataLoader
 
 from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
-from pytorch_lightning.loops.loop import Loop
 
 
 class PoolNoEvalLoop(Loop):
-    """Calls the `query` method directly, without running on the pool."""
+    """Calls the `query` method directly, without running on the pool.
+
+    This is used for the `RandomStrategy`.
+    """
 
     def reset(self) -> None:
         pass
@@ -25,15 +29,16 @@ class PoolNoEvalLoop(Loop):
     def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
         output = super().on_run_end()
         indices = self.trainer.lightning_module.query()
+        rank_zero_info(f"\nPool loop: queried {self.trainer.lightning_module.query_size} instances randomly\n")
         return output, indices
 
 
 class PoolEvaluationLoop(EvaluationLoop):
     """Loops over all dataloaders for evaluation."""
 
-    def __init__(self, query_size: Optional[int] = None, verbose: Optional[bool] = False) -> None:
+    def __init__(self, verbose: Optional[bool] = False) -> None:
         super().__init__(verbose)
-        self.epoch_loop = PoolEvaluationEpochLoop(query_size)
+        self.epoch_loop = PoolEvaluationEpochLoop()
         # self._results = _ResultCollection(training=False)
 
     @property
@@ -91,7 +96,7 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.trainer._call_lightning_module_hook("on_pool_epoch_start", *args, **kwargs)
 
         # manually reset accumulation metric
-        # self.trainer.lightning_module.accumulator.reset()
+        self.epoch_loop.accumulator.reset()
 
     def _evaluation_epoch_end(self, outputs: List[EPOCH_OUTPUT]) -> None:
         """Runs ``pool_epoch_end``"""
@@ -112,6 +117,6 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.trainer._logger_connector.on_epoch_end()
 
     def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
-        output = super().on_run_end()
+        logged_outputs = super().on_run_end()
         indices = self.trainer.lightning_module.query()
-        return output, indices
+        return logged_outputs, indices
