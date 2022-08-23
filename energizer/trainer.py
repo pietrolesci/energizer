@@ -171,13 +171,13 @@ class Trainer(pl.Trainer):
         self._active_learning_loop = loop
 
     @property
-    def model_reference(self) -> BaseQueryStrategy:
-        return self._model_reference
+    def query_strategy(self) -> BaseQueryStrategy:
+        return self._query_strategy
 
-    @model_reference.setter
-    def model_reference(self, BaseQueryStrategy: BaseQueryStrategy):
-        """Attach a custom model_reference to this Trainer."""
-        self._model_reference = BaseQueryStrategy
+    @query_strategy.setter
+    def query_strategy(self, model: BaseQueryStrategy):
+        """Attach a custom query_strategy to this Trainer."""
+        self._query_strategy = model
 
     """
     New `active_fit` method
@@ -193,9 +193,9 @@ class Trainer(pl.Trainer):
         ckpt_path: Optional[str] = None,
     ) -> List[LabellingIterOutputs]:
         # set up model reference
-        self.model_reference = model
-        self.model_reference.query_size = self.query_size
-        self.active_learning_loop.pool_loop = self.model_reference.pool_loop
+        self.query_strategy = model
+        self.query_strategy.query_size = self.query_size
+        self.active_learning_loop.pool_loop = self.query_strategy.pool_loop
 
         """
         NOTE: this creates the `self.lightning_module` attribute on the trainer
@@ -206,7 +206,7 @@ class Trainer(pl.Trainer):
 
         return self._call_and_handle_interrupt(
             self._active_fit_impl,
-            self.model_reference,
+            self.query_strategy,
             train_dataloaders,
             val_dataloaders,
             test_dataloaders,
@@ -449,13 +449,20 @@ class Trainer(pl.Trainer):
         if self.predicting:
             return self.predict_loop
 
-    def set_lightning_module(self, use_underlying_lightning_module: bool = True) -> None:
-        if use_underlying_lightning_module:
-            self.strategy.model = self.model_reference.model
-            rank_zero_info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
-        else:
-            self.strategy.model = self.model_reference
+    def set_lightning_module(self, use_query_strategy: bool = False) -> None:
+        if use_query_strategy:
+            # self.strategy.model = self.query_strategy
+            self.strategy.connect(self.query_strategy)
             rank_zero_info(f"Using `{self.lightning_module.__class__.__name__}`")
+        else:
+            # self.strategy.model = self.query_strategy.model
+            self.strategy.connect(self.query_strategy.model)
+            rank_zero_info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
+        self.strategy.model_to_device()
+
+    @property
+    def using_query_strategy_as_lightning_module(self) -> bool:
+        return isinstance(self.lightning_module, BaseQueryStrategy)
 
     # @property
     # def _results(self):
