@@ -67,8 +67,11 @@ class PoolEvaluationLoop(EvaluationLoop):
 
     def _on_evaluation_start(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_pool_start`` hooks."""
+
+        # TODO: check if this is correct device
         assert self._results is not None
         self._results.to(device=self.trainer.lightning_module.device)
+        self.epoch_loop.accumulator.to(device=self.trainer.lightning_module.device)
 
         self.trainer._call_callback_hooks("on_pool_start", *args, **kwargs)
         self.trainer._call_lightning_module_hook("on_pool_start", *args, **kwargs)
