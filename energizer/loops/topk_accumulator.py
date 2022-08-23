@@ -17,14 +17,14 @@ class AccumulateTopK(Metric):
         batch_size = scores.numel()
 
         # indices with respect to the pool dataset and scores
-        current_indices = torch.arange(self.size, self.size + batch_size, 1)
+        current_indices = torch.arange(self.size, self.size + batch_size, 1).type_as(self.indices)
 
         # compute topk comparing current batch with the states
         all_scores = torch.cat([self.topk_scores, scores], dim=0)
         all_indices = torch.cat([self.indices, current_indices], dim=0)
 
         # aggregation
-        topk_scores, idx = torch.topk(all_scores, k=min(self.k, batch_size))
+        topk_scores, idx = torch.topk(all_scores, k=self.k)
 
         self.topk_scores.copy_(topk_scores)
         self.indices.copy_(all_indices[idx])
