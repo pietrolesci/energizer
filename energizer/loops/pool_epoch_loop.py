@@ -43,6 +43,7 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         # NOTE: this should be calling on the strategy to be consistent with PL
         # output = self.trainer._call_lightning_strategy_hook("pool_step", *kwargs.values())
         output = self.trainer._call_lightning_module_hook("pool_step", *kwargs.values())
+
         self.accumulator.update(output)
         return output
 
