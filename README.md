@@ -221,7 +221,7 @@ Install `energizer` locally
 
 ```bash
 conda create -n energizer-dev python=3.9 -y
-conda install poetry
+conda install poetry -y
 poetry install -E dev -E test -E doc -E text -E vision
 ```
 
