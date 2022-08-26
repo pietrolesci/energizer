@@ -64,6 +64,10 @@ class ActiveLearningLoop(Loop):
         self._outputs: Optional[List[LabellingIterOutputs]] = []
 
     @property
+    def can_run_testing(self) -> bool:
+        return self.test_after_labelling and self.trainer.datamodule.test_dataloader() is not None
+
+    @property
     def _results(self) -> _ResultCollection:
         if self.trainer.training:
             return self.fit_loop.epoch_loop._results
@@ -79,8 +83,9 @@ class ActiveLearningLoop(Loop):
     @property
     def done(self) -> bool:
         """Evaluates when to leave the loop."""
-        # `processed` is increased before `on_train_epoch_end`, the hook where checkpoints are typically saved.
-        # we use it here because the checkpoint data won't have `completed` increased yet
+
+        # TODO: add stopping condition based on satisfactory level of a
+        # performance metric. Potentially do this via a callback
 
         # stop if no more data to label are available
         stop_no_data_to_label = not (
@@ -114,6 +119,7 @@ class ActiveLearningLoop(Loop):
 
     def on_run_start(self) -> None:
         """Store the original weights of the model."""
+        self.epoch_progress.current.completed = self.epoch_progress.current.processed
 
         # make a copy of the initial state of the underlying model
         # in `trainer.active_fit` the underlying model is passed,
@@ -122,12 +128,9 @@ class ActiveLearningLoop(Loop):
             self.lightning_module_state_dict = deepcopy(self.trainer.lightning_module.state_dict())
 
         # set query_strategy as lightning_module to access hooks
-        self.trainer.set_lightning_module(False)
-
-        self.epoch_progress.current.completed = self.epoch_progress.current.processed
+        self.trainer.set_lightning_module(use_query_strategy=True)
 
         self._results.to(device=self.trainer.lightning_module.device)
-
         self.trainer._call_callback_hooks("on_active_learning_start")
         self.trainer._call_lightning_module_hook("on_active_learning_start")
 
@@ -157,10 +160,12 @@ class ActiveLearningLoop(Loop):
             self._reset_fitting()
             self.fit_loop.run()
 
-        if self.test_after_labelling:
+        if self.can_run_testing:
+            # TODO: check that test_after_labelling and test_dl is present
             # TODO: check it's using the last checkpoint
             self._reset_testing()
             outputs.test_outputs = self.test_loop.run()
+            self.test_loop._print_results(outputs.test_outputs, "test")
 
         if self.trainer.datamodule.has_unlabelled_data:
             self._reset_evaluating_pool()
@@ -171,12 +176,6 @@ class ActiveLearningLoop(Loop):
         outputs = self._prepare_outputs(outputs)
         # self.trainer._logger_connector.log_metrics()
         self._outputs.append(outputs)
-
-    def _prepare_outputs(self, outputs: LabellingIterOutputs) -> LabellingIterOutputs:
-        args = (torch.Tensor, convert_to_numpy, "cpu")
-        outputs.test_outputs = apply_to_collection(outputs.test_outputs, *args)
-        outputs.pool_outputs = apply_to_collection(outputs.pool_outputs, *args)
-        return outputs
 
     def on_advance_end(self) -> None:
         """Used to restore the original weights and the optimizers and schedulers states."""
@@ -197,15 +196,26 @@ class ActiveLearningLoop(Loop):
         self.trainer._exit_gracefully_on_signal()
 
     def on_run_end(self) -> List[LabellingIterOutputs]:
+
         # enforce training at the end of acquisitions
         rank_zero_info(f"Last fit_loop".center(72, "-"))
+        outputs = LabellingIterOutputs(
+            current_labelling_iter=self.epoch_progress.current.completed,
+            data_stats=self.trainer.datamodule.get_statistics(),
+        )
         self._reset_fitting()
         self.fit_loop.run()
+        if self.can_run_testing:
+            self._reset_testing()
+            outputs.test_outputs = self.test_loop.run()
+            self.test_loop._print_results(outputs.test_outputs, "test")
+        outputs = self._prepare_outputs(outputs)
+        self._outputs.append(outputs)
+        outputs, self._outputs = self._outputs, []
 
-        self._reset_evaluating_pool()
+        self.trainer.set_lightning_module(use_query_strategy=True)
         self.trainer._call_callback_hooks("on_active_learning_end")
         self.trainer._call_lightning_module_hook("on_active_learning_end")
-        outputs, self._outputs = self._outputs, []
 
         return outputs
 
@@ -214,7 +224,7 @@ class ActiveLearningLoop(Loop):
         self.fit_loop.epoch_progress.reset()
 
         # puts the underlying module as "trainer.lightning_module"
-        self.trainer.set_lightning_module(True)
+        self.trainer.set_lightning_module(use_query_strategy=False)
 
         # maybe reset the weights
         if self.reset_weights:
@@ -232,7 +242,7 @@ class ActiveLearningLoop(Loop):
         torch.set_grad_enabled(True)
 
     def _reset_testing(self) -> None:
-        self.trainer.set_lightning_module(True)
+        self.trainer.set_lightning_module(use_query_strategy=False)
         self.trainer.reset_test_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
@@ -240,7 +250,7 @@ class ActiveLearningLoop(Loop):
         torch.set_grad_enabled(False)
 
     def _reset_evaluating_pool(self) -> None:
-        self.trainer.set_lightning_module(False)
+        self.trainer.set_lightning_module(use_query_strategy=True)
         self.trainer.reset_pool_dataloader()
         self.trainer.state.fn = TrainerFn.TESTING
         self.trainer.testing = True
@@ -257,6 +267,16 @@ class ActiveLearningLoop(Loop):
         #     rank_zero_info(f"Queried indices: {indices}")
         # return self.trainer.datamodule.get_statistics()
 
+    """
+    Helpers
+    """
+
     @rank_zero_only
     def _print_separator_line(self) -> None:
-        print(f"Labelling Iteration {self.epoch_progress.current.completed}".center(72, "-"))
+        print(f"Labelling Iteration {self.epoch_progress.current.completed}".center(72, "-"), flush=True)
+
+    def _prepare_outputs(self, outputs: LabellingIterOutputs) -> LabellingIterOutputs:
+        args = (torch.Tensor, convert_to_numpy, "cpu")
+        outputs.test_outputs = apply_to_collection(outputs.test_outputs, *args)
+        outputs.pool_outputs = apply_to_collection(outputs.pool_outputs, *args)
+        return outputs

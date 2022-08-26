@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from energizer.loops.pool_epoch_loop import PoolEvaluationEpochLoop
 
 
-class PoolNoEvalLoop(Loop):
+class PoolNoEvaluationLoop(Loop):
     """Calls the `query` method directly, without running on the pool.
 
     This is used for the `RandomStrategy`.
@@ -34,7 +34,7 @@ class PoolNoEvalLoop(Loop):
 
 
 class PoolEvaluationLoop(EvaluationLoop):
-    """Loops over all dataloaders for evaluation."""
+    """Loops over the pool dataloaders for evaluation."""
 
     def __init__(self, verbose: Optional[bool] = False) -> None:
         super().__init__(verbose)
