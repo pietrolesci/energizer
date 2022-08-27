@@ -16,12 +16,7 @@ from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_on
 from pytorch_lightning.utilities.types import _EVALUATE_OUTPUT
 
 from energizer.utilities.logger import logger
-
-
-def convert_to_numpy(t: torch.Tensor, *_) -> Union[np.ndarray, float, int]:
-    if t.numel() > 1:
-        return t.numpy()
-    return round(t.item(), 6)
+from energizer.utilities.tensors import convert_to_numpy
 
 
 @dataclass
