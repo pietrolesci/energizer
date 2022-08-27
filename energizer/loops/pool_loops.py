@@ -12,6 +12,7 @@ from pytorch_lightning.utilities.types import EPOCH_OUTPUT, STEP_OUTPUT
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchmetrics import Metric
+
 from energizer.utilities.logger import logger
 
 """

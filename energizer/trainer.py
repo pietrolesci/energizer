@@ -22,7 +22,6 @@ from energizer.mixin.hooks import CallBackActiveLearningHooks
 from energizer.query_strategies.base import BaseQueryStrategy
 from energizer.utilities.logger import logger
 
-
 """
 Preliminary components needed to add support for `pool_dataloader`
 and pool-related hooks
