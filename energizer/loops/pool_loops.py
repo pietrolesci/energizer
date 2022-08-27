@@ -35,7 +35,8 @@ class PoolNoEvaluationLoop(Loop):
 
     def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
         output = super().on_run_end()
-        indices = self.trainer.lightning_module.query()
+        indices = self.trainer._call_lightning_module_hook("query")
+        # indices = self.trainer.lightning_module.query()
         return output, indices
 
 
@@ -82,6 +83,95 @@ class AccumulateTopK(Metric):
     def compute(self) -> Tensor:
         # print("compute indices:", self.indices)
         return self.indices
+
+
+class PoolEvaluationEpochLoop(EvaluationEpochLoop):
+    """This is the loop performing the evaluation.
+
+    It mainly loops over the given dataloader and runs the `pool_step` method.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    @property
+    def accumulator(self) -> AccumulateTopK:
+        """Returns the `AccumulateTopK` metric."""
+        return self._accumulator
+
+    @accumulator.setter
+    def accumulator(self, accumulator: AccumulateTopK) -> None:
+        # need to move this to same device as model
+        self._accumulator = accumulator
+
+    def _evaluation_step(self, **kwargs: Any) -> Optional[STEP_OUTPUT]:
+        """The evaluation step (`pool_step`).
+
+        Args:
+            batch: The current batch to run through the step.
+            batch_idx: The index of the current batch
+            dataloader_idx: the index of the dataloader producing the current batch
+
+        Returns:
+            the outputs of the step
+        """
+
+        # unpack batch with custom logic
+        kwargs["batch"] = self.trainer._call_lightning_module_hook("get_inputs_from_batch", kwargs["batch"])
+
+        # NOTE: this should be calling on the strategy to be consistent with PL
+        # output = self.trainer._call_lightning_strategy_hook("pool_step", *kwargs.values())
+        output = self.trainer._call_lightning_module_hook("pool_step", *kwargs.values())
+
+        self.accumulator.update(output)
+        return output
+
+    def _evaluation_step_end(self, *args: Any, **kwargs: Any) -> Optional[STEP_OUTPUT]:
+        """Calls the `pool_step_end` hook."""
+        model_output = self.trainer._call_lightning_module_hook("pool_step_end", *args, **kwargs)
+        # NOTE: this should be calling on the strategy to be consistent with PL
+        # strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
+        strategy_output = None
+        output = strategy_output if model_output is None else model_output
+        return output
+
+    def _on_evaluation_batch_start(self, **kwargs: Any) -> None:
+        """Calls the `on_pool_batch_start` hook.
+
+        Args:
+            batch: The current batch to run through the step
+            batch_idx: The index of the current batch
+            dataloader_idx: The index of the dataloader producing the current batch
+
+        Raises:
+            AssertionError: If the number of dataloaders is None (has not yet been set).
+        """
+        self.trainer._logger_connector.on_batch_start(**kwargs)
+        kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
+        self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
+        self.trainer._call_lightning_module_hook("on_pool_batch_start", *kwargs.values())
+
+    def _on_evaluation_batch_end(self, output: Optional[STEP_OUTPUT], **kwargs: Any) -> None:
+        """The `on_pool_batch_end` hook.
+
+        Args:
+            output: The output of the performed step
+            batch: The input batch for the step
+            batch_idx: The index of the current batch
+            dataloader_idx: Index of the dataloader producing the current batch
+        """
+        kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
+        self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
+        self.trainer._call_lightning_module_hook("on_pool_batch_end", output, *kwargs.values())
+        self.trainer._logger_connector.on_batch_end()
+
+    @lru_cache(1)
+    def _should_track_batch_outputs_for_epoch_end(self) -> bool:
+        """Whether the batch outputs should be stored for later usage."""
+        from energizer.query_strategies.base import AccumulatorStrategy
+
+        model = self.trainer.lightning_module
+        return is_overridden("pool_epoch_end", model, AccumulatorStrategy)
 
 
 class PoolEvaluationLoop(EvaluationLoop):
@@ -174,88 +264,3 @@ class PoolEvaluationLoop(EvaluationLoop):
         logged_outputs = super().on_run_end()
         indices = self.trainer.lightning_module.query()
         return logged_outputs, indices
-
-
-class PoolEvaluationEpochLoop(EvaluationEpochLoop):
-    """This is the loop performing the evaluation.
-
-    It mainly loops over the given dataloader and runs the `pool_step` method.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    @property
-    def accumulator(self) -> AccumulateTopK:
-        """Returns the `AccumulateTopK` metric."""
-        return self._accumulator
-
-    @accumulator.setter
-    def accumulator(self, accumulator: AccumulateTopK) -> None:
-        # need to move this to same device as model
-        self._accumulator = accumulator
-
-    def _evaluation_step(self, **kwargs: Any) -> Optional[STEP_OUTPUT]:
-        """The evaluation step (`pool_step`).
-
-        Args:
-            batch: The current batch to run through the step.
-            batch_idx: The index of the current batch
-            dataloader_idx: the index of the dataloader producing the current batch
-
-        Returns:
-            the outputs of the step
-        """
-        # NOTE: this should be calling on the strategy to be consistent with PL
-        # output = self.trainer._call_lightning_strategy_hook("pool_step", *kwargs.values())
-        output = self.trainer._call_lightning_module_hook("pool_step", *kwargs.values())
-
-        self.accumulator.update(output)
-        return output
-
-    def _evaluation_step_end(self, *args: Any, **kwargs: Any) -> Optional[STEP_OUTPUT]:
-        """Calls the `pool_step_end` hook."""
-        model_output = self.trainer._call_lightning_module_hook("pool_step_end", *args, **kwargs)
-        # NOTE: this should be calling on the strategy to be consistent with PL
-        # strategy_output = self.trainer._call_strategy_hook("pool_step_end", *args, **kwargs)
-        strategy_output = None
-        output = strategy_output if model_output is None else model_output
-        return output
-
-    def _on_evaluation_batch_start(self, **kwargs: Any) -> None:
-        """Calls the `on_pool_batch_start` hook.
-
-        Args:
-            batch: The current batch to run through the step
-            batch_idx: The index of the current batch
-            dataloader_idx: The index of the dataloader producing the current batch
-
-        Raises:
-            AssertionError: If the number of dataloaders is None (has not yet been set).
-        """
-        self.trainer._logger_connector.on_batch_start(**kwargs)
-        kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        self.trainer._call_callback_hooks("on_pool_batch_start", *kwargs.values())
-        self.trainer._call_lightning_module_hook("on_pool_batch_start", *kwargs.values())
-
-    def _on_evaluation_batch_end(self, output: Optional[STEP_OUTPUT], **kwargs: Any) -> None:
-        """The `on_pool_batch_end` hook.
-
-        Args:
-            output: The output of the performed step
-            batch: The input batch for the step
-            batch_idx: The index of the current batch
-            dataloader_idx: Index of the dataloader producing the current batch
-        """
-        kwargs.setdefault("dataloader_idx", 0)  # TODO: the argument should be keyword for these
-        self.trainer._call_callback_hooks("on_pool_batch_end", output, *kwargs.values())
-        self.trainer._call_lightning_module_hook("on_pool_batch_end", output, *kwargs.values())
-        self.trainer._logger_connector.on_batch_end()
-
-    @lru_cache(1)
-    def _should_track_batch_outputs_for_epoch_end(self) -> bool:
-        """Whether the batch outputs should be stored for later usage."""
-        from energizer.query_strategies.base import AccumulatorStrategy
-
-        model = self.trainer.lightning_module
-        return is_overridden("pool_epoch_end", model, AccumulatorStrategy)

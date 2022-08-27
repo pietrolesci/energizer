@@ -17,7 +17,7 @@ from pytorch_lightning.utilities.apply_func import apply_to_collection
 from pytorch_lightning.utilities.types import _EVALUATE_OUTPUT
 
 from energizer.utilities.logger import logger
-from energizer.utilities.tensors import convert_to_numpy
+from energizer.utilities.type_converters import tensor_to_python
 
 
 @dataclass
@@ -48,7 +48,7 @@ class LabellingOutputsList(list):
         return super().append(outputs)
 
     def _prepare_outputs(self, outputs: LabellingIterOutputs) -> LabellingIterOutputs:
-        args = (torch.Tensor, convert_to_numpy, "cpu")
+        args = (torch.Tensor, tensor_to_python, "cpu")
         outputs.test_outputs = apply_to_collection(outputs.test_outputs, *args)
         outputs.pool_outputs = apply_to_collection(outputs.pool_outputs, *args)
         return outputs
@@ -280,7 +280,7 @@ class ActiveLearningLoop(Loop):
     def label_datamodule(self, indices: List[int]) -> Dict[str, int]:
         """This method changes the state of the underlying dataset."""
         self.trainer.datamodule.label(indices)
-        logger.info(f"Annotated {len(indices)} instances.")
+        logger.info(f"Annotated {len(indices)} instances")
         logger.info("New data statistics\n" f"{yaml.dump(self.trainer.datamodule.get_statistics())}")
 
     """
@@ -290,4 +290,5 @@ class ActiveLearningLoop(Loop):
     def _print_separator_line(self, is_last: bool = False) -> None:
         if is_last:
             print(f"Last fit_loop".center(72, "-"))
+            return
         print(f"Labelling Iteration {self.epoch_progress.current.completed}".center(72, "-"), flush=True)

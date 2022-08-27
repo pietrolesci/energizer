@@ -56,6 +56,9 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
     def _forward(self, *args, **kwargs) -> Any:
         return self.model.forward(*args, **kwargs)
 
+    def get_inputs_from_batch(self, batch: Any) -> Any:
+        return batch
+
 
 class RandomStrategy(BaseQueryStrategy):
     def __post_init__(self) -> None:
@@ -95,4 +98,33 @@ class AccumulatorStrategy(BaseQueryStrategy):
         pass
 
 
-# class RandomArchorPointsStrategy(BaseQueryStrategy):
+class RandomArchorPointsStrategy(BaseQueryStrategy):
+    def __init__(self, model: LightningModule, n_anchors: int) -> None:
+        super().__init__(model)
+        self.n_anchors = n_anchors
+
+    def __post_init__(self) -> None:
+        self.pool_loop = PoolNoEvaluationLoop()
+
+    def query(self) -> List[int]:
+
+        assert self.trainer.datamodule.is_synced
+    
+        if not self.trainer.datamodule.has_labelled_data:
+            pool_size = self.trainer.datamodule.pool_size
+            indices = np.random.randint(low=0, high=pool_size, size=self.query_size).tolist()
+        else:
+            anchors_indices = self.query_archors()
+            search_query = self.trainer.datamodule.get_array_at_ids(anchors_indices)
+            indices = self.trainer.datamodule.search(search_query, self.query_size)
+
+        return indices
+    
+    def query_archors(self) -> List[int]:
+        train_size = self.trainer.datamodule.train_size
+        return np.random.randint(low=0, high=train_size, size=self.n_anchors).tolist()
+
+    def get_search_query_from_batch(self, batch: Any) -> Tensor:
+        return batch
+
+

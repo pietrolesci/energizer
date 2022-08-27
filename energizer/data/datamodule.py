@@ -4,6 +4,9 @@ import numpy as np
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch.utils.data import DataLoader, Dataset, Subset
+import faiss
+from energizer.utilities.type_converters import list_to_numpyint64, array_to_numpyfloat32
+from energizer.utilities.logger import logger
 
 
 class DataloaderToDataModule(LightningDataModule):
@@ -99,6 +102,18 @@ class ActiveDataModule(LightningDataModule):
         """Returns the number of the last active learning step."""
         return int(self.train_mask.max())
 
+    @property
+    def train_dataset(self) -> Any:
+        return self.train_dataloader().dataset
+
+    @property
+    def val_dataset(self) -> Any:
+        return self.val_dataloader().dataset
+
+    @property
+    def test_dataset(self) -> Any:
+        return self.test_dataloader().dataset
+
     """
     Data preparations
     """
@@ -149,6 +164,18 @@ class ActiveDataModule(LightningDataModule):
         """Transform indices in `pool_fold` to indices in the original `dataset`."""
         return [self.pool_fold.indices[i] for i in np.unique(pool_idx)]
 
+    def train_to_original(self, train_idx: List[int]) -> List[int]:
+        """Transform indices in `train_fold` to indices in the original `dataset`."""
+        return [self.train_fold.indices[i] for i in np.unique(train_idx)]
+
+    def original_to_pool(self, indices: List[int]) -> List[int]:
+        """Transform indices wrt the original `dataset` to indices wrt `pool_fold`."""
+        return [self.pool_fold.indices.index(i) for i in np.unique(indices)]
+
+    def original_to_train(self, indices: List[int]) -> List[int]:
+        """Transform indices wrt the original `dataset` to indices wrt `train_fold`."""
+        return [self.train_fold.indices.index(i) for i in np.unique(indices)]
+
     def setup_fold_index(self) -> None:
         """Updates indices in each `torch.utils.data.Subset`.
 
@@ -188,7 +215,7 @@ class ActiveDataModule(LightningDataModule):
         }
 
     def label(self, pool_idx: Union[int, List[int]]) -> None:
-        """Moves instances at index `pool_idx` from the `train_fold` to the `pool_fold`.
+        """Moves instances at index `pool_idx` from the `pool_fold` to the `train_fold`.
 
         Args:
             pool_idx (List[int]): The index (relative to the pool_fold, not the overall data) to label.
@@ -226,6 +253,64 @@ class ActiveDataModule(LightningDataModule):
 
     def pool_dataloader(self) -> DataLoader:
         return DataLoader(self.pool_fold, **self.eval_dataloader_args)
+
+
+class ActiveDataModuleWithIndex(ActiveDataModule):
+
+    def __init__(
+        self,
+        train_dataloader: DataLoader,
+        val_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
+        test_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
+        datamodule: Optional[LightningDataModule] = None,
+        faiss_index_path: Optional[str] = None,
+    ):
+        super().__init__(train_dataloader, val_dataloaders, test_dataloaders, datamodule)
+
+        self.faiss_index_path = faiss_index_path
+        self._faiss_index = faiss.read_index(faiss_index_path)
+        assert len(train_dataloader.dataset) == self._faiss_index.ntotal
+
+    @property
+    def faiss_index(self) -> "faiss.IndexIDMap":
+        return self._faiss_index
+
+    @faiss_index.setter
+    def faiss_index(self, faiss_index_path: str) -> None:
+        self._faiss_index = faiss.read_index(faiss_index_path)
+
+    @property
+    def faiss_index_size(self) -> int:
+        return self.faiss_index.ntotal
+
+    @property
+    def is_synced(self) -> bool:
+        return self.pool_size == self.faiss_index_size
+
+    def get_array_at_ids(self, indices: List[int]) -> np.ndarray:
+        # indices wrt `train_fold`` to original
+        indices = self.train_to_original(indices)
+        ids = [self.faiss_index.id_map.at(idx) for idx in indices]
+        search_query =  np.vstack([self.faiss_index.index.reconstruct(idx) for idx in ids])
+        return array_to_numpyfloat32(search_query)
+
+    def search(self, search_query: np.ndarray, k: int) -> List[int]:
+        logger.info("Searching `faiss_index`")
+        retrieved_indices = self.faiss_index.assign(search_query, k)
+        indices = np.unique(retrieved_indices.flatten()).tolist()
+        return self.original_to_pool(indices)
+
+    def remove_ids_from_faiss_index(self, indices: List[int]) -> None:
+        logger.info("Updating `faiss_index`")
+        indices = self.pool_to_original(indices)
+        n_removed = self.faiss_index.remove_ids(list_to_numpyint64(indices))
+        assert n_removed == len(indices)
+
+    def label(self, pool_idx: Union[int, List[int]]) -> None:
+        self.remove_ids_from_faiss_index(pool_idx)
+        super().label(pool_idx)
+
+
 
 
 """
