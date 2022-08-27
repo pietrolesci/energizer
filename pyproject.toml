@@ -57,6 +57,7 @@ matplotlib = "^3.5.3"
 sentence-transformers = "^2.2.2"
 torchvision = "^0.13.1"
 colorlog = "^6.6.0"
+faiss-gpu = "^1.7.2"
 
 [tool.poetry.extras]
 test = [

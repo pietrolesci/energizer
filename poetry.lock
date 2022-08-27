@@ -402,6 +402,14 @@ optional = false
 python-versions = ">=2.7"
 
 [[package]]
+name = "faiss-gpu"
+version = "1.7.2"
+description = "A library for efficient similarity search and clustering of dense vectors."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "filelock"
 version = "3.4.2"
 description = "A platform independent file lock."
@@ -2420,7 +2428,7 @@ vision = ["torchvision"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<4.0"
-content-hash = "f6496fdb67db4e5fed8dadc00cb697062b4c877f3e160d3d97d6b79498fd8153"
+content-hash = "938f3711a5431ac5cea6053b9ae7aebc89729e0fe2ed76e0e657052fb0db7704"
 
 [metadata.files]
 absl-py = [
@@ -2769,6 +2777,7 @@ docutils = [
     {file = "docutils-0.18.1.tar.gz", hash = "sha256:679987caf361a7539d76e584cbeddc311e3aee937877c87346f31debc63e9d06"},
 ]
 entrypoints = []
+faiss-gpu = []
 filelock = []
 flake8 = [
     {file = "flake8-3.9.2-py2.py3-none-any.whl", hash = "sha256:bf8fd333346d844f616e8d47905ef3a3384edae6b4e9beb0c5101e25e3110907"},
