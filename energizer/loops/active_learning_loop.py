@@ -15,7 +15,7 @@ from pytorch_lightning.utilities.apply_func import apply_to_collection
 from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_only
 from pytorch_lightning.utilities.types import _EVALUATE_OUTPUT
 
-from energizer.loops.pool_loop import PoolEvaluationLoop
+from energizer.utilities.logger import logger
 
 
 def convert_to_numpy(t: torch.Tensor, *_) -> Union[np.ndarray, float, int]:
@@ -53,7 +53,7 @@ class ActiveLearningLoop(Loop):
         self.epoch_progress = Progress()
 
         # pool evaluation loop
-        self.pool_loop: Optional[PoolEvaluationLoop] = None
+        self.pool_loop: Optional[Loop] = None
 
         # fit after each labelling session
         self.fit_loop: Optional[FitLoop] = None
@@ -106,7 +106,7 @@ class ActiveLearningLoop(Loop):
     def skip(self) -> bool:
         return self.done
 
-    def connect(self, pool_loop: PoolEvaluationLoop, fit_loop: FitLoop, test_loop: EvaluationLoop) -> None:
+    def connect(self, pool_loop: Loop, fit_loop: FitLoop, test_loop: EvaluationLoop) -> None:
         self.pool_loop = pool_loop
         self.fit_loop = fit_loop
         self.test_loop = test_loop
@@ -229,7 +229,7 @@ class ActiveLearningLoop(Loop):
         # maybe reset the weights
         if self.reset_weights:
             self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
-            rank_zero_info(f"{self.trainer.lightning_module.__class__.__name__} " "state dict has been re-initialized")
+            logger.info(f"{self.trainer.lightning_module.__class__.__name__} " "state dict has been re-initialized")
 
         # resets the train/val dataloaders
         self.trainer.reset_train_dataloader()

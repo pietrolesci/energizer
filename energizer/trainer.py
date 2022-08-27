@@ -12,22 +12,15 @@ from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
 from pytorch_lightning.trainer.trainer import _determine_batch_limits
 from pytorch_lightning.utilities import LightningEnum
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-
-# from pytorch_lightning.utilities.model_helpers import is_overridden
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
 from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 
 from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
 from energizer.data.datamodule import ActiveDataModule
 from energizer.loops.active_learning_loop import ActiveLearningLoop, LabellingIterOutputs
-
-# from energizer.loops.pool_loop import PoolEvaluationLoop
-# from energizer.mixin.base import Learner
 from energizer.mixin.hooks import CallBackActiveLearningHooks
 from energizer.query_strategies.base import BaseQueryStrategy
-
-log = logging.getLogger(__name__)
+from energizer.utilities.logger import logger
 
 
 """
@@ -232,7 +225,7 @@ class Trainer(pl.Trainer):
         self.active_fitting = True
         # TODO: some of these are duplicated in the `reset_{fitting, test}` methods in `ActiveLearningLoop`
         pl.Trainer._log_api_event("fit")
-        log.detail(f"{self.__class__.__name__}: trainer active_fit stage")
+        logger.detail(f"{self.__class__.__name__}: trainer active_fit stage")
         self.state.fn = TrainerFn.FITTING
         self.state.status = TrainerStatus.RUNNING
         self.training = True
@@ -453,11 +446,11 @@ class Trainer(pl.Trainer):
         if use_query_strategy:
             # self.strategy.model = self.query_strategy
             self.strategy.connect(self.query_strategy)
-            rank_zero_info(f"Using `{self.lightning_module.__class__.__name__}`")
+            logger.info(f"Using `{self.lightning_module.__class__.__name__}`")
         else:
             # self.strategy.model = self.query_strategy.model
             self.strategy.connect(self.query_strategy.model)
-            rank_zero_info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
+            logger.info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
         self.strategy.model_to_device()
 
     @property
