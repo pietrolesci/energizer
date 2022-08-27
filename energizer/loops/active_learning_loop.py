@@ -1,9 +1,11 @@
+import textwrap
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
-import numpy as np
 import torch
+import yaml
+from pandas import DataFrame
 from pytorch_lightning.loops.dataloader.evaluation_loop import EvaluationLoop
 from pytorch_lightning.loops.fit_loop import FitLoop
 from pytorch_lightning.loops.loop import Loop
@@ -12,7 +14,6 @@ from pytorch_lightning.trainer.connectors.logger_connector.result import _Result
 from pytorch_lightning.trainer.progress import Progress
 from pytorch_lightning.trainer.states import TrainerFn
 from pytorch_lightning.utilities.apply_func import apply_to_collection
-from pytorch_lightning.utilities.distributed import rank_zero_info, rank_zero_only
 from pytorch_lightning.utilities.types import _EVALUATE_OUTPUT
 
 from energizer.utilities.logger import logger
@@ -21,11 +22,36 @@ from energizer.utilities.tensors import convert_to_numpy
 
 @dataclass
 class LabellingIterOutputs:
+    labelling_iter: Optional[int] = None
+    indices: Optional[List[int]] = field(default_factory=list)
     test_outputs: Optional[_EVALUATE_OUTPUT] = field(default_factory=list)
     pool_outputs: Optional[_EVALUATE_OUTPUT] = field(default_factory=list)
-    indices: Optional[List[int]] = field(default_factory=list)
     data_stats: Optional[Dict[str, int]] = field(default_factory=dict)
-    current_labelling_iter: Optional[int] = None
+
+
+class LabellingOutputsList(list):
+    def to_pandas(self) -> DataFrame:
+        return DataFrame(
+            data=[(l.data_stats["train_size"], *l.test_outputs[0].values()) for l in self],
+            columns=("train_size", *self[0].test_outputs[0].keys()),
+        )
+
+    def __repr__(self) -> str:
+        tab = "    "
+        return f"{self.__class__.__name__}(\n{tab}" + f",\n{tab}".join(map(str, self)) + ",\n)"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def append(self, outputs: LabellingIterOutputs) -> None:
+        outputs = self._prepare_outputs(outputs)
+        return super().append(outputs)
+
+    def _prepare_outputs(self, outputs: LabellingIterOutputs) -> LabellingIterOutputs:
+        args = (torch.Tensor, convert_to_numpy, "cpu")
+        outputs.test_outputs = apply_to_collection(outputs.test_outputs, *args)
+        outputs.pool_outputs = apply_to_collection(outputs.pool_outputs, *args)
+        return outputs
 
 
 class ActiveLearningLoop(Loop):
@@ -56,7 +82,7 @@ class ActiveLearningLoop(Loop):
         # test after labelling and fitting
         self.test_loop: Optional[EvaluationLoop] = None
 
-        self._outputs: Optional[List[LabellingIterOutputs]] = []
+        self._outputs: LabellingOutputsList = LabellingOutputsList()
 
     @property
     def can_run_testing(self) -> bool:
@@ -147,7 +173,7 @@ class ActiveLearningLoop(Loop):
         # TODO: add `with self.trainer.profiler.profile("<some_step>"):`
 
         outputs = LabellingIterOutputs(
-            current_labelling_iter=self.epoch_progress.current.completed,
+            labelling_iter=self.epoch_progress.current.completed,
             data_stats=self.trainer.datamodule.get_statistics(),
         )
 
@@ -166,10 +192,9 @@ class ActiveLearningLoop(Loop):
             self._reset_evaluating_pool()
             outputs.pool_outputs, indices = self.pool_loop.run()
             outputs.indices = indices
+            logger.info(f"Queried {len(indices)} instance")
             self.label_datamodule(indices)
 
-        outputs = self._prepare_outputs(outputs)
-        # self.trainer._logger_connector.log_metrics()
         self._outputs.append(outputs)
 
     def on_advance_end(self) -> None:
@@ -193,9 +218,9 @@ class ActiveLearningLoop(Loop):
     def on_run_end(self) -> List[LabellingIterOutputs]:
 
         # enforce training at the end of acquisitions
-        rank_zero_info(f"Last fit_loop".center(72, "-"))
+        self._print_separator_line(is_last=True)
         outputs = LabellingIterOutputs(
-            current_labelling_iter=self.epoch_progress.current.completed,
+            labelling_iter=self.epoch_progress.current.completed,
             data_stats=self.trainer.datamodule.get_statistics(),
         )
         self._reset_fitting()
@@ -204,7 +229,7 @@ class ActiveLearningLoop(Loop):
             self._reset_testing()
             outputs.test_outputs = self.test_loop.run()
             self.test_loop._print_results(outputs.test_outputs, "test")
-        outputs = self._prepare_outputs(outputs)
+
         self._outputs.append(outputs)
         outputs, self._outputs = self._outputs, []
 
@@ -252,26 +277,17 @@ class ActiveLearningLoop(Loop):
         self.trainer.lightning_module.eval()
         torch.set_grad_enabled(False)
 
-    @rank_zero_only
     def label_datamodule(self, indices: List[int]) -> Dict[str, int]:
         """This method changes the state of the underlying dataset."""
         self.trainer.datamodule.label(indices)
-
-        # TODO: verbose
-        # if self.verbose:
-        #     rank_zero_info(f"Queried indices: {indices}")
-        # return self.trainer.datamodule.get_statistics()
+        logger.info(f"Annotated {len(indices)} instances.")
+        logger.info("New data statistics\n" f"{yaml.dump(self.trainer.datamodule.get_statistics())}")
 
     """
     Helpers
     """
 
-    @rank_zero_only
-    def _print_separator_line(self) -> None:
+    def _print_separator_line(self, is_last: bool = False) -> None:
+        if is_last:
+            print(f"Last fit_loop".center(72, "-"))
         print(f"Labelling Iteration {self.epoch_progress.current.completed}".center(72, "-"), flush=True)
-
-    def _prepare_outputs(self, outputs: LabellingIterOutputs) -> LabellingIterOutputs:
-        args = (torch.Tensor, convert_to_numpy, "cpu")
-        outputs.test_outputs = apply_to_collection(outputs.test_outputs, *args)
-        outputs.pool_outputs = apply_to_collection(outputs.pool_outputs, *args)
-        return outputs

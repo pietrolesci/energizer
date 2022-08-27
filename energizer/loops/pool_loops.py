@@ -13,8 +13,6 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from torchmetrics import Metric
 
-from energizer.utilities.logger import logger
-
 """
 Loops that does not require evaluating on pool
 """
@@ -38,12 +36,11 @@ class PoolNoEvaluationLoop(Loop):
     def on_run_end(self) -> Tuple[List[_OUT_DICT], List[int]]:
         output = super().on_run_end()
         indices = self.trainer.lightning_module.query()
-        logger.info(f"Pool loop: queried {self.trainer.lightning_module.query_size} instances randomly")
         return output, indices
 
 
 """
-Loops that evaluate on pool and accumulate results
+Loops that evaluate on pool and accumulate batch results
 """
 
 
