@@ -2,10 +2,10 @@ from typing import Any, List, Optional
 
 import numpy as np
 from pytorch_lightning import LightningModule
+from pytorch_lightning.loops.loop import Loop
 from torch import Tensor
 
-from energizer.loops.pool_loop import PoolEvaluationLoop, PoolNoEvalLoop
-from energizer.loops.topk_accumulator import AccumulateTopK
+from energizer.loops.pool_loops import AccumulateTopK, PoolEvaluationLoop, PoolNoEvaluationLoop
 from energizer.query_strategies.hooks import ModelHooks
 
 
@@ -31,7 +31,7 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
         return self._forward(*args, **kwargs)
 
     @property
-    def pool_loop(self) -> PoolEvaluationLoop:
+    def pool_loop(self) -> Loop:
         return self._pool_loop
 
     @pool_loop.setter
@@ -59,7 +59,7 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
 
 class RandomStrategy(BaseQueryStrategy):
     def __post_init__(self) -> None:
-        self.pool_loop = PoolNoEvalLoop()
+        self.pool_loop = PoolNoEvaluationLoop()
 
     def query(self) -> List[int]:
         pool_size = self.trainer.datamodule.pool_size
@@ -93,3 +93,6 @@ class AccumulatorStrategy(BaseQueryStrategy):
 
     def pool_epoch_end(self, *args, **kwargs) -> Optional[Any]:
         pass
+
+
+# class RandomArchorPointsStrategy(BaseQueryStrategy):
