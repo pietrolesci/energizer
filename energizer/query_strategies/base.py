@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 from pytorch_lightning import LightningModule
@@ -51,7 +51,7 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
 
         A query selects instances from the unlabeled pool.
         """
-        pass
+        NotImplementedError
 
     def _forward(self, *args, **kwargs) -> Any:
         return self.model.forward(*args, **kwargs)
@@ -114,9 +114,15 @@ class RandomArchorPointsStrategy(BaseQueryStrategy):
             pool_size = self.trainer.datamodule.pool_size
             indices = np.random.randint(low=0, high=pool_size, size=self.query_size).tolist()
         else:
+            # indices wrt train_set
             anchors_indices = self.query_archors()
-            search_query = self.trainer.datamodule.get_array_at_ids(anchors_indices)
-            indices = self.trainer.datamodule.search(search_query, self.query_size)
+            
+            # NOTE: faiss pads wiwth `-1` when there are less entries than k
+            scores, indices = self.search_anchors(anchors_indices, self.query_size)
+            
+            # across all retrieved compute the one with the highest inner-product
+            ids = scores.flatten().argsort()[::-1][:self.query_size]
+            indices = indices.flatten()[ids].tolist()
 
         return indices
     
@@ -126,5 +132,9 @@ class RandomArchorPointsStrategy(BaseQueryStrategy):
 
     def get_search_query_from_batch(self, batch: Any) -> Tensor:
         return batch
+
+    def search_anchors(self, indices: List[int], k: int) -> Tuple[np.ndarray, np.ndarray]:
+        return self.trainer.datamodule.search_anchors(indices, k)
+
 
 

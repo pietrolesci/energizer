@@ -1,11 +1,11 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple, Iterable
 
 import numpy as np
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch.utils.data import DataLoader, Dataset, Subset
 import faiss
-from energizer.utilities.type_converters import list_to_numpyint64, array_to_numpyfloat32
+from energizer.utilities.types import list_to_numpyint64, array_to_numpyfloat32, check_type
 from energizer.utilities.logger import logger
 
 
@@ -160,20 +160,24 @@ class ActiveDataModule(LightningDataModule):
         self.train_mask = np.zeros((len(train_dataset),), dtype=int)
         self.setup_fold_index()
 
-    def pool_to_original(self, pool_idx: List[int]) -> List[int]:
+    def pool_to_original(self, indices: List[int]) -> List[int]:
         """Transform indices in `pool_fold` to indices in the original `dataset`."""
-        return [self.pool_fold.indices[i] for i in np.unique(pool_idx)]
+        check_type(Iterable, indices)
+        return [self.pool_fold.indices[i] for i in np.unique(indices)]
 
-    def train_to_original(self, train_idx: List[int]) -> List[int]:
+    def train_to_original(self, indices: List[int]) -> List[int]:
         """Transform indices in `train_fold` to indices in the original `dataset`."""
-        return [self.train_fold.indices[i] for i in np.unique(train_idx)]
+        check_type(Iterable, indices)
+        return [self.train_fold.indices[i] for i in np.unique(indices)]
 
     def original_to_pool(self, indices: List[int]) -> List[int]:
         """Transform indices wrt the original `dataset` to indices wrt `pool_fold`."""
+        check_type(Iterable, indices)
         return [self.pool_fold.indices.index(i) for i in np.unique(indices)]
 
     def original_to_train(self, indices: List[int]) -> List[int]:
         """Transform indices wrt the original `dataset` to indices wrt `train_fold`."""
+        check_type(Iterable, indices)
         return [self.train_fold.indices.index(i) for i in np.unique(indices)]
 
     def setup_fold_index(self) -> None:
@@ -288,27 +292,40 @@ class ActiveDataModuleWithIndex(ActiveDataModule):
         return self.pool_size == self.faiss_index_size
 
     def get_array_at_ids(self, indices: List[int]) -> np.ndarray:
-        # indices wrt `train_fold`` to original
-        indices = self.train_to_original(indices)
+        """Expects indices wrt train_set and internally maps to original."""
         ids = [self.faiss_index.id_map.at(idx) for idx in indices]
-        search_query =  np.vstack([self.faiss_index.index.reconstruct(idx) for idx in ids])
+        search_query = np.vstack([self.faiss_index.index.reconstruct(idx) for idx in ids])
         return array_to_numpyfloat32(search_query)
 
-    def search(self, search_query: np.ndarray, k: int) -> List[int]:
+    def search(self, search_query: np.ndarray, k: int) -> Tuple[np.ndarray, List[int]]:
+        """Returns indices wrt to original.
+        
+        See [here](https://github.com/huggingface/datasets/blob/293e662378b4eb192cad0b1496f98d8d873c31df/src/datasets/search.py) for inspiration.
+        """
         logger.info("Searching `faiss_index`")
-        retrieved_indices = self.faiss_index.assign(search_query, k)
-        indices = np.unique(retrieved_indices.flatten()).tolist()
-        return self.original_to_pool(indices)
+        scores, indices = self.faiss_index.search(search_query, k)
+        # indices = np.unique(indices.flatten()).tolist()
+        return scores, indices
 
-    def remove_ids_from_faiss_index(self, indices: List[int]) -> None:
+    def search_anchors(self, query_indices: List[int], k: int) -> Tuple[np.ndarray, List[int]]:
+        check_type(Iterable, query_indices)
+        # map from train to original
+        query_indices = self.train_to_original(query_indices)
+        queries = self.get_array_at_ids(query_indices)
+        scores, indices = self.search(queries, k)
+        # map from original to pool
+        indices = np.apply_along_axis(self.original_to_pool, 0, indices)
+        return scores, indices
+
+    def _remove_ids_from_faiss_index(self, indices: List[int]) -> None:
         logger.info("Updating `faiss_index`")
-        indices = self.pool_to_original(indices)
         n_removed = self.faiss_index.remove_ids(list_to_numpyint64(indices))
         assert n_removed == len(indices)
 
-    def label(self, pool_idx: Union[int, List[int]]) -> None:
-        self.remove_ids_from_faiss_index(pool_idx)
-        super().label(pool_idx)
+    def label(self, indices: Union[int, List[int]]) -> None:
+        original_indices = self.pool_to_original(indices)
+        self._remove_ids_from_faiss_index(original_indices)
+        super().label(indices)
 
 
 

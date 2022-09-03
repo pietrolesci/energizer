@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Union, List, Any
 
 from numpy import ndarray, array, int64, float32
 from torch import Tensor
@@ -16,3 +16,6 @@ def list_to_numpyint64(l: List[int]) -> ndarray:
 
 def array_to_numpyfloat32(a: ndarray) -> ndarray:
     return a.astype(float32)
+
+def check_type(expected_type, x: Any) -> None:
+    assert isinstance(x, expected_type), TypeError(f"input must be of type {expected_type}, not {type(x)}")

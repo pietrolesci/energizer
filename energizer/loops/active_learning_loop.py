@@ -17,7 +17,7 @@ from pytorch_lightning.utilities.apply_func import apply_to_collection
 from pytorch_lightning.utilities.types import _EVALUATE_OUTPUT
 
 from energizer.utilities.logger import logger
-from energizer.utilities.type_converters import tensor_to_python
+from energizer.utilities.types import tensor_to_python
 
 
 @dataclass
