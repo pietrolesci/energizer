@@ -479,38 +479,38 @@ python-versions = ">=3.6"
 
 [[package]]
 name = "fsspec"
-version = "2022.7.1"
+version = "2022.8.2"
 description = "File-system specification"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 
 [package.dependencies]
-aiohttp = {version = "*", optional = true, markers = "extra == \"http\""}
+aiohttp = {version = "<4.0.0a0 || >4.0.0a0,<4.0.0a1 || >4.0.0a1", optional = true, markers = "extra == \"http\""}
 requests = {version = "*", optional = true, markers = "extra == \"http\""}
 
 [package.extras]
-tqdm = ["tqdm"]
-ssh = ["paramiko"]
-smb = ["smbprotocol"]
-sftp = ["paramiko"]
-s3 = ["s3fs"]
-oci = ["ocifs"]
-libarchive = ["libarchive-c"]
-http = ["aiohttp", "requests"]
-hdfs = ["pyarrow (>=1)"]
-gui = ["panel"]
-gs = ["gcsfs"]
-github = ["requests"]
-git = ["pygit2"]
-gcs = ["gcsfs"]
-fuse = ["fusepy"]
-entrypoints = ["importlib-metadata"]
-dropbox = ["dropbox", "requests", "dropboxdrivefs"]
-dask = ["distributed", "dask"]
-arrow = ["pyarrow (>=1)"]
-adl = ["adlfs"]
 abfs = ["adlfs"]
+adl = ["adlfs"]
+arrow = ["pyarrow (>=1)"]
+dask = ["dask", "distributed"]
+dropbox = ["dropboxdrivefs", "requests", "dropbox"]
+entrypoints = ["importlib-metadata"]
+fuse = ["fusepy"]
+gcs = ["gcsfs"]
+git = ["pygit2"]
+github = ["requests"]
+gs = ["gcsfs"]
+gui = ["panel"]
+hdfs = ["pyarrow (>=1)"]
+http = ["requests", "aiohttp (!=4.0.0a0,!=4.0.0a1)"]
+libarchive = ["libarchive-c"]
+oci = ["ocifs"]
+s3 = ["s3fs"]
+sftp = ["paramiko"]
+smb = ["smbprotocol"]
+ssh = ["paramiko"]
+tqdm = ["tqdm"]
 
 [[package]]
 name = "ghp-import"
@@ -2428,7 +2428,7 @@ vision = ["torchvision"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<4.0"
-content-hash = "938f3711a5431ac5cea6053b9ae7aebc89729e0fe2ed76e0e657052fb0db7704"
+content-hash = "ff228366b6c81ab0895624117681dd85ec3b7d7d866c69bd5197f9149433f391"
 
 [metadata.files]
 absl-py = [

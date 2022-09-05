@@ -69,6 +69,7 @@ test = [
     "flake8-docstrings",
     "pytest",
     "pytest-cov",
+    "types-pyyaml",
     ]
 
 dev = ["tox", "pre-commit", "virtualenv", "pip", "twine", "toml", "bump2version"]
