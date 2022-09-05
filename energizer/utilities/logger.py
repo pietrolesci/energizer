@@ -5,7 +5,7 @@ import colorlog
 logger = logging.getLogger("energizer_logger")
 
 formatter = colorlog.ColoredFormatter(
-    "%(log_color)s[%(asctime)s] energizer/%(levelname)s%(reset)s ~ %(bold_yellow)s%(module)s:%(lineno)s%(reset)s$ %(message_log_color)s%(message)s",
+    "%(log_color)s[%(asctime)s] energizer/%(levelname)s%(reset)s ~ %(bold_yellow)s%(module)s:%(lineno)s%(reset)s$ %(message_log_color)s%(message)s",  # noqa: E501
     datefmt="%Y-%m-%d %H:%M:%S",
     # reset=True,
     log_colors={

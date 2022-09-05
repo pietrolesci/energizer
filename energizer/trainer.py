@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional, Union
 
 import pytorch_lightning as pl
@@ -18,8 +17,8 @@ from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADER
 from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
 from energizer.data.datamodule import ActiveDataModule
 from energizer.loops.active_learning_loop import ActiveLearningLoop, LabellingIterOutputs
-from energizer.mixin.hooks import CallBackActiveLearningHooks
 from energizer.query_strategies.base import BaseQueryStrategy
+from energizer.query_strategies.hooks import CallBackActiveLearningHooks
 from energizer.utilities.logger import logger
 
 """
@@ -57,6 +56,8 @@ class DataConnector(DataConnector_pl):
 
 
 def patch_callbacks(callbacks: List[Callback]) -> List[Callback]:
+    """Adds `pool`-related hooks to callbacks."""
+
     def add_pool_hooks(callback: Callback) -> Callback:
         hook_names = [m for m in dir(CallBackActiveLearningHooks) if not m.startswith("_")]
         for name in hook_names:
@@ -192,7 +193,7 @@ class Trainer(pl.Trainer):
         """
         NOTE: this creates the `self.lightning_module` attribute on the trainer
         it is set in the `fit` method, but we do not set it here and let the
-        loop components do it        
+        loop components do it
         """
         # self.strategy.model = model
 
@@ -216,6 +217,45 @@ class Trainer(pl.Trainer):
         ckpt_path: Optional[str] = None,
     ) -> None:
 
+        """
+        Check the inputs
+        """
+        # check inputs
+        if not isinstance(model, BaseQueryStrategy):
+            raise MisconfigurationException(f"model must be a `BaseQueryStrategy` not {type(model).__class__.__name__}.")
+
+        # if a datamodule comes in as the second arg, then fix it for the user
+        if isinstance(train_dataloaders, pl.LightningDataModule):
+            datamodule = train_dataloaders
+            train_dataloaders = None
+        is_dataloaders = train_dataloaders is not None or val_dataloaders is not None or test_dataloaders is not None
+        is_datamodule = datamodule is not None
+
+        # if you supply a datamodule you can't supply train_dataloader or val_dataloaders
+        if is_dataloaders and is_datamodule:
+            raise MisconfigurationException(
+                "You cannot pass `train_dataloader` or `val_dataloaders` or ",
+                "`test_dataloaders` to `trainer.active_fit(datamodule=...)`",
+            )
+
+        # cast to ActiveDataModule
+        elif is_dataloaders or (is_datamodule and not isinstance(datamodule, ActiveDataModule)):
+            datamodule = ActiveDataModule(
+                train_dataloader=train_dataloaders,
+                val_dataloaders=val_dataloaders,
+                test_dataloaders=test_dataloaders,
+                datamodule=datamodule,
+            )
+
+        # check if can run testing
+        if self.test_after_labelling and getattr(datamodule, "test_dataloader", None) is None:
+            raise MisconfigurationException(
+                "You specified `test_after_labelling=True` but no test_dataloader was provided."
+            )
+
+        """
+        Set states
+        """
         # patch progress bar and add pool-related hooks
         _old_callbacks = self.callbacks
         self.callbacks = patch_callbacks(self.callbacks)
@@ -232,37 +272,6 @@ class Trainer(pl.Trainer):
         self._last_val_dl_reload_epoch = float("-inf")
         self._last_test_dl_reload_epoch = float("-inf")
 
-        # # check inputs
-        # if not isinstance(model, BaseQueryStrategy):
-        #     raise MisconfigurationException("model must be a `BaseQueryStrategy` not a `LightningModule`.")
-
-        # if a datamodule comes in as the second arg, then fix it for the user
-        if isinstance(train_dataloaders, pl.LightningDataModule):
-            datamodule = train_dataloaders
-            train_dataloaders = None
-        is_dataloaders = train_dataloaders is not None or val_dataloaders is not None or test_dataloaders is not None
-        is_datamodule = datamodule is not None
-
-        # if you supply a datamodule you can't supply train_dataloader or val_dataloaders
-        if is_dataloaders and is_datamodule:
-            raise MisconfigurationException(
-                "You cannot pass `train_dataloader` or `val_dataloaders` or ",
-                "`test_dataloaders` to `trainer.active_fit(datamodule=...)`",
-            )
-
-        elif is_dataloaders or (is_datamodule and not isinstance(datamodule, ActiveDataModule)):
-            datamodule = ActiveDataModule(
-                train_dataloader=train_dataloaders,
-                val_dataloaders=val_dataloaders,
-                test_dataloaders=test_dataloaders,
-                datamodule=datamodule,
-            )
-
-        if self.test_after_labelling and getattr(datamodule, "test_dataloader", None) is None:
-            raise MisconfigurationException(
-                "You specified `test_after_labelling=True` but no test_dataloader was provided."
-            )
-
         # links data to the trainer
         self._data_connector.attach_data(model, datamodule=datamodule)
 
@@ -272,10 +281,16 @@ class Trainer(pl.Trainer):
             ckpt_path, model_provided=True, model_connected=self.lightning_module is not None
         )
 
+        """
+        Run active fit loop
+        """
         # NOTE: pass the underlying `LightningModule` to `_run` so that it finds
         # the `training_step` method etc
         results = self._run(model.model, ckpt_path=self.ckpt_path)
 
+        """
+        Reset states
+        """
         assert self.state.stopped
         self.training = False
         self.active_fitting = False
@@ -430,7 +445,6 @@ class Trainer(pl.Trainer):
     @property
     def _active_loop(self) -> Optional[Union[FitLoop, EvaluationLoop, PredictionLoop]]:
         """Returns the currently active loop based on the `Trainer`'s state."""
-
         if self.training:
             return self.fit_loop if not self.active_fitting else self.active_learning_loop
 
@@ -455,12 +469,3 @@ class Trainer(pl.Trainer):
     @property
     def using_query_strategy_as_lightning_module(self) -> bool:
         return isinstance(self.lightning_module, BaseQueryStrategy)
-
-    # @property
-    # def _results(self):
-    #     active_loop = self._active_loop
-    #     print(self.state.fn, self.active_fitting, self.sanity_checking)
-    #     print("HERE", active_loop)
-    #     print("HERE", active_loop.trainer)
-    #     if active_loop is not None:
-    #         return active_loop._results

@@ -1,4 +1,3 @@
-import textwrap
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -32,7 +31,7 @@ class LabellingIterOutputs:
 class LabellingOutputsList(list):
     def to_pandas(self) -> DataFrame:
         return DataFrame(
-            data=[(l.data_stats["train_size"], *l.test_outputs[0].values()) for l in self],
+            data=[(out.data_stats["train_size"], *out.test_outputs[0].values()) for out in self],
             columns=("train_size", *self[0].test_outputs[0].keys()),
         )
 
@@ -104,7 +103,6 @@ class ActiveLearningLoop(Loop):
     @property
     def done(self) -> bool:
         """Evaluates when to leave the loop."""
-
         # TODO: add stopping condition based on satisfactory level of a
         # performance metric. Potentially do this via a callback
 
@@ -289,6 +287,6 @@ class ActiveLearningLoop(Loop):
 
     def _print_separator_line(self, is_last: bool = False) -> None:
         if is_last:
-            print(f"Last fit_loop".center(72, "-"))
+            print("Last fit_loop".center(72, "-"))
             return
         print(f"Labelling Iteration {self.epoch_progress.current.completed}".center(72, "-"), flush=True)

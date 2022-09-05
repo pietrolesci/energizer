@@ -115,7 +115,6 @@ class PoolEvaluationEpochLoop(EvaluationEpochLoop):
         Returns:
             the outputs of the step
         """
-
         # unpack batch with custom logic
         kwargs["batch"] = self.trainer._call_lightning_module_hook("get_inputs_from_batch", kwargs["batch"])
 
@@ -208,7 +207,6 @@ class PoolEvaluationLoop(EvaluationLoop):
 
     def _on_evaluation_start(self, *args: Any, **kwargs: Any) -> None:
         """Runs ``on_pool_start`` hooks."""
-
         # TODO: check if this is correct device
         assert self._results is not None
         self._results.to(device=self.trainer.lightning_module.device)
@@ -243,7 +241,7 @@ class PoolEvaluationLoop(EvaluationLoop):
         self.epoch_loop.accumulator.reset()
 
     def _evaluation_epoch_end(self, outputs: List[EPOCH_OUTPUT]) -> None:
-        """Runs ``pool_epoch_end``"""
+        """Runs ``pool_epoch_end`."""
         self.trainer._logger_connector._evaluation_epoch_end()
 
         # with a single dataloader don't pass a 2D list

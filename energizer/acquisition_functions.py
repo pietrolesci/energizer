@@ -62,6 +62,18 @@ def expected_entropy(logits: Tensor) -> Tensor:
     return torch.mean(entropies, dim=-1)
 
 
+def bald(logits: Tensor) -> Tensor:
+    probs = softmax(logits, dim=-2)
+
+    # To get the first term, we make many runs, average the output, and measure the entropy.
+    first_term = entr(probs.mean(dim=-1)).sum(dim=-1)
+
+    # To get the second term, we make many runs, measure the entropy of every run, and take the average.
+    second_term = entr(probs).sum(dim=-2).mean(dim=-1)
+
+    return first_term - second_term
+
+
 def confidence(logits: Tensor, k: int = 1) -> Tensor:
     r"""Computes confidence based on logits.
 
@@ -83,7 +95,30 @@ def confidence(logits: Tensor, k: int = 1) -> Tensor:
     return torch.topk(probs, k=k, dim=-1).values
 
 
-def least_confidence(logits: Tensor, k: int = 1) -> Tensor:
+def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
+    r"""Computes the expected confidence based on logits.
+
+    Computes the expected confidence across samples, defined as the highest probability the model assigns
+    to a class, that is
+
+    $$\sum_s \max_c p_{bcs}$$
+
+    where $p_{bcs}$ is the probability for class $c$ for instance $b$ in batch of sample $s$.
+
+    Args:
+        logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes, S: num_samples)`.
+        k (int): The "k" in "top-k".
+
+    Returns:
+        The confidence defined as the maximum probability assigned to a class, i.e. a vector of
+        dimensions `(B: batch_size, k)`.
+    """
+    probs = softmax(logits, dim=-2)
+    confidence = torch.topk(probs, k=k, dim=-2).values
+    return torch.mean(confidence, dim=-1)
+
+
+def least_confidence(logits: Tensor) -> Tensor:
     r"""Implements the least confidence acquisition function.
 
     References: http://burrsettles.com/pub/settles.activelearning.pdf.
@@ -105,7 +140,7 @@ def least_confidence(logits: Tensor, k: int = 1) -> Tensor:
 
     $$\arg \max_{x} \; 1 - \mathrm{E}_{p(\theta| D)} p(y_{max}|x, \theta)$$
     """
-    return 1.0 - confidence(logits, k=k)
+    return 1.0 - confidence(logits, k=1).flatten()
 
 
 def expected_least_confidence(logits: Tensor, k: int = 1) -> Tensor:
@@ -130,30 +165,7 @@ def expected_least_confidence(logits: Tensor, k: int = 1) -> Tensor:
 
     $$\arg \max_{x} \; 1 - \mathrm{E}_{p(\theta| D)} p(y_{max}|x, \theta)$$
     """
-    return 1.0 - expected_confidence(logits, k=k)
-
-
-def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
-    r"""Computes the expected confidence based on logits.
-
-    Computes the expected confidence across samples, defined as the highest probability the model assigns
-    to a class, that is
-
-    $$\sum_s \max_c p_{bcs}$$
-
-    where $p_{bcs}$ is the probability for class $c$ for instance $b$ in batch of sample $s$.
-
-    Args:
-        logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes, S: num_samples)`.
-        k (int): The "k" in "top-k".
-
-    Returns:
-        The confidence defined as the maximum probability assigned to a class, i.e. a vector of
-        dimensions `(B: batch_size, k)`.
-    """
-    probs = softmax(logits, dim=-2)
-    confidence = torch.topk(probs, k=k, dim=-2).values
-    return torch.mean(confidence, dim=-1)
+    return 1.0 - expected_confidence(logits, k=k).flatten()
 
 
 def margin_confidence(logits: Tensor) -> Tensor:
@@ -180,7 +192,7 @@ def margin_confidence(logits: Tensor) -> Tensor:
     $$\arg\min_{x} \mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
     """
     confidence_top2 = confidence(logits, k=2)
-    return -(confidence_top2[:, 0] - confidence_top2[:, 1])
+    return -(confidence_top2[:, 0] - confidence_top2[:, 1]).flatten()
 
 
 def expected_margin_confidence(logits: Tensor):
@@ -207,4 +219,4 @@ def expected_margin_confidence(logits: Tensor):
     $$\arg\min_{x} \mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
     """
     confidence_top2 = expected_confidence(logits, k=2)
-    return -(confidence_top2[:, 0] - confidence_top2[:, 1])
+    return -(confidence_top2[:, 0] - confidence_top2[:, 1]).flatten()

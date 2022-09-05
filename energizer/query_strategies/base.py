@@ -1,10 +1,11 @@
-from typing import Any, List, Optional, Tuple
-
+from typing import Any, List, Optional
+from copy import deepcopy
 import numpy as np
+import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops.loop import Loop
 from torch import Tensor
-
+from energizer.utilities.mcdropout import patch_dropout_layers
 from energizer.loops.pool_loops import AccumulateTopK, PoolEvaluationLoop, PoolNoEvaluationLoop
 from energizer.query_strategies.hooks import ModelHooks
 
@@ -22,10 +23,10 @@ class PostInitCaller(type):
 class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
     def __init__(self, model: LightningModule) -> None:
         super().__init__()
-        self.model = model
+        self.model = deepcopy(model)
 
     def __post_init__(self) -> None:
-        pass
+        raise NotImplementedError("You need to attach a pool loop.")
 
     def __call__(self, *args, **kwargs) -> Any:
         return self._forward(*args, **kwargs)
@@ -51,7 +52,7 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
 
         A query selects instances from the unlabeled pool.
         """
-        NotImplementedError
+        raise NotImplementedError("You need to define how the pool is queried.")
 
     def _forward(self, *args, **kwargs) -> Any:
         return self.model.forward(*args, **kwargs)
@@ -60,9 +61,12 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
         return batch
 
 
-class RandomStrategy(BaseQueryStrategy):
+class NoAccumulatorStrategy(BaseQueryStrategy):
     def __post_init__(self) -> None:
         self.pool_loop = PoolNoEvaluationLoop()
+
+
+class RandomStrategy(NoAccumulatorStrategy):
 
     def query(self) -> List[int]:
         pool_size = self.trainer.datamodule.pool_size
@@ -98,43 +102,46 @@ class AccumulatorStrategy(BaseQueryStrategy):
         pass
 
 
-class RandomArchorPointsStrategy(BaseQueryStrategy):
-    def __init__(self, model: LightningModule, n_anchors: int) -> None:
+class MCAccumulatorStrategy(AccumulatorStrategy):
+    """Implements the MCDropout inference method in [PUT REFERENCES]."""
+
+    def __init__(
+        self,
+        model: LightningModule,
+        num_inference_iters: Optional[int] = 10,
+        consistent: Optional[bool] = False,
+        prob: Optional[float] = None,
+    ) -> None:
+        """Instantiates a new learner (same as `learner`) with patched dropout layers.
+        The patched such that they are active even during evaluation.
+        Args:
+            num_inference_iters (int): The number of forward passes to perform.
+            consistent (bool): If True, it uses the consistent version of dropout that fixes the mask across batches.
+            prob (float): If specified, this changes the dropout probability of all layers to `prob`. If `None` the
+                dropout probability is the same as the original layer. Must be 0 <= prob <= 1.
+            inplace (bool): Whether to modify the learner in place or return a copy of the learner.
+        """
+        self.num_inference_iters = num_inference_iters
+        self.consistent = consistent
+        self.prob = prob
         super().__init__(model)
-        self.n_anchors = n_anchors
 
     def __post_init__(self) -> None:
-        self.pool_loop = PoolNoEvaluationLoop()
+        super().__post_init__()
+        patch_dropout_layers(
+            module=self.model,
+            prob=self.prob,
+            consistent=self.consistent,
+            inplace=True,
+        )
 
-    def query(self) -> List[int]:
-
-        assert self.trainer.datamodule.is_synced
-    
-        if not self.trainer.datamodule.has_labelled_data:
-            pool_size = self.trainer.datamodule.pool_size
-            indices = np.random.randint(low=0, high=pool_size, size=self.query_size).tolist()
-        else:
-            # indices wrt train_set
-            anchors_indices = self.query_archors()
-            
-            # NOTE: faiss pads wiwth `-1` when there are less entries than k
-            scores, indices = self.search_anchors(anchors_indices, self.query_size)
-            
-            # across all retrieved compute the one with the highest inner-product
-            ids = scores.flatten().argsort()[::-1][:self.query_size]
-            indices = indices.flatten()[ids].tolist()
-
-        return indices
-    
-    def query_archors(self) -> List[int]:
-        train_size = self.trainer.datamodule.train_size
-        return np.random.randint(low=0, high=train_size, size=self.n_anchors).tolist()
-
-    def get_search_query_from_batch(self, batch: Any) -> Tensor:
-        return batch
-
-    def search_anchors(self, indices: List[int], k: int) -> Tuple[np.ndarray, np.ndarray]:
-        return self.trainer.datamodule.search_anchors(indices, k)
-
-
-
+    def _forward(self, *args, **kwargs) -> Tensor:
+        """Performs `num_inference_iters` forward passes using the underlying learner and keeping the dropout layers active..
+        Returns:
+            A tensor of dimension `(B: batch_size, C: num_classes, S: num_samples)`.
+        """
+        out = []
+        for _ in range(self.num_inference_iters):
+            out.append(self.model.forward(*args, **kwargs))  # type: ignore
+        # expects shape [num_samples, num_classes, num_iterations]
+        return torch.stack(out).permute((1, 2, 0))
