@@ -222,7 +222,9 @@ class Trainer(pl.Trainer):
         """
         # check inputs
         if not isinstance(model, BaseQueryStrategy):
-            raise MisconfigurationException(f"model must be a `BaseQueryStrategy` not {type(model).__class__.__name__}.")
+            raise MisconfigurationException(
+                f"model must be a `BaseQueryStrategy` not {type(model).__class__.__name__}."
+            )
 
         # if a datamodule comes in as the second arg, then fix it for the user
         if isinstance(train_dataloaders, pl.LightningDataModule):
@@ -264,7 +266,7 @@ class Trainer(pl.Trainer):
         self.active_fitting = True
         # TODO: some of these are duplicated in the `reset_{fitting, test}` methods in `ActiveLearningLoop`
         pl.Trainer._log_api_event("fit")
-        logger.detail(f"{self.__class__.__name__}: trainer active_fit stage")
+        logger.info(f"{self.__class__.__name__}: trainer active_fit stage")
         self.state.fn = TrainerFn.FITTING
         self.state.status = TrainerStatus.RUNNING
         self.training = True
@@ -459,11 +461,11 @@ class Trainer(pl.Trainer):
         if use_query_strategy:
             # self.strategy.model = self.query_strategy
             self.strategy.connect(self.query_strategy)
-            logger.info(f"Using `{self.lightning_module.__class__.__name__}`")
+            logger.debug(f"Using `{self.lightning_module.__class__.__name__}`")
         else:
             # self.strategy.model = self.query_strategy.model
             self.strategy.connect(self.query_strategy.model)
-            logger.info(f"Using underlying `{self.lightning_module.__class__.__name__}`")
+            logger.debug(f"Using underlying `{self.lightning_module.__class__.__name__}`")
         self.strategy.model_to_device()
 
     @property

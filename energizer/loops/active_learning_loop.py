@@ -247,7 +247,7 @@ class ActiveLearningLoop(Loop):
         # maybe reset the weights
         if self.reset_weights:
             self.trainer.lightning_module.load_state_dict(self.lightning_module_state_dict)
-            logger.info(f"{self.trainer.lightning_module.__class__.__name__} " "state dict has been re-initialized")
+            logger.debug(f"{self.trainer.lightning_module.__class__.__name__} " "state dict has been re-initialized")
 
         # resets the train/val dataloaders
         self.trainer.reset_train_dataloader()
