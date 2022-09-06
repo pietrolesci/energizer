@@ -200,8 +200,8 @@ class ActiveDataModule(LightningDataModule):
                 f"`labelling_step` ({labelling_step}) must be less than the total number "
                 f"of labelling steps performed ({self.last_labelling_step})."
             )
-        self.pool_pool.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
-        self.train_pool.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
+        self.pool_fold.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
+        self.train_fold.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
 
     """
     Main methods
