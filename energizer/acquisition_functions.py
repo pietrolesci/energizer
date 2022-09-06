@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from torch.nn.functional import softmax
-from torch.special import entr
+from torch.special import entr  # https://pytorch.org/docs/stable/special.html
 
 
 def entropy(logits: Tensor) -> Tensor:
@@ -12,12 +12,10 @@ def entropy(logits: Tensor) -> Tensor:
     This function implements the following steps, for each element along the `B: batch_size` dimension:
 
     - Converts logits in probabilities along the `C: num_classes` dimension
-
     $$p_{bc} = e^{l_{bc}} / \sum_j e^{l_{bj}}$$
 
 
     - Computes Shannon's entropy along the `C: num_classes` dimension
-
     $$\mathrm{H}_b\left(\mathrm{p}(X)\right) = - \sum_c p_{bc} \log(p_{bc})$$
 
     where $l_{bc}$ is the logit for class $c$ for the $b$-th element in the batch, and $\mathrm{p}$ is a
@@ -27,16 +25,47 @@ def entropy(logits: Tensor) -> Tensor:
         logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes)`.
 
     Returns:
-        The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size, 1)`.
+        The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
     """
     probs = softmax(logits, dim=-1)
-    return torch.sum(entr(probs), dim=-1)
+    return entr(probs).sum(dim=-1)  # remember: you need to sum across classes
+
+
+def predictive_entropy(logits: Tensor) -> Tensor:
+    r"""Computes the predictive Shannon's entropy in nats.
+
+    It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
+    This function implements the following steps, for each element along the `B: batch_size` dimension:
+
+    - Converts logits in probabilities along the `C: num_classes` dimension
+    $$p_{bcs} = e^{l_{bcs}} / \sum_j e^{l_{bjs}}$$
+
+    - Averages the output probabilities per class across samples
+    $$p_{bc} = \frac{1}{S} \sum_s p_{bcs}
+
+    - Computes Shannon's entropy along the `C: num_classes` dimension
+    $$\mathrm{H}_{b}\left(\mathrm{p}(X) \right) = - \sum_c p_{bc} \log(p_{bc})$$
+
+    where $l_{bcs}$ is the logit for class $c$ for the $b$-th element in the batch in the $s$-th sample,
+    and $\mathrm{p}$ is a probability mass function for a random variable $X$ such that $\mathrm{p}(X = c) = p_c$.
+
+    You can see the `entropy` function as a restriction of this in which we
+    only have one sample.
+
+    Args:
+        logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
+
+    Returns:
+        The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
+    """
+    avg_probs = softmax(logits, dim=-2).mean(dim=-1)
+    return entr(avg_probs).sum(dim=-1)
 
 
 def expected_entropy(logits: Tensor) -> Tensor:
     r"""Computes the expected Shannon's entropy in nats.
 
-    It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes)`.
+    It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
     This function implements the following steps, for each element along the `B: batch_size` dimension:
 
     - Converts logits in probabilities along the `C: num_classes` dimension
@@ -45,33 +74,47 @@ def expected_entropy(logits: Tensor) -> Tensor:
     - Computes Shannon's entropy along the `C: num_classes` dimension
     $$\mathrm{H}_{bs}\left(\mathrm{p}(X) \right) = - \sum_c p_{bcs} \log(p_{bcs})$$
 
-    - Computes the average Shannon's entropy along the `S: num_samples` dimension
+    - Averages the Shannon's entropy along the `S: num_samples` dimension
     $$\frac{1}{S} \sum_s \mathrm{H}_{bs}\left(\mathrm{p}(X)\right)$$
 
     where $l_{bcs}$ is the logit for class $c$ for the $b$-th element in the batch in the $s$-th sample,
     and $\mathrm{p}$ is a probability mass function for a random variable $X$ such that $\mathrm{p}(X = c) = p_c$.
 
     Args:
-        logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes, S: num_samples)`.
+        logits (Tensor): A tensor of dimensions `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
 
     Returns:
-        The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size, 1)`.
+        The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
     """
     probs = softmax(logits, dim=-2)
-    entropies = torch.sum(entr(probs), dim=-2)
-    return torch.mean(entropies, dim=-1)
+    entropies = entr(probs).sum(dim=-2)
+    return entropies.mean(dim=-1)
 
 
 def bald(logits: Tensor) -> Tensor:
+    r"""Compute the BALD acquisition function.
+
+    NOTE: this could have been simply implemented as
+
+    ```python
+    predictive_entropy(logits) - expected_entropy(logits)
+    ```
+
+    however, both functions would need to compute the softmax internally.
+    To avoid doubling the computation uselessly, we implement this function
+    so that it only computes the softmax ones.
+
+    """
+    # predictive_entropy(logits) - expected_entropy(logits)
     probs = softmax(logits, dim=-2)
 
     # To get the first term, we make many runs, average the output, and measure the entropy.
-    first_term = entr(probs.mean(dim=-1)).sum(dim=-1)
+    predictive_entropy = entr(probs.mean(dim=-1)).sum(dim=-1)
 
     # To get the second term, we make many runs, measure the entropy of every run, and take the average.
-    second_term = entr(probs).sum(dim=-2).mean(dim=-1)
+    expected_entropy = entr(probs).sum(dim=-2).mean(dim=-1)
 
-    return first_term - second_term
+    return predictive_entropy - expected_entropy
 
 
 def confidence(logits: Tensor, k: int = 1) -> Tensor:
