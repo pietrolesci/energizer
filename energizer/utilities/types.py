@@ -3,6 +3,9 @@ from typing import Any, List, Union
 from numpy import array, float32, int64, ndarray
 from torch import Tensor
 
+BATCH_TYPE = Any
+MODEL_INPUT = Any
+
 
 def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
     """Converts `torch.Tensor` to a `numpy.ndarray` or python scalar type."""

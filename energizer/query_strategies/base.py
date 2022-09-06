@@ -1,13 +1,16 @@
-from typing import Any, List, Optional
 from copy import deepcopy
+from typing import Any, List, Optional
+
 import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops.loop import Loop
 from torch import Tensor
-from energizer.utilities.mcdropout import patch_dropout_layers
+
 from energizer.loops.pool_loops import AccumulateTopK, PoolEvaluationLoop, PoolNoEvaluationLoop
 from energizer.query_strategies.hooks import ModelHooks
+from energizer.utilities.mcdropout import patch_dropout_layers
+from energizer.utilities.types import BATCH_TYPE, MODEL_INPUT
 
 
 class PostInitCaller(type):
@@ -57,20 +60,13 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
     def _forward(self, *args, **kwargs) -> Any:
         return self.model.forward(*args, **kwargs)
 
-    def get_inputs_from_batch(self, batch: Any) -> Any:
+    def get_inputs_from_batch(self, batch: BATCH_TYPE) -> MODEL_INPUT:
         return batch
 
 
 class NoAccumulatorStrategy(BaseQueryStrategy):
     def __post_init__(self) -> None:
         self.pool_loop = PoolNoEvaluationLoop()
-
-
-class RandomStrategy(NoAccumulatorStrategy):
-
-    def query(self) -> List[int]:
-        pool_size = self.trainer.datamodule.pool_size
-        return np.random.randint(low=0, high=pool_size, size=self.query_size).tolist()
 
 
 class AccumulatorStrategy(BaseQueryStrategy):
@@ -92,7 +88,7 @@ class AccumulatorStrategy(BaseQueryStrategy):
     def on_pool_epoch_start(self) -> None:
         pass
 
-    def pool_step(self, *args, **kwargs) -> Tensor:
+    def pool_step(self, batch: MODEL_INPUT, batch_idx: int, *args, **kwargs) -> Tensor:
         raise NotImplementedError
 
     def pool_step_end(self, *args, **kwargs) -> Any:
