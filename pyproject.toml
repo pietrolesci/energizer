@@ -1,7 +1,7 @@
 [tool]
 [tool.poetry]
 name = "energizer"
-version = "0.1.0"
+version = "0.2.0"
 homepage = "https://github.com/pietrolesci/energizer"
 description = "An active learning library for PyTorch based on Pytorch-Lightning."
 authors = ["Pietro Lesci <pietrolesci@outlook.com>"]
