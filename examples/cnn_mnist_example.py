@@ -134,7 +134,7 @@ def main():
         "limit_val_batches": 0,  # do not validate
         "log_every_n_steps": 1,  # we will have a few batches while training, so log on each
     }
-    
+
     # define strategies
     strategies = {
         "random": RandomStrategy(model),
@@ -152,14 +152,14 @@ def main():
         datamodule = ActiveDataModule(train_dl, val_dl, test_dl)
         datamodule.label(initial_set_indices)
 
-        # active learning 
+        # active learning
         trainer = Trainer(**trainer_kwargs)
         results = trainer.active_fit(model=strategy, datamodule=datamodule)
-        
+
         # storeresults
         df = results.to_pandas()
         results_dict[name] = df
-        
+
         df.to_csv(f"./results/{name}.csv", index=False)
 
 
