@@ -135,7 +135,7 @@ def confidence(logits: Tensor, k: int = 1) -> Tensor:
         dimensions `(B: batch_size, k)`.
     """
     probs = softmax(logits, dim=-1)
-    return torch.topk(probs, k=k, dim=-1).values
+    return torch.topk(probs, k=k, sorted=True, dim=-1).values
 
 
 def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
@@ -157,7 +157,7 @@ def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
         dimensions `(B: batch_size, k)`.
     """
     probs = softmax(logits, dim=-2)
-    confidence = torch.topk(probs, k=k, dim=-2).values
+    confidence = torch.topk(probs, k=k, sorted=True, dim=-2).values
     return torch.mean(confidence, dim=-1)
 
 
@@ -235,6 +235,7 @@ def margin_confidence(logits: Tensor) -> Tensor:
     $$\arg\min_{x} \mathrm{E}_{p(\theta| D)} P(y_1|x, \theta) - \mathrm{E}_{p(\theta| D)} P(y_2|x, \theta)$$
     """
     confidence_top2 = confidence(logits, k=2)
+    # we want the instances with the smallest gap, so we need to negate
     return -(confidence_top2[:, 0] - confidence_top2[:, 1]).flatten()
 
 
