@@ -46,6 +46,7 @@ Loops that evaluate on pool and accumulate batch results
 
 
 class AccumulateTopK(Metric):
+    # TODO: check this in multi-node/multi-gpu settings
     full_state_update = False
 
     def __init__(self, k: int) -> None:
