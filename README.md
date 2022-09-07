@@ -15,11 +15,11 @@
 
 ## Features
 
-`Energizer` offers features like
+`Energizer`
 
 * allows training any PyTorch-Lightning model using Active-Learning with no code changes, requiring minimal information from the user
 
-* modular and easily extensible by using the energizer primitives, in case you need the extra flexibility
+* is modular and easily extensible by using the energizer primitives, in case you need the extra flexibility
 
 * provides a unified and tidy interfaces for Active-Learning so that you can easily mix and match query strategies, acquisition functions, etc with no boilerplate code
 
@@ -28,11 +28,11 @@
 
 ### Gotchas and future plans
 
-At the moment `energizer` is focused on research settings. In other words, it works with datasets in which the labels are already available. Internally, it will mask the labels and mimick a true active learning setting. In the future, is to make `energizer` fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/). 
+At the moment `energizer` is focused on research settings. In other words, it works with datasets in which the labels are already available. Internally, it will mask the labels and mimick a true active learning setting. In the future, `energizer` will fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/). 
 
-Currently `energizer` has been extensively tested on cpu and single-node/single-gpu settings due to availability issues. Support for multi-node/multi-gpu settings should work out of the box thanks to Pytorch-Lightning but has not been extensively tested at this stage.
+Currently `energizer` has been extensively tested on cpu and single-node/single-gpu settings due to availability issues. Support for multi-node/multi-gpu settings should work out of the box thanks to Pytorch-Lightning but has not been tested at this stage.
 
-At this stage, `energizer` supports pool-based active learning. We plan to add support for stream-based settings and for self-supervised training.
+`energizer` supports pool-based active learning. We plan to add support for stream-based settings and for self-supervised training.
 
 
 ## Design
