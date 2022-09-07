@@ -1,14 +1,10 @@
-# Pytorch-Energizer
-
 [![pypi](https://img.shields.io/pypi/v/pytorch-energizer.svg)](https://pypi.org/project/pytorch-energizer/)
 [![python](https://img.shields.io/pypi/pyversions/pytorch-energizer.svg)](https://pypi.org/project/pytorch-energizer/)
 [![Build Status](https://github.com/pietrolesci/pytorch-energizer/actions/workflows/dev.yml/badge.svg)](https://github.com/pietrolesci/pytorch-energizer/actions/workflows/dev.yml)
 [![codecov](https://codecov.io/gh/pietrolesci/pytorch-energizer/branch/main/graphs/badge.svg)](https://codecov.io/github/pietrolesci/pytorch-energizer)
 
 
-
-An active learning library for PyTorch
-
+`Energizer` is an Active-Learning framework for PyTorch based on PyTorch-Lightning
 
 * Documentation: <https://pietrolesci.github.io/pytorch-energizer>
 * GitHub: <https://github.com/pietrolesci/pytorch-energizer>
@@ -18,58 +14,67 @@ An active learning library for PyTorch
 
 ## Features
 
-`Energizer` allows training PyTorch models using active learning. Being based on Pytorch-Lightning, it can easily scale to multi-node/multi-gpu settings. Also, importantly, abiding to the light-weight Pytorch-Lightning API allows `energizer` to have a tidy interface and reduce boilerplate code.
+`Energizer` offers features like
 
-A core principle of `energizer` is full compatibility with any `LightningModule`. By simply implementing the required hooks, it should be possible to actively train any `LightningModule`.
+* allows training any PyTorch-Lightning model using Active-Learning with no code changes, requiring minimal information from the user
 
-At the moment `energizer` supports only pool-based active learning and is focused on research settings: the labels are already available but masked, thus mimicking a true active learning loop. However, the plan for `energizer` is to make it fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/).
+* modular and easily extensible by using the energizer primitives, in case you need the extra flexibility
 
-Furthermore, `energizer` aims to be an extension to Pytorch-Lightning providing the users with non-standard training loop. For example, in the future we plan to add support for self-supervised learning.
+* provides a unified and tidy interfaces for Active-Learning so that you can easily mix and match query strategies, acquisition functions, etc with no boilerplate code
+
+* can easily scale to multi-node/multi-gpu settings thanks to the Pytorch-Lighting backend
 
 
-## MNIST example
+### Gotchas and future plans
 
-In this example we will train a vision model on the famous MNIST dataset.
-First let's import the required modules
+At the moment `energizer` is focused on research settings. In other words, it works with datasets in which the labels are already available. Internally, it will mask the labels and mimick a true active learning setting. In the future, is to make `energizer` fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/). 
 
+Currently `energizer` has been extensively tested on cpu and single-node/single-gpu settings due to availability issues. Support for multi-node/multi-gpu settings should work out of the box thanks to Pytorch-Lightning but has not been extensively tested at this stage.
+
+At this stage, `energizer` supports pool-based active learning. We plan to add support for stream-based settings and for self-supervised training.
+
+
+## Design
+
+A core principle of `energizer` is full compatibility with Pytorch-Lightning, that is with any `LightningModule`. By simply implementing the required hooks in the query strategy, it should be possible to actively train any `LightningModule`.
+
+The core objects in `energizer` are:
+
+* The active learning loop: it is Pytorch-Lightning `Loop` that in essence implements the following steps at each labelling iteration
 ```python
-from typing import Dict, Tuple
+for _ in range(max_labelling_epochs):
+    if labelled_data_available:
+        # fit the model
+        fit_loop.run()
 
-import torch
-import torch.nn.functional as F
-from pytorch_lightning import LightningModule
-from torch import Tensor, nn
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
-from torchvision.datasets import MNIST
+    if can_run_testing:  
+        # if test_dataloader is provided
+        test_loop.run()
 
-from energizer import DeterministicMixin, MCDropoutMixin, Trainer
-from energizer.acquisition_functions import entropy, expected_entropy
+    if unlabelled_data_available:
+        indices = pool_loop.run()
+        label_data(indices)
 ```
 
-Load and process the MNIST data
-
+* Query strategy: it is a `LightningModule` itself that implements additional hooks and methods and is linked to a specific pool loop. The fundamental method of a query strategy is the `query` method which is in charge of returning the indices of the instances that needs to be labelled. To initialize a strategy, it is simply required to pass a `LightningModule` to the constructor
 ```python
-data_dir = "./data"
-preprocessing_pipe = transforms.Compose(
-    [
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-    ]
-)
-train_set = MNIST(data_dir, train=True, download=False, transform=preprocessing_pipe)
-test_set = MNIST(data_dir, train=False, download=False, transform=preprocessing_pipe)
-train_set, val_set = random_split(train_set, [55000, 5000])
+from energizer.query_strategies import RandomQueryStrategy
 
-# create dataloaders
-batch_size = 32
-eval_batch_size = 32  # this is use when evaluating on the pool too
-train_dl = DataLoader(train_set, batch_size=batch_size)
-val_dl = DataLoader(val_set, batch_size=eval_batch_size)
-test_dl = DataLoader(test_set, batch_size=eval_batch_size)
+model = MyGreatLightningModel()
+query_strategy = RandomQueryStrategy(model)
 ```
 
-Now, let's define a normal `LightningModule`, as usual
+* Trainer: it provides a simple extension to the Pytorch-Lightning trainer by implementing the `active_fit` method (and other state-tracking properties). The trainer knows that when the active learning loop is either testing or fitting it will use the underlying `LightningModule` passed to the strategy, i.e. `query_strategy.model` in the example above. When it needs to run on the pool it will use the `query_strategy` directly.
+
+
+* Pool loops: a pool loop is implemented using the `Loop` abstraction in Pytorch-Lightning. Pool loops control how the query strategies behave on the pool. For example, the `RandomQueryStrategy` that queries random instances from the pool does not need to run any computation on the pool. Other query strategies might need to run model inference on the pool and thus need to be treated separately. For this reason, a pool loop is tightly linked to a query strategy
+
+
+## Usage
+
+The most basic usage of `energizer` requires minimal inputs from the user. 
+
+Say we have the following `LightningModule`
 
 ```python
 class MNISTModel(LightningModule):
@@ -90,129 +95,110 @@ class MNISTModel(LightningModule):
             nn.Linear(128, 10),
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Union[Tensor, Tuple[Tensor, Tensor]]) -> Tensor:
+        """NOTE: notice how we unpack the batch in forward method.
+        
+        More on this later.
+        """
+        if isinstance(x, tuple):
+            x, y = batch
+            return self.model(x), y
         return self.model(x)
 
-    def loss(self, logits: Tensor, targets: Tensor) -> Tensor:
-        return F.cross_entropy(logits, targets)
-
-    def step(self, batch: Tuple[Tensor, Tensor], stage: str) -> Dict[str, Tensor]:
-        x, y = batch
-        logits = self(x)
-        loss = self.loss(logits, y)
+    def common_step(self, batch: Tuple[Tensor, Tensor], stage: str) -> Tensor:
+        """For convenience define a common step."""
+        logits, y = self(batch)
+        loss = F.cross_entropy(logits, y)
         self.log(f"{stage}/loss", loss)
-        return {"loss": loss, "logits": logits}
+        return loss
 
-    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, "train")
-
-    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, "val")
-
-    def test_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Dict[str, Tensor]:
-        return self.step(batch, "test")
-
-    def configure_optimizers(self) -> None:
-        return torch.optim.SGD(self.parameters(), lr=0.01)
-```
-
-As a side note, notice that, for convenience, in this example we have defined the loss in an isolated method. This is useful for the sake of this example bacause, below, to use MCDropout we need to redefine how the loss is computed. In this way, we can simply override the `loss` method.
-
-In order to run pool-based active learning, we need to define how the model behaves when predicting on the unlabelled pool. This is achieved, by overriding the new "pool" hooks provided by `energizer`. To have access to those, just inherit from one of the available mixins. Currently,`energizer` provides two mixins: 
-
-- `DeterministicMixin`: it is a (very) thin wrapper around a normal `LightningModule` and simply adds the "pool"-related hooks needed to run the active learning loop.
-
-- `MCDropoutMixin`: similar to `DeterministicMixin`, but modifies the behaviour of the model. In particular, it patches all the dropout layers so that they will remain active even during evaluation: it also modifies the behaviour of the forward pass of the model making it run `num_inference_iters` returning a `torch.Tensor` with dimensions `(batch_size, num_classes, num_inference_iter)`.
-
-```python
-class DeterministicMNISTModel(MNISTModel, DeterministicMixin):
-    """A implememntation of the `Entropy` active learning strategy."""
-    def pool_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
-        # define how to perform the forward pass
-        x, _ = batch
-        logits = self(x)
-        # use an acquisition/scoring function
-        scores = entropy(logits)
-        return scores
-
-
-class StochasticMNISTModel(MNISTModel, MCDropoutMixin):
-    """A implememntation of the `Entropy` active learning strategy.
-
-    In this case we use the MCDropout technique to compute model
-    uncertainty. Accordigly, we need to use `expected_entropy` as
-    the acquisition function.
-    """
-    def loss(logits: Tensor, targets: Tensor) -> Tensor:
-        # logits has now shape:
-        # [num_samples, num_classes, num_iterations]
-        # average over num_iterations
-        logits = logits.mean(-1)
-        return F.cross_entropy(logits, targets)
+    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
+        return self.common_step(batch, "train")
     
-    def pool_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
-        """A implememntation of the `Entropy` active learning strategy."""
-        # define how to perform the forward pass
-        x, _ = batch
-        logits = self(x)
-        # use an acquisition/scoring function
-        # NOTE: since we are using MCDropout we need to use the
-        # `expected_entropy` acquisition function
-        scores = expected_entropy(logits)
-        return scores
+    def test_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
+        return self.common_step(batch, "test")
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        return torch.optim.SGD(self.parameters(), lr=0.001)
+
+model = MNISTModel()
 ```
 
-To check how the two new methods behave, let's look at the shapes of their predictions
+We need to select a query strategy, say the `EntropyStrategy` that queries instances from pool for which the model is most uncertain. Uncertainty is defined as the entropy of the model predictive label distribution
 
 ```python
-model = MNISTModel()
-deterministic_model = DeterministicMNISTModel()
-stochastic_model = StochasticMNISTModel()
+from energizer.query_strategies import EntropyStrategy
 
-x, _ = next(iter(train_dl))
-model(x).shape, deterministic_model(x).shape, stochastic_model(x).shape
-# (torch.Size([32, 10]), torch.Size([32, 10]), torch.Size([32, 10, 10]))
+entropy_strategy = EntropyStrategy(model)
 ```
 
-As expected, the stochastic model produces an output with a third dimension which corresponds to the 10 MC iterations.
+> __NOTE__: When a strategy is instantiated, internally it creates a deep copy of the model passed. This is to avoid sharing states if you want to try out different query strategies on the same model. This might change in the future!
 
-Once we have defined a `LightningModule` that also inherits from the mixins and overridden at least the `pool_step` method, then we can run the active learning loop.
+Now, to train the model with active learning we just need to apply the following changes
 
-To do that, import the `Trainer` from `energizer`. This trainer is a thin wrapper around the usual Pytorch-Lightning `Trainer` that implements the `active_fit` method.
+```diff
+- from pytorch_lightning import Trainer
++ from energizer import Trainer
+```
 
+And then call the `active_fit` method
 
 ```python
-model = MNISTModel()
-
 trainer = Trainer(
-    query_size=2,
-    max_epochs=3,
-    max_labelling_epochs=4,
-    total_budget=5,
-    log_every_n_steps=1,
-    test_after_labelling=True,
-    
-    # for testing purposes
-    limit_train_batches=10,
-    limit_val_batches=10,
-    limit_test_batches=10,
-    limit_pool_batches=10,
+    max_labelling_epochs=4,     # run the active learning loop 4 times
+    query_size=10,              # at each loop query 10 instances
+    max_epochs=3,               # fit the model on the labelled data for 3 epochs 
+    test_after_labelling=True,  # test after each labelling
+    # ... you can pass any other pl.Trainer arguments
 )
 
-trainer.active_fit(
-    model=model,
-    train_dataloaders=train_dl,
-    val_dataloaders=val_dl,
-    test_dataloaders=test_dl,
+results = trainer.active_fit(
+    model=entropy_strategy,
+    # ... dataloaders or datamodule
 )
-
-print(trainer.datamodule.stats)
-# {'total_data_size': 55000,
-#  'train_size': 6,
-#  'pool_size': 54994,
-#  'num_train_batches': 1,
-#  'num_pool_batches': 1719}
 ```
+
+The `active_fit` method will take care of masking the train dataloader and create a pool dataloader.
+
+And that's it! You will have a resulting model trained with active learning. 
+
+
+### The anatomy of a query strategy
+
+In the example abote, we used the `EntropyStrategy`. It needs to run model inference on the pool, get the logits, transform them into probabilities, and compute the entropy. So, contrarely to a `RandomStrategy`, we also need to implement how the model should behave when fed with a batch coming from the pool.
+
+In `energizer` we implement a base class called `AccumulatorStrategy`. The name comes from the fact that it accumulates the results of each batch and the returns the indices corresponding to the Top-K instances. Do not worry if you have a huge pool, it performs a running Top-K operation and keeps in memory only `2 * K` instance at every time. 
+
+In order to run pool-based active learning, we need to define how the model behaves when predicting on the unlabelled pool. This is achieved, by overriding the new "pool" hooks. An `AccumulatorStrategy` requires us to implement the `pool_step` method (similar to a `training_step` or `test_step` in Pytorch-Lightning) that runs inference on the batch and returns a 1-dimensional `Tensor` of scores (that are then Top-K-ed).
+
+So, if we were to implement the `EntropyStrategy` ourselves, we would simply do
+
+```python
+from energizer.acquisition_functions import entropy
+
+class EntropyStrategy(AccumulatorStrategy):
+    def pool_step(self, batch: MODEL_INPUT, batch_idx: int, *args, **kwargs) -> Tensor:
+        logits = self(batch)
+        return entropy(logits)
+```
+
+As simple as this. We do not need to implement the `query` method in this case because for `AccumulatorStrategy`s, the output of `pool_step` is continually aggregated and we simply need to perform an argmax operation to obtain the indices. This is handled directly by `energizer`.
+
+
+### Note on research settings
+
+Finally, note that in our implementation of the `EntropyStrategy` the type of the batch input is `MODEL_INPUT`. This is to highlight that `pool_step` (by defaut, of course you can override it as you like) does not unpack a batch: it expectes that a batch can directly be passed to the `forward` of the underlying `LightningModule`. This is the case in real-world scenarios where you actually do not have a label.
+
+However, for research settings, we do have a label in each batch. Since `energizer` cannot know how to unpack a batch (it can be a `dict`, a `tuple`, your own custom data structure, etc) it also implements an additional hook that can be used for this purpose `get_inputs_from_batch`. 
+
+So if you are in a research setting (your batch contains the labels and needs to be unpacked in order to extract the inputs), you have the following 3 options:
+
+1. Unpack a batch in the `forward` method of your `LightningModule` (as we did in the MNIST example)
+
+1. Define a `forward` method that expects only the inputs in your `LightningModule` (as it is usually done), subclass a query strategy (e.g, `EntropyStrategy`), and implement the `get_inputs_from_batch`
+
+1. Define a `forward` method that expects only the inputs in your `LightningModule` (as it is usually done), subclass a query strategy (e.g, `EntropyStrategy`), and implement the `pool_step` from scratch including the batch unpacking logic
+
 
 
 ## Contributing
@@ -224,7 +210,6 @@ conda create -n energizer-dev python=3.9 -y
 conda install poetry -y
 poetry install -E dev -E test -E doc -E text -E vision
 ```
-
 
 
 ## Credits
