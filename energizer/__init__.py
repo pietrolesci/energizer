@@ -1,4 +1,4 @@
-"""Top-level package for Pytorch-Energizer."""
+"""Top-level package for Energizer."""
 
 from energizer.data.datamodule import ActiveDataModule
 from energizer.trainer import Trainer
