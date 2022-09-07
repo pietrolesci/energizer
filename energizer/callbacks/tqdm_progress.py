@@ -44,7 +44,7 @@ class TQDMProgressBarActiveLearning(TQDMProgressBar):
         return bar
 
     """
-    Pool porperties
+    Pool properties
     """
 
     @property
