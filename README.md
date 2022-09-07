@@ -124,7 +124,7 @@ class MNISTModel(LightningModule):
 model = MNISTModel()
 ```
 
-We need to select a query strategy, say the `EntropyStrategy` that queries instances from pool for which the model is most uncertain. Uncertainty is defined as the entropy of the model predictive label distribution
+We need to select a query strategy, say the `EntropyStrategy` that queries instances from the pool for which the model is most uncertain. Uncertainty is defined as the entropy of the model predictive label distribution
 
 ```python
 from energizer.query_strategies import EntropyStrategy
