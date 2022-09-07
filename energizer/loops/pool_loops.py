@@ -72,16 +72,7 @@ class AccumulateTopK(Metric):
         self.indices.copy_(all_indices[idx])
         self.size += batch_size
 
-        # print("current batch_size:", batch_size)
-        # print("current_indices:", current_indices)
-        # print("size:", self.size)
-        # print("all_scores:", all_scores)
-        # print("all_indices:", all_indices)
-        # print("top_scores:", topk_scores)
-        # print("top_indices:", all_indices[idx], "\n")
-
     def compute(self) -> Tensor:
-        # print("compute indices:", self.indices)
         return self.indices
 
 
