@@ -1,9 +1,10 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Iterable
 
 import numpy as np
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch.utils.data import DataLoader, Dataset, Subset
+from energizer.utilities.types import check_type
 
 
 class DataloaderToDataModule(LightningDataModule):
@@ -12,8 +13,8 @@ class DataloaderToDataModule(LightningDataModule):
     def __init__(
         self,
         train_dataloader: DataLoader,
-        val_dataloaders: Union[DataLoader, List[DataLoader]],
-        test_dataloaders: Union[DataLoader, List[DataLoader]],
+        val_dataloaders: Union[DataLoader, List[DataLoader], None],
+        test_dataloaders: Union[DataLoader, List[DataLoader], None],
     ) -> None:
         super().__init__()
         self._train_dataloader = train_dataloader
@@ -36,7 +37,7 @@ class ActiveDataModule(LightningDataModule):
 
     def __init__(
         self,
-        train_dataloader: Optional[DataLoader] = None,
+        train_dataloader: DataLoader,
         val_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
         test_dataloaders: Optional[Union[DataLoader, List[DataLoader]]] = None,
         datamodule: Optional[LightningDataModule] = None,
@@ -56,7 +57,6 @@ class ActiveDataModule(LightningDataModule):
             self.datamodule.setup()
 
         super().__init__()
-
         self._train_dataloader_args = None
         self._eval_dataloader_args = None
         self.setup_folds()
@@ -101,14 +101,16 @@ class ActiveDataModule(LightningDataModule):
         return int(self.train_mask.max())
 
     @property
-    def stats(self) -> Dict[str, int]:
-        return {
-            "total_data_size": self.total_data_size,
-            "train_size": self.train_size,
-            "pool_size": self.pool_size,
-            "num_train_batches": len(self.train_dataloader()),
-            "num_pool_batches": len(self.pool_dataloader()),
-        }
+    def train_dataset(self) -> Any:
+        return self.train_dataloader().dataset
+
+    @property
+    def val_dataset(self) -> Any:
+        return self.val_dataloader().dataset
+
+    @property
+    def test_dataset(self) -> Any:
+        return self.test_dataloader().dataset
 
     """
     Data preparations
@@ -128,6 +130,7 @@ class ActiveDataModule(LightningDataModule):
                 "worker_init_fn": dataloader.worker_init_fn,
                 "prefetch_factor": dataloader.prefetch_factor,
                 "persistent_workers": dataloader.persistent_workers,
+                "shuffle": False,  # be explicit about it
             }
 
     def prepare_data(self) -> None:
@@ -135,6 +138,10 @@ class ActiveDataModule(LightningDataModule):
 
     def setup(self, stage: Optional[str] = None) -> None:
         self.datamodule.setup(stage)
+
+    """
+    Helper methods
+    """
 
     def setup_folds(self) -> None:
         train_dl = self.datamodule.train_dataloader()
@@ -151,33 +158,25 @@ class ActiveDataModule(LightningDataModule):
         self.train_mask = np.zeros((len(train_dataset),), dtype=int)
         self.setup_fold_index()
 
-    def label(self, pool_idx: Union[int, List[int]]) -> None:
-        """Moves instances at index `pool_idx` from the `train_fold` to the `pool_fold`.
-
-        Args:
-            pool_idx (List[int]): The index (relative to the pool_fold, not the overall data) to label.
-        """
-        assert isinstance(pool_idx, int) or isinstance(pool_idx, list), ValueError(
-            f"`pool_idx` must be of type `int` or `List[int]`, not {type(pool_idx)}."
-        )
-
-        pool_idx = [pool_idx] if isinstance(pool_idx, int) else pool_idx
-
-        if len(np.unique(pool_idx)) > len(self.pool_fold):
-            raise ValueError(
-                f"Pool has {len(self.pool_fold)} instances, cannot label {len(np.unique(pool_idx))} instances."
-            )
-        if max(pool_idx) > len(self.pool_fold):
-            raise ValueError(f"Cannot label instance {max(pool_idx)} for pool dataset of size {len(self.pool_fold)}.")
-
-        # acquire labels
-        indices = self.pool_to_original(pool_idx)
-        self.train_mask[indices] = self.last_labelling_step + 1  # current labelling step
-        self.setup_fold_index()
-
-    def pool_to_original(self, pool_idx: List[int]) -> List[int]:
+    def pool_to_original(self, indices: List[int]) -> List[int]:
         """Transform indices in `pool_fold` to indices in the original `dataset`."""
-        return [self.pool_fold.indices[i] for i in np.unique(pool_idx)]
+        check_type(Iterable, indices)
+        return [self.pool_fold.indices[i] for i in np.unique(indices)]
+
+    def train_to_original(self, indices: List[int]) -> List[int]:
+        """Transform indices in `train_fold` to indices in the original `dataset`."""
+        check_type(Iterable, indices)
+        return [self.train_fold.indices[i] for i in np.unique(indices)]
+
+    def original_to_pool(self, indices: List[int]) -> List[int]:
+        """Transform indices wrt the original `dataset` to indices wrt `pool_fold`."""
+        check_type(Iterable, indices)
+        return [self.pool_fold.indices.index(i) for i in np.unique(indices)]
+
+    def original_to_train(self, indices: List[int]) -> List[int]:
+        """Transform indices wrt the original `dataset` to indices wrt `train_fold`."""
+        check_type(Iterable, indices)
+        return [self.train_fold.indices.index(i) for i in np.unique(indices)]
 
     def setup_fold_index(self) -> None:
         """Updates indices in each `torch.utils.data.Subset`.
@@ -201,8 +200,45 @@ class ActiveDataModule(LightningDataModule):
                 f"`labelling_step` ({labelling_step}) must be less than the total number "
                 f"of labelling steps performed ({self.last_labelling_step})."
             )
-        self.pool_pool.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
-        self.train_pool.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
+        self.pool_fold.indices = np.where((self.train_mask == 0) | (self.train_mask > labelling_step))[0].tolist()
+        self.train_fold.indices = np.where((self.train_mask > 0) & (self.train_mask <= labelling_step))[0].tolist()
+
+    """
+    Main methods
+    """
+
+    def get_statistics(self) -> Dict[str, int]:
+        return {
+            "total_data_size": self.total_data_size,
+            "train_size": self.train_size,
+            "pool_size": self.pool_size,
+            "num_train_batches": len(self.train_dataloader()),
+            "num_pool_batches": len(self.pool_dataloader()),
+        }
+
+    def label(self, pool_idx: Union[int, List[int]]) -> None:
+        """Moves instances at index `pool_idx` from the `pool_fold` to the `train_fold`.
+
+        Args:
+            pool_idx (List[int]): The index (relative to the pool_fold, not the overall data) to label.
+        """
+        assert isinstance(pool_idx, int) or isinstance(pool_idx, list), ValueError(
+            f"`pool_idx` must be of type `int` or `List[int]`, not {type(pool_idx)}."
+        )
+
+        pool_idx = [pool_idx] if isinstance(pool_idx, int) else pool_idx
+
+        if len(np.unique(pool_idx)) > len(self.pool_fold):
+            raise ValueError(
+                f"Pool has {len(self.pool_fold)} instances, cannot label {len(np.unique(pool_idx))} instances."
+            )
+        if max(pool_idx) > len(self.pool_fold):
+            raise ValueError(f"Cannot label instance {max(pool_idx)} for pool dataset of size {len(self.pool_fold)}.")
+
+        # acquire labels
+        indices = self.pool_to_original(pool_idx)
+        self.train_mask[indices] = self.last_labelling_step + 1  # current labelling step
+        self.setup_fold_index()
 
     """
     DataLoaders

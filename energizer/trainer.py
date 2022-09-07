@@ -1,28 +1,88 @@
-import logging
-from typing import Optional, Union
+from typing import List, Optional, Union
 
+import pytorch_lightning as pl
 import torch
-from pytorch_lightning import LightningDataModule, LightningModule
-from pytorch_lightning import Trainer as Trainer_pl
+from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks.progress.base import ProgressBarBase
 from pytorch_lightning.loops import EvaluationLoop, FitLoop, PredictionLoop, TrainingEpochLoop
+from pytorch_lightning.trainer.connectors.data_connector import DataConnector as DataConnector_pl
+from pytorch_lightning.trainer.connectors.data_connector import _DataLoaderSource
 from pytorch_lightning.trainer.states import TrainerFn, TrainerStatus
 from pytorch_lightning.trainer.trainer import _determine_batch_limits
+from pytorch_lightning.utilities import LightningEnum
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from pytorch_lightning.utilities.model_helpers import is_overridden
 from pytorch_lightning.utilities.seed import isolate_rng
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 
+from energizer.callbacks.tqdm_progress import TQDMProgressBarActiveLearning
 from energizer.data.datamodule import ActiveDataModule
-from energizer.loops.active_learning_loop import ActiveLearningLoop
-from energizer.loops.pool_loop import PoolEvaluationLoop
-from energizer.mixin.base import Learner
-from energizer.utilities.connectors import DataConnector, PoolRunningStage
-from energizer.utilities.trainer_utils import patch_callbacks
+from energizer.loops.active_learning_loop import ActiveLearningLoop, LabellingIterOutputs
+from energizer.query_strategies.base import BaseQueryStrategy
+from energizer.query_strategies.hooks import CallBackActiveLearningHooks
+from energizer.utilities.logger import logger
 
-log = logging.getLogger(__name__)
+"""
+Preliminary components needed to add support for `pool_dataloader`
+and pool-related hooks
+"""
 
 
-class Trainer(Trainer_pl):
+class PoolRunningStage(LightningEnum):
+    POOL = "pool"
+
+    @property
+    def evaluating(self) -> bool:
+        return True
+
+    @property
+    def dataloader_prefix(self) -> Optional[str]:
+        return self.value
+
+
+class DataConnector(DataConnector_pl):
+    def __init__(self, trainer: "pl.Trainer", multiple_trainloader_mode: str = "max_size_cycle"):
+        super().__init__(trainer, multiple_trainloader_mode)
+        self._pool_dataloader_source = _DataLoaderSource(None, "")
+
+    def attach_datamodule(
+        self, model: "pl.LightningModule", datamodule: Optional["pl.LightningDataModule"] = None
+    ) -> None:
+        # do the usual
+        super().attach_datamodule(model, datamodule)
+
+        # and attach the pool dataloader if the user has passed an ActiveDataModule
+        if isinstance(datamodule, ActiveDataModule):
+            self._pool_dataloader_source = _DataLoaderSource(datamodule, "pool_dataloader")
+
+
+def patch_callbacks(callbacks: List[Callback]) -> List[Callback]:
+    """Adds `pool`-related hooks to callbacks."""
+
+    def add_pool_hooks(callback: Callback) -> Callback:
+        hook_names = [m for m in dir(CallBackActiveLearningHooks) if not m.startswith("_")]
+        for name in hook_names:
+            if not hasattr(callback, name):
+                setattr(callback, name, getattr(CallBackActiveLearningHooks, name))
+        return callback
+
+    new_callbacks = []
+    for c in callbacks:
+        if isinstance(c, ProgressBarBase):
+            prog_bar = TQDMProgressBarActiveLearning(process_position=c.process_position, refresh_rate=c.refresh_rate)
+            prog_bar = add_pool_hooks(prog_bar)
+            new_callbacks.append(prog_bar)
+        else:
+            new_callbacks.append(add_pool_hooks(c))
+
+    return new_callbacks
+
+
+"""
+New trainer implementation
+"""
+
+
+class Trainer(pl.Trainer):
     def __init__(
         self,
         query_size: int = 2,
@@ -58,9 +118,6 @@ class Trainer(Trainer_pl):
             reload_dataloaders_every_n_epochs=self.reload_dataloaders_every_n_epochs,
         )
 
-        # pool loop
-        pool_loop = PoolEvaluationLoop(self.query_size, verbose=False)
-
         # fit after each labelling session
         fit_loop = FitLoop(min_epochs=self.fit_loop.min_epochs, max_epochs=self.fit_loop.max_epochs)
         training_epoch_loop = TrainingEpochLoop(min_steps=self.fit_loop.min_steps, max_steps=self.fit_loop.max_steps)
@@ -77,7 +134,7 @@ class Trainer(Trainer_pl):
             min_labelling_epochs=self.min_labelling_epochs,
             max_labelling_epochs=self.max_labelling_epochs,
         )
-        active_learning_loop.connect(pool_loop=pool_loop, fit_loop=fit_loop, test_loop=test_loop)
+        active_learning_loop.connect(pool_loop=None, fit_loop=fit_loop, test_loop=test_loop)
         self.active_learning_loop = active_learning_loop  # also attaches the trainer
 
         # this needed to be patched
@@ -85,7 +142,7 @@ class Trainer(Trainer_pl):
         self._extend_init_debugging_flags()
 
     """
-    Add states, properties, and methods
+    Properties
     """
 
     @property
@@ -106,52 +163,71 @@ class Trainer(Trainer_pl):
         loop.trainer = self
         self._active_learning_loop = loop
 
+    @property
+    def query_strategy(self) -> BaseQueryStrategy:
+        return self._query_strategy
+
+    @query_strategy.setter
+    def query_strategy(self, model: BaseQueryStrategy):
+        """Attach a custom query_strategy to this Trainer."""
+        self._query_strategy = model
+
+    """
+    New `active_fit` method
+    """
+
     def active_fit(
         self,
-        model: Learner,
-        train_dataloaders: Optional[Union[TRAIN_DATALOADERS, LightningDataModule]] = None,
+        model: BaseQueryStrategy,
+        train_dataloaders: Optional[Union[TRAIN_DATALOADERS, "pl.LightningDataModule"]] = None,
         val_dataloaders: Optional[EVAL_DATALOADERS] = None,
         test_dataloaders: Optional[EVAL_DATALOADERS] = None,
-        datamodule: Optional[LightningDataModule] = None,
+        datamodule: Optional["pl.LightningDataModule"] = None,
         ckpt_path: Optional[str] = None,
-    ) -> None:
-        self.strategy.model = model
-        self._call_and_handle_interrupt(
-            self._active_fit_impl, model, train_dataloaders, val_dataloaders, test_dataloaders, datamodule, ckpt_path
+    ) -> List[LabellingIterOutputs]:
+        # set up model reference
+        self.query_strategy = model
+        self.query_strategy.query_size = self.query_size
+        self.active_learning_loop.pool_loop = self.query_strategy.pool_loop
+
+        """
+        NOTE: this creates the `self.lightning_module` attribute on the trainer
+        it is set in the `fit` method, but we do not set it here and let the
+        loop components do it
+        """
+        # self.strategy.model = model
+
+        return self._call_and_handle_interrupt(
+            self._active_fit_impl,
+            self.query_strategy,
+            train_dataloaders,
+            val_dataloaders,
+            test_dataloaders,
+            datamodule,
+            ckpt_path,
         )
 
     def _active_fit_impl(
         self,
-        model: Learner,
-        train_dataloaders: Optional[Union[TRAIN_DATALOADERS, LightningDataModule]] = None,
+        model: BaseQueryStrategy,
+        train_dataloaders: Optional[Union[TRAIN_DATALOADERS, "pl.LightningDataModule"]] = None,
         val_dataloaders: Optional[EVAL_DATALOADERS] = None,
         test_dataloaders: Optional[EVAL_DATALOADERS] = None,
-        datamodule: Optional[LightningDataModule] = None,
+        datamodule: Optional["pl.LightningDataModule"] = None,
         ckpt_path: Optional[str] = None,
     ) -> None:
 
-        # patch progress bar and add pool-related hooks
-        _old_callbacks = self.callbacks
-        self.callbacks = patch_callbacks(self.callbacks)
-
-        # set states as in the original `_fit_impl`
-        self.active_fitting = True
-        # TODO: some of these are duplicated in the `reset_{fitting, test}` methods in `ActiveLearningLoop`
-        Trainer_pl._log_api_event("fit")
-        log.detail(f"{self.__class__.__name__}: trainer active_fit stage")
-        self.state.fn = TrainerFn.FITTING
-        self.state.status = TrainerStatus.RUNNING
-        self.training = True
-        self._last_train_dl_reload_epoch = float("-inf")
-        self._last_val_dl_reload_epoch = float("-inf")
-        self._last_test_dl_reload_epoch = float("-inf")
-
+        """
+        Check the inputs
+        """
         # check inputs
-        if not isinstance(model, Learner):
-            raise MisconfigurationException("model must be a `Learner` not a `LightningModule`.")
+        if not isinstance(model, BaseQueryStrategy):
+            raise MisconfigurationException(
+                f"model must be a `BaseQueryStrategy` not {type(model).__class__.__name__}."
+            )
 
         # if a datamodule comes in as the second arg, then fix it for the user
-        if isinstance(train_dataloaders, LightningDataModule):
+        if isinstance(train_dataloaders, pl.LightningDataModule):
             datamodule = train_dataloaders
             train_dataloaders = None
         is_dataloaders = train_dataloaders is not None or val_dataloaders is not None or test_dataloaders is not None
@@ -164,6 +240,7 @@ class Trainer(Trainer_pl):
                 "`test_dataloaders` to `trainer.active_fit(datamodule=...)`",
             )
 
+        # cast to ActiveDataModule
         elif is_dataloaders or (is_datamodule and not isinstance(datamodule, ActiveDataModule)):
             datamodule = ActiveDataModule(
                 train_dataloader=train_dataloaders,
@@ -172,10 +249,30 @@ class Trainer(Trainer_pl):
                 datamodule=datamodule,
             )
 
+        # check if can run testing
         if self.test_after_labelling and getattr(datamodule, "test_dataloader", None) is None:
             raise MisconfigurationException(
                 "You specified `test_after_labelling=True` but no test_dataloader was provided."
             )
+
+        """
+        Set states
+        """
+        # patch progress bar and add pool-related hooks
+        _old_callbacks = self.callbacks
+        self.callbacks = patch_callbacks(self.callbacks)
+
+        # set states as in the original `_fit_impl`
+        self.active_fitting = True
+        # TODO: some of these are duplicated in the `reset_{fitting, test}` methods in `ActiveLearningLoop`
+        pl.Trainer._log_api_event("fit")
+        logger.info(f"{self.__class__.__name__}: trainer active_fit stage")
+        self.state.fn = TrainerFn.FITTING
+        self.state.status = TrainerStatus.RUNNING
+        self.training = True
+        self._last_train_dl_reload_epoch = float("-inf")
+        self._last_val_dl_reload_epoch = float("-inf")
+        self._last_test_dl_reload_epoch = float("-inf")
 
         # links data to the trainer
         self._data_connector.attach_data(model, datamodule=datamodule)
@@ -186,8 +283,16 @@ class Trainer(Trainer_pl):
             ckpt_path, model_provided=True, model_connected=self.lightning_module is not None
         )
 
-        results = self._run(model, ckpt_path=self.ckpt_path)
+        """
+        Run active fit loop
+        """
+        # NOTE: pass the underlying `LightningModule` to `_run` so that it finds
+        # the `training_step` method etc
+        results = self._run(model.model, ckpt_path=self.ckpt_path)
 
+        """
+        Reset states
+        """
         assert self.state.stopped
         self.training = False
         self.active_fitting = False
@@ -197,7 +302,7 @@ class Trainer(Trainer_pl):
 
         return results
 
-    def reset_pool_dataloader(self, model: Optional[LightningModule] = None) -> None:
+    def reset_pool_dataloader(self, model: Optional["pl.LightningModule"] = None) -> None:
         """Resets the pool dataloader and determines the number of batches.
 
         This method is exactly the same as `trainer.reset_test_dataloader`.
@@ -207,9 +312,10 @@ class Trainer(Trainer_pl):
         """
         # source = self._data_connector._pool_dataloader_source
         pl_module = self.lightning_module or model
-        has_step = is_overridden("pool_step", pl_module, Learner)
+        # has_step = is_overridden("pool_step", pl_module, BaseQueryStrategy)
         enable_pool = self.limit_pool_batches > 0
-        if has_step and enable_pool:
+        # if has_step and enable_pool:
+        if enable_pool:
             self.num_pool_batches, self.pool_dataloaders = self._data_connector._reset_eval_dataloader(
                 PoolRunningStage.POOL, model=pl_module
             )
@@ -237,7 +343,7 @@ class Trainer(Trainer_pl):
     Patch `_run_train` implementation
     """
 
-    def _run_train(self) -> None:
+    def _run_train(self) -> List[LabellingIterOutputs]:
         """Method that depending on `self.active_fitting` selects which loop to run.
 
         If `self.active_fitting is False` it runs the usual `fit_loop`, otherwise
@@ -257,10 +363,11 @@ class Trainer(Trainer_pl):
         self.model.train()
         torch.set_grad_enabled(True)
 
-        # TODO: apparently here it's too late to attach a trainer
         self.active_learning_loop.trainer = self
         with torch.autograd.set_detect_anomaly(self._detect_anomaly):
-            self.active_learning_loop.run()
+            results = self.active_learning_loop.run()
+
+        return results
 
     """
     Dispatch properties calls to the right `FitLoop` depending on whether
@@ -340,7 +447,6 @@ class Trainer(Trainer_pl):
     @property
     def _active_loop(self) -> Optional[Union[FitLoop, EvaluationLoop, PredictionLoop]]:
         """Returns the currently active loop based on the `Trainer`'s state."""
-
         if self.training:
             return self.fit_loop if not self.active_fitting else self.active_learning_loop
 
@@ -351,11 +457,17 @@ class Trainer(Trainer_pl):
         if self.predicting:
             return self.predict_loop
 
-    # @property
-    # def _results(self):
-    #     active_loop = self._active_loop
-    #     print(self.state.fn, self.active_fitting, self.sanity_checking)
-    #     print("HERE", active_loop)
-    #     print("HERE", active_loop.trainer)
-    #     if active_loop is not None:
-    #         return active_loop._results
+    def set_lightning_module(self, use_query_strategy: bool = False) -> None:
+        if use_query_strategy:
+            # self.strategy.model = self.query_strategy
+            self.strategy.connect(self.query_strategy)
+            logger.debug(f"Using `{self.lightning_module.__class__.__name__}`")
+        else:
+            # self.strategy.model = self.query_strategy.model
+            self.strategy.connect(self.query_strategy.model)
+            logger.debug(f"Using underlying `{self.lightning_module.__class__.__name__}`")
+        self.strategy.model_to_device()
+
+    @property
+    def using_query_strategy_as_lightning_module(self) -> bool:
+        return isinstance(self.lightning_module, BaseQueryStrategy)
