@@ -1,6 +1,5 @@
 import torch
 from torch import Tensor
-from torch.nn.functional import softmax
 from torch.special import entr  # https://pytorch.org/docs/stable/special.html
 
 
@@ -27,7 +26,7 @@ def entropy(logits: Tensor) -> Tensor:
     Returns:
         The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
     """
-    probs = softmax(logits, dim=-1)
+    probs = logits.softmax(dim=-1)
     return entr(probs).sum(dim=-1)  # remember: you need to sum across classes
 
 
@@ -58,7 +57,7 @@ def predictive_entropy(logits: Tensor) -> Tensor:
     Returns:
         The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
     """
-    avg_probs = softmax(logits, dim=-2).mean(dim=-1)
+    avg_probs = logits.softmax(dim=-2).mean(dim=-1)
     return entr(avg_probs).sum(dim=-1)
 
 
@@ -86,7 +85,7 @@ def expected_entropy(logits: Tensor) -> Tensor:
     Returns:
         The Shannon's entropy, i.e. a vector of dimensions `(B: batch_size,)`.
     """
-    probs = softmax(logits, dim=-2)
+    probs = logits.softmax(dim=-2)
     entropies = entr(probs).sum(dim=-2)
     return entropies.mean(dim=-1)
 
@@ -106,7 +105,7 @@ def bald(logits: Tensor) -> Tensor:
 
     """
     # predictive_entropy(logits) - expected_entropy(logits)
-    probs = softmax(logits, dim=-2)
+    probs = logits.softmax(dim=-2)
 
     # To get the first term, we make many runs, average the output, and measure the entropy.
     predictive_entropy = entr(probs.mean(dim=-1)).sum(dim=-1)
@@ -134,7 +133,7 @@ def confidence(logits: Tensor, k: int = 1) -> Tensor:
         The confidence defined as the maximum probability assigned to a class, i.e. a vector of
         dimensions `(B: batch_size, k)`.
     """
-    probs = softmax(logits, dim=-1)
+    probs = logits.softmax(dim=-1)
     return torch.topk(probs, k=k, sorted=True, dim=-1).values
 
 
@@ -156,9 +155,9 @@ def expected_confidence(logits: Tensor, k: int = 1) -> Tensor:
         The confidence defined as the maximum probability assigned to a class, i.e. a vector of
         dimensions `(B: batch_size, k)`.
     """
-    probs = softmax(logits, dim=-2)
+    probs = logits.softmax(dim=-2)
     confidence = torch.topk(probs, k=k, sorted=True, dim=-2).values
-    return torch.mean(confidence, dim=-1)
+    return confidence.mean(dim=-1)
 
 
 def least_confidence(logits: Tensor) -> Tensor:
