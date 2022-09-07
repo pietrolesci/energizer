@@ -18,12 +18,12 @@ def mock_hf_dataset():
 
 
 @pytest.fixture
-def dataset_arg(request):
+def dataloader(request):
     return request.getfixturevalue(request.param)
 
 
 @pytest.fixture
-def mock_dataloader(mock_dataset):
+def dataloader(mock_dataset):
     return DataLoader(mock_dataset, batch_size=10)
 
 

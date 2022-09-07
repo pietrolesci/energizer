@@ -2,8 +2,6 @@
 .DS_Store
 .AppleDouble
 .LSOverride
-*/lightning_logs/
-*/data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -114,3 +112,9 @@ ENV/
 
 # mkdocs build dir
 site/
+
+# custom
+*/lightning_logs/
+*/data
+*/results
+*/*.ipynb
