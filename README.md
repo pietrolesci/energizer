@@ -208,7 +208,8 @@ Install `energizer` locally
 
 ```bash
 conda create -n energizer-dev python=3.9 -y
-conda install poetry -y
+# conda install poetry -y
+curl -sSL https://install.python-poetry.org | python3 -
 poetry install -E dev -E test -E doc -E text -E vision
 ```
 
