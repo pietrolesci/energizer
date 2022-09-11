@@ -9,7 +9,7 @@
 * Documentation: <https://pietrolesci.github.io/energizer>
 * GitHub: <https://github.com/pietrolesci/energizer>
 * PyPI: <https://pypi.org/project/energizer/>
-* Free software: MIT
+* Free software: Apache-2.0
 
 
 ## Features
