@@ -64,6 +64,7 @@ theme:
     repo: fontawesome/brands/github
 markdown_extensions:
   - admonition
+  - tables
   - def_list
   - footnotes
   - md_in_html
@@ -77,9 +78,9 @@ markdown_extensions:
   - pymdownx.tilde
   - pymdownx.betterem
   - pymdownx.tabbed:
-    - alternate_style: true 
+      alternate_style: true 
   - pymdownx.tasklist:
-    - custom_checkbox: true
+      custom_checkbox: true
   - attr_list
   - pymdownx.arithmatex:
       generic: true
@@ -93,10 +94,8 @@ markdown_extensions:
   - pymdownx.smartsymbols
   - pymdownx.snippets
   - toc:
-      baselevel: 2
       permalink: true
       slugify: !!python/name:pymdownx.slugs.uslugify
-  - meta
 
 plugins:
   - tags
