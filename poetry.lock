@@ -2652,7 +2652,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 
 [extras]
 dev = ["tox", "pre-commit", "twine", "toml", "bump2version"]
-doc = ["mkdocs", "mkdocs-include-markdown-plugin", "mkdocs-material", "mkdocstrings", "mkdocstrings-python", "mkdocs-autorefs", "mkdocs-git-revision-date-localized-plugin", "mkdocs-git-authors-plugin"]
+doc = ["mkdocs", "mkdocs-include-markdown-plugin", "mkdocs-material", "mkdocstrings", "mkdocstrings-python", "mkdocs-autorefs", "mkdocs-git-revision-date-localized-plugin"]
 plotting = ["matplotlib", "seaborn"]
 test = ["black", "isort", "nbqa", "flake8", "flake8-docstrings", "mypy", "pytest", "pytest-cov", "types-pyyaml"]
 text = ["transformers", "datasets", "sentence-transformers"]
@@ -2661,7 +2661,7 @@ vision = ["torchvision"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<4.0"
-content-hash = "be1538a00d4267476224d1c2275e5929b0657b4ffd2e92ddce6ad20e541c1393"
+content-hash = "b7a0afab491298773e530093e3750744f2b8410af865e043b70260fa1882df74"
 
 [metadata.files]
 absl-py = [
