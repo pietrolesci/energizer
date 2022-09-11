@@ -2,7 +2,6 @@
 [![python](https://img.shields.io/pypi/pyversions/energizer.svg)](https://pypi.org/project/energizer/)
 [![Build Status](https://github.com/pietrolesci/energizer/actions/workflows/dev.yml/badge.svg)](https://github.com/pietrolesci/energizer/actions/workflows/dev.yml)
 [![codecov](https://codecov.io/gh/pietrolesci/energizer/branch/main/graph/badge.svg?token=782XT9AQFZ)](https://codecov.io/gh/pietrolesci/energizer)
-[![Documentation Status](https://pietrolesci.github.io/energizer)](http://ansicolortags.readthedocs.io/?badge=latest)
 
 
 `Energizer` is an Active-Learning framework for PyTorch based on PyTorch-Lightning
