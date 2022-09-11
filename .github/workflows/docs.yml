@@ -32,10 +32,3 @@ jobs:
           
       - name: Publish docs
         run: poetry run mkdocs gh-deploy --force
-
-      # poetry run mkdocs build
-      # - name: publish documentation
-      #   uses: peaceiris/actions-gh-pages@v3
-      #   with:
-      #     personal_token: ${{ secrets.PERSONAL_TOKEN }}
-      #     publish_dir: ./site

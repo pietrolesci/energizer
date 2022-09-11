@@ -28,3 +28,4 @@ clean:
 	rm -rf .tox dist site
 	rm -rf coverage.xml .coverage
 	rm -rf */lightning_logs/
+	rm -rf site

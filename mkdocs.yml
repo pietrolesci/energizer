@@ -4,14 +4,19 @@ site_name: Energizer
 site_url: https://pietrolesci.github.io/energizer
 repo_url: https://github.com/pietrolesci/energizer
 repo_name: pietrolesci/energizer
-#strict: true
+edit_uri: tree/main/docs
+
 nav:
   - Home: index.md
   - Installation: installation.md
-  - API: api.md
+  - API: 
+    - Trainer: ./api/trainer.md
+    - Query strategies: ./api/query_strategies.md
+    - Acquisition function: ./api/acquisition_functions.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - About: about.md
+
 theme:
   name: material
   custom_dir: docs/overrides
@@ -46,23 +51,31 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode   
+  
   features:
+    - navigation.expand
+    - navigation.sections
     - navigation.instant
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
-    - navigation.expand
-    - navigation.indexes
+    # - navigation.indexes
+    # - toc.integrate
     - navigation.top
     - search.suggest
     - search.highlight
     - search.share
     - header.autohide
     - announce.dismiss
+  
   icon:
     repo: fontawesome/brands/github
+
 markdown_extensions:
   - admonition
+  - pymdownx.details
+  - pymdownx.critic
+  - pymdownx.superfences
   - tables
   - def_list
   - footnotes
@@ -70,8 +83,6 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:materialx.emoji.twemoji
       emoji_generator: !!python/name:materialx.emoji.to_svg
-  - pymdownx.critic
-  - pymdownx.details
   - pymdownx.caret
   - pymdownx.mark
   - pymdownx.tilde
@@ -87,7 +98,6 @@ markdown_extensions:
       linenums: true
       use_pygments: true
       anchor_linenums: true
-  - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.keys
   - pymdownx.smartsymbols
@@ -98,14 +108,20 @@ markdown_extensions:
 
 plugins:
   - tags
+  - include-markdown
   - git-revision-date-localized:
       enable_creation_date: true
-  - include-markdown
   - search:
       lang: en
   - mkdocstrings:
-      watch:
-        - energizer
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: false
+            heading_level: 3
+
 extra:
   version:
     provider: mike
@@ -123,11 +139,12 @@ extra:
       name: Github
     - icon: material/email
       link: "mailto:pietrolesci@outlook.com"
+
 extra_javascript:
   - javascripts/mathjax.js
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-edit_uri: edit/main/docs/
+
 copyright: Copyright &copy; 2022 - Pietro Lesci
   # to enable disqus, uncomment the following and put your disqus id below
   # disqus: disqus_id
