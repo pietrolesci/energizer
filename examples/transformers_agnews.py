@@ -26,9 +26,10 @@ from energizer.query_strategies import (
     RandomStrategy,
 )
 
-MODEL_NAME_OR_PATH = "google/bert_uncased_L-2_H-128_A-2"
+MODEL_NAME_OR_PATH = "bert-base-uncased"
+# MODEL_NAME_OR_PATH = "google/bert_uncased_L-2_H-128_A-2"
 BATCH_SIZE = 32
-EVAL_BATCH_SIZE = 512
+EVAL_BATCH_SIZE = 128 # 512
 LEARNING_RATE = 0.0001
 NUM_WARMUP_STEPS = 50
 DATASET_NAME = "pietrolesci/ag_news"
@@ -67,19 +68,19 @@ def get_dataloaders(
         train_set.with_format(columns=columns_to_keep),
         batch_size=batch_size,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=os.cpu_count(),
     )
     val_dl = DataLoader(
         val_set.with_format(columns=columns_to_keep),
         batch_size=eval_batch_size,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=os.cpu_count(),
     )
     test_dl = DataLoader(
         test_set.with_format(columns=columns_to_keep),
         batch_size=eval_batch_size,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=os.cpu_count(),
     )
 
     return train_dl, val_dl, test_dl, labels
