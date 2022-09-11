@@ -8,8 +8,7 @@ repo_name: pietrolesci/energizer
 nav:
   - Home: index.md
   - Installation: installation.md
-  - Usage: usage.md
-  - Modules: api.md
+  - API: api.md
   - Contributing: contributing.md
   - Changelog: changelog.md
   - About: about.md
