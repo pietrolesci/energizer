@@ -4,11 +4,23 @@ on:
     branches:
       - main
   workflow_dispatch:      
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    steps:
     
+    name: Publish documentation
+    
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-versions: [3.8]
+    
+    steps:
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-versions }}
@@ -19,9 +31,10 @@ jobs:
           pip install poetry
 
       - name: Build documentation
-        run: |
-          poetry install -E doc
-          mkdocs gh-deploy --force
+        run: poetry install -E doc
+          
+      - name: Publish docs
+        run: mkdocs gh-deploy --force
 
       # poetry run mkdocs build
       # - name: publish documentation
