@@ -118,3 +118,4 @@ site/
 */data
 */results
 */*.ipynb
+*/*.faiss

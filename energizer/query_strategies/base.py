@@ -1,7 +1,6 @@
 from copy import deepcopy
 from typing import Any, List, Optional
 
-import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops.loop import Loop
@@ -109,8 +108,11 @@ class MCAccumulatorStrategy(AccumulatorStrategy):
         prob: Optional[float] = None,
     ) -> None:
         """Instantiates a new learner (same as `learner`) with patched dropout layers.
+
         The patched such that they are active even during evaluation.
+
         Args:
+            model (LightningModule): The model to use for inference.
             num_inference_iters (int): The number of forward passes to perform.
             consistent (bool): If True, it uses the consistent version of dropout that fixes the mask across batches.
             prob (float): If specified, this changes the dropout probability of all layers to `prob`. If `None` the
@@ -132,7 +134,8 @@ class MCAccumulatorStrategy(AccumulatorStrategy):
         )
 
     def _forward(self, *args, **kwargs) -> Tensor:
-        """Performs `num_inference_iters` forward passes using the underlying learner and keeping the dropout layers active..
+        """Performs multiple forward passes using the underlying model while keeping the dropout active.
+
         Returns:
             A tensor of dimension `(B: batch_size, C: num_classes, S: num_samples)`.
         """

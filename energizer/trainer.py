@@ -218,7 +218,7 @@ class Trainer(pl.Trainer):
     ) -> None:
 
         """
-        Check the inputs
+        Check the inputs # noqa: D200,D201,D212,D415
         """
         # check inputs
         if not isinstance(model, BaseQueryStrategy):
@@ -456,6 +456,8 @@ class Trainer(pl.Trainer):
 
         if self.predicting:
             return self.predict_loop
+
+        return
 
     def set_lightning_module(self, use_query_strategy: bool = False) -> None:
         if use_query_strategy:

@@ -29,7 +29,7 @@ from energizer.query_strategies import (
 MODEL_NAME_OR_PATH = "bert-base-uncased"
 # MODEL_NAME_OR_PATH = "google/bert_uncased_L-2_H-128_A-2"
 BATCH_SIZE = 32
-EVAL_BATCH_SIZE = 128 # 512
+EVAL_BATCH_SIZE = 128  # 512
 LEARNING_RATE = 0.0001
 NUM_WARMUP_STEPS = 50
 DATASET_NAME = "pietrolesci/ag_news"

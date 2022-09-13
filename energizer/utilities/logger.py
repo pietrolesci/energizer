@@ -48,6 +48,7 @@ level_map = {
 
 
 def set_logging_level(level: str, also_pl: bool = False):
+    """Changes the internal logging level."""
     assert level in level_map, ValueError(f"`level` must be one of {list(level_map.keys())}")
 
     logger = logging.getLogger("energizer_logger")

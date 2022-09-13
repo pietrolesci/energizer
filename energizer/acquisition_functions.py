@@ -33,7 +33,8 @@ def entropy(logits: Tensor) -> Tensor:
 def predictive_entropy(logits: Tensor) -> Tensor:
     r"""Computes the predictive Shannon's entropy in nats.
 
-    It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
+    It expects a tensor of logits with the following dimensions:
+    `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
     This function implements the following steps, for each element along the `B: batch_size` dimension:
 
     - Converts logits in probabilities along the `C: num_classes` dimension
@@ -64,7 +65,8 @@ def predictive_entropy(logits: Tensor) -> Tensor:
 def expected_entropy(logits: Tensor) -> Tensor:
     r"""Computes the expected Shannon's entropy in nats.
 
-    It expects a tensor of logits with the following dimensions: `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
+    It expects a tensor of logits with the following dimensions:
+    `(B: batch_size, C: num_classes, S: num_inference_iterations)`.
     This function implements the following steps, for each element along the `B: batch_size` dimension:
 
     - Converts logits in probabilities along the `C: num_classes` dimension

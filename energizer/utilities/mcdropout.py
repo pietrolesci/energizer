@@ -93,15 +93,23 @@ class EnergizerDropoutLayer(_DropoutNd):
         """Initialize a new dropout layer."""
         super().__init__(p=p, inplace=inplace)
         self.consistent = consistent
-        self.num_inference_iters: Optional[int] = None
-        self.seeds: Optional[cycle[int]] = None
 
         if self.consistent:
             if "num_inference_iters" not in consistent_kwargs:
-                raise MisconfigurationException("When consistent is True, must pass 'num_inference_iters' as kwargs.")
-            self.reset_mask(consistent_kwargs.get("num_inference_iters"))
+                raise MisconfigurationException("When consistent is True, must pass `num_inference_iters` as kwargs.")
 
-    def reset_mask(self, num_inference_iters: Optional[int] = None) -> None:
+            if "seeds" not in consistent_kwargs:
+                raise MisconfigurationException("When consistent is True, must pass `seeds` as kwargs.")
+
+            self.num_inference_iters = consistent_kwargs.get("num_inference_iters")
+            self._seeds = consistent_kwargs.get("seeds")
+            assert self.num_inference_iters == len(self._seeds), ValueError(  # type: ignore
+                f"For consistent dropout to work, the list of `seeds` ({len(self._seeds)}) ",  # type: ignore
+                f"needs to have length equal to `num_inference_iters ({self.num_inference_iters})",
+            )
+            self.reset_mask()
+
+    def reset_mask(self) -> None:
         """Recreate the list of seeds for consistent sampling of dropout masks.
 
         Optionally it is possible to pass a new number of `num_inference_iters` so that the dropout layers
@@ -114,11 +122,10 @@ class EnergizerDropoutLayer(_DropoutNd):
             num_inference_iters (Optional[int]): If provided, changes the number of seeds. This must match
                 the number of forward passes the user performs.
         """
-        if num_inference_iters:
-            self.num_inference_iters = num_inference_iters
-        self.seeds = cycle(torch.randint(10, 10**8, size=(self.num_inference_iters,)).tolist())
+        # self.seeds = cycle(torch.randint(10, 10**8, size=(self.num_inference_iters,)).tolist())
+        self.seeds = cycle(self._seeds)
 
-    def eval(self) -> None:
+    def eval(self) -> nn.Module:
         """Reset the mask when put in eval mode."""
         self.reset_mask()
         return super().eval()
@@ -136,7 +143,7 @@ class EnergizerDropoutLayer(_DropoutNd):
         return torch.mul(x, self._mask)
 
     def _forward(self, x: Tensor) -> Tensor:
-        NotImplementedError
+        raise NotImplementedError
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass that is able to select the appropriate modality (consistent or not)."""
