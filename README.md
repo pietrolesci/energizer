@@ -27,7 +27,7 @@
 
 ### Gotchas and future plans
 
-At the moment `energizer` is focused on research settings. In other words, it works with datasets in which the labels are already available. Internally, it will mask the labels and mimick a true active learning setting. In the future, `energizer` will fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/). 
+At the moment `energizer` is focused on research settings. In other words, it works with datasets in which the labels are already available. Internally, it will mask the labels and mimick a true active learning setting. In the future, `energizer` will fully compatible with open-source annotation tools such as [`Label-Studio` ](https://labelstud.io/) and [`Rubrix`](https://www.rubrix.ml/).
 
 Currently `energizer` has been extensively tested on cpu and single-node/single-gpu settings due to availability issues. Support for multi-node/multi-gpu settings should work out of the box thanks to Pytorch-Lightning but has not been tested at this stage.
 
@@ -47,7 +47,7 @@ for _ in range(max_labelling_epochs):
         # fit the model
         fit_loop.run()
 
-    if can_run_testing:  
+    if can_run_testing:
         # if test_dataloader is provided
         test_loop.run()
 
@@ -72,7 +72,7 @@ query_strategy = RandomQueryStrategy(model)
 
 ## Usage
 
-The most basic usage of `energizer` requires minimal inputs from the user. 
+The most basic usage of `energizer` requires minimal inputs from the user.
 
 Say we have the following `LightningModule`
 
@@ -97,7 +97,7 @@ class MNISTModel(LightningModule):
 
     def forward(self, x: Union[Tensor, Tuple[Tensor, Tensor]]) -> Tensor:
         """NOTE: notice how we unpack the batch in forward method.
-        
+
         More on this later.
         """
         if isinstance(x, tuple):
@@ -114,7 +114,7 @@ class MNISTModel(LightningModule):
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         return self.common_step(batch, "train")
-    
+
     def test_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         return self.common_step(batch, "test")
 
@@ -147,7 +147,7 @@ And then call the `active_fit` method
 trainer = Trainer(
     max_labelling_epochs=4,     # run the active learning loop 4 times
     query_size=10,              # at each loop query 10 instances
-    max_epochs=3,               # fit the model on the labelled data for 3 epochs 
+    max_epochs=3,               # fit the model on the labelled data for 3 epochs
     test_after_labelling=True,  # test after each labelling
     # ... you can pass any other pl.Trainer arguments
 )
@@ -160,14 +160,14 @@ results = trainer.active_fit(
 
 The `active_fit` method will take care of masking the train dataloader and create a pool dataloader.
 
-And that's it! You will have a resulting model trained with active learning. 
+And that's it! You will have a resulting model trained with active learning.
 
 
 ### The anatomy of a query strategy
 
 In the example abote, we used the `EntropyStrategy`. It needs to run model inference on the pool, get the logits, transform them into probabilities, and compute the entropy. So, contrarely to a `RandomStrategy`, we also need to implement how the model should behave when fed with a batch coming from the pool.
 
-In `energizer` we implement a base class called `AccumulatorStrategy`. The name comes from the fact that it accumulates the results of each batch and the returns the indices corresponding to the Top-K instances. Do not worry if you have a huge pool, it performs a running Top-K operation and keeps in memory only `2 * K` instance at every time. 
+In `energizer` we implement a base class called `AccumulatorStrategy`. The name comes from the fact that it accumulates the results of each batch and the returns the indices corresponding to the Top-K instances. Do not worry if you have a huge pool, it performs a running Top-K operation and keeps in memory only `2 * K` instance at every time.
 
 In order to run pool-based active learning, we need to define how the model behaves when predicting on the unlabelled pool. This is achieved, by overriding the new "pool" hooks. An `AccumulatorStrategy` requires us to implement the `pool_step` method (similar to a `training_step` or `test_step` in Pytorch-Lightning) that runs inference on the batch and returns a 1-dimensional `Tensor` of scores (that are then Top-K-ed).
 
@@ -189,7 +189,7 @@ As simple as this. We do not need to implement the `query` method in this case b
 
 Finally, note that in our implementation of the `EntropyStrategy` the type of the batch input is `MODEL_INPUT`. This is to highlight that `pool_step` (by defaut, of course you can override it as you like) does not unpack a batch: it expectes that a batch can directly be passed to the `forward` of the underlying `LightningModule`. This is the case in real-world scenarios where you actually do not have a label.
 
-However, for research settings, we do have a label in each batch. Since `energizer` cannot know how to unpack a batch (it can be a `dict`, a `tuple`, your own custom data structure, etc) it also implements an additional hook that can be used for this purpose `get_inputs_from_batch`. 
+However, for research settings, we do have a label in each batch. Since `energizer` cannot know how to unpack a batch (it can be a `dict`, a `tuple`, your own custom data structure, etc) it also implements an additional hook that can be used for this purpose `get_inputs_from_batch`.
 
 So if you are in a research setting (your batch contains the labels and needs to be unpacked in order to extract the inputs), you have the following 3 options:
 

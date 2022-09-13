@@ -1,18 +1,18 @@
 name: publish docs
 on:
-  workflow_dispatch:      
+  workflow_dispatch:
 
 jobs:
   deploy:
-    
+
     name: Publish documentation
-    
+
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         python-versions: [3.9]
-    
+
     steps:
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -29,6 +29,6 @@ jobs:
 
       - name: Build documentation
         run: poetry install -E doc
-          
+
       - name: Publish docs
         run: poetry run mkdocs gh-deploy --force

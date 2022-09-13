@@ -9,7 +9,7 @@ edit_uri: tree/main/docs
 nav:
   - Home: index.md
   - Installation: installation.md
-  - API: 
+  - API:
     - Trainer: ./api/trainer.md
     - Query strategies: ./api/query_strategies.md
     - Acquisition function: ./api/acquisition_functions.md
@@ -41,7 +41,7 @@ theme:
       primary: teal
       accent: teal
       toggle:
-        icon: material/brightness-7 
+        icon: material/brightness-7
         name: Switch to dark mode
 
     # Palette toggle for dark mode
@@ -50,8 +50,8 @@ theme:
       accent: teal
       toggle:
         icon: material/brightness-4
-        name: Switch to light mode   
-  
+        name: Switch to light mode
+
   features:
     - navigation.expand
     - navigation.sections
@@ -67,7 +67,7 @@ theme:
     - search.share
     - header.autohide
     - announce.dismiss
-  
+
   icon:
     repo: fontawesome/brands/github
 
@@ -88,7 +88,7 @@ markdown_extensions:
   - pymdownx.tilde
   - pymdownx.betterem
   - pymdownx.tabbed:
-      alternate_style: true 
+      alternate_style: true
   - pymdownx.tasklist:
       custom_checkbox: true
   - attr_list

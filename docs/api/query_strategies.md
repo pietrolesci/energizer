@@ -9,7 +9,7 @@
 
 Uncertainty-based query strategies select instance with high aleatoric uncertainty
 or epistemic uncertainty. Aleatoric uncertainty refers to the uncertainty
-in data due the data generation processes (sometimes called irreducible uncertainty). 
+in data due the data generation processes (sometimes called irreducible uncertainty).
 Epistemic uncertainty comes from the modeling/learning process and is caused by a
 lack of knowledge.
 
@@ -27,7 +27,7 @@ lack of knowledge.
 
 
 
---- 
+---
 
 ## Base classes
 ::: energizer.query_strategies.base
