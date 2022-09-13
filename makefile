@@ -11,7 +11,7 @@ format:
 
 lint:
 	flake8 $(sources) tests
-	mypy $(sources) tests
+	# mypy $(sources) tests
 
 unittest:
 	pytest
