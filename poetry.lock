@@ -2660,8 +2660,8 @@ vision = ["torchvision"]
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.7,<4.0"
-content-hash = "b7a0afab491298773e530093e3750744f2b8410af865e043b70260fa1882df74"
+python-versions = ">=3.7,<3.10"
+content-hash = "27cb73cf2df1854b51e50b5c2596874ba6d998d968cc87963ee91a12e8ee8aba"
 
 [metadata.files]
 absl-py = [

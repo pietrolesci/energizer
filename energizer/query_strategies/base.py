@@ -117,7 +117,6 @@ class MCAccumulatorStrategy(AccumulatorStrategy):
             consistent (bool): If True, it uses the consistent version of dropout that fixes the mask across batches.
             prob (float): If specified, this changes the dropout probability of all layers to `prob`. If `None` the
                 dropout probability is the same as the original layer. Must be 0 <= prob <= 1.
-            inplace (bool): Whether to modify the learner in place or return a copy of the learner.
         """
         self.num_inference_iters = num_inference_iters
         self.consistent = consistent
