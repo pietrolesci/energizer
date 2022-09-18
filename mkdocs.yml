@@ -8,19 +8,24 @@ edit_uri: tree/main/docs
 
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - API:
-    - Trainer: ./api/trainer.md
-    - Query strategies: ./api/query_strategies.md
-    - Acquisition function: ./api/acquisition_functions.md
+  - Get started: 
+    - get-started/index.md
+    - Installation: get-started/installation.md
+    - Energizer in 15 minutes: get-started/energizer-in-15.md
+  - API Reference:
+    - Trainer: api/trainer.md
+    - Query strategies: api/query_strategies.md
+    - Acquisition function: api/acquisition_functions.md
   - Contributing: contributing.md
   - Changelog: changelog.md
-  - About: about.md
 
 theme:
   name: material
   custom_dir: docs/overrides
   language: en
+  icon:
+    logo: material/book-education-outline
+    repo: fontawesome/brands/github
   font:
     text: Roboto
     code: Roboto Mono
@@ -59,7 +64,7 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
-    # - navigation.indexes
+    - navigation.indexes
     # - toc.integrate
     - navigation.top
     - search.suggest
@@ -67,9 +72,7 @@ theme:
     - search.share
     - header.autohide
     - announce.dismiss
-
-  icon:
-    repo: fontawesome/brands/github
+    - content.tabs.link
 
 markdown_extensions:
   - admonition
