@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs at https://github.com/pietrolesci/pytorch-energizer/issues.
+Report bugs at [https://github.com/pietrolesci/energizer/issues](https://github.com/pietrolesci/energizer/issues).
 
 If you are reporting a bug, please include:
 
@@ -35,7 +35,7 @@ articles, and such.
 
 ### Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/pietrolesci/pytorch-energizer/issues.
+The best way to send feedback is to file an issue at https://github.com/pietrolesci/energizer/issues.
 
 If you are proposing a feature:
 
@@ -44,48 +44,75 @@ If you are proposing a feature:
 * Remember that this is a volunteer-driven project, and that contributions
   are welcome :)
 
-## Get Started!
+## Set up local development environment!
 
-Ready to contribute? Here's how to set up `pytorch-energizer` for local development.
+Ready to contribute? Here's how to set up `energizer` for local development.
 
-1. Fork the `pytorch-energizer` repo on GitHub.
-2. Clone your fork locally
+1. Fork the `energizer` repo on GitHub.
 
-    ```
-    $ git clone git@github.com:your_name_here/pytorch-energizer.git
-    ```
+1. Clone your fork locally
 
-3. Ensure [poetry](https://python-poetry.org/docs/) is installed.
-4. Install dependencies and start your virtualenv:
-
-    ```
-    $ poetry install -E test -E doc -E dev
+    ```bash
+    git clone git@github.com:your_name_here/energizer.git
     ```
 
-5. Create a branch for local development:
+1. Ensure [conda](https://docs.conda.io/en/latest/miniconda.html#latest-miniconda-installer-links) is installed, otherwise install it
 
+    ```bash
+    LINK_TO_CONDA_INSTALLER=  #(1)
+    wget $LINK_TO_CONDA_INSTALLER
+    #(2)
     ```
-    $ git checkout -b name-of-your-bugfix-or-feature
+
+    1. Check [here](https://docs.conda.io/en/latest/miniconda.html#latest-miniconda-installer-links) for a suitable version of the conda installer, copy the link, and paste it here to download the file.
+
+    2. Run the installer.
+
+1. Create a new conda environment
+    ```bash
+    CONDA_ENV_NAME=  #(1)
+    conda create -n $CONDA_ENV_NAME python=3.9 -y
+    conda activate $CONDA_ENV_NAME
+    ```
+
+    1. Put here the name of the conda environment.
+
+1. Ensure [poetry](https://python-poetry.org/docs/) is installed, otherwise install it
+
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 -
+    ```
+
+1. Install dependencies and start your virtualenv:
+
+    ```bash
+    poetry install --all-extras --sync
+    ```
+
+1. Create a branch for local development:
+
+    ```bash
+    git checkout -b name-of-your-bugfix-or-feature
     ```
 
     Now you can make your changes locally.
 
-6. When you're done making changes, check that your changes pass the
+1. When you're done making changes, check that your changes pass the
    tests, including testing other Python versions, with tox:
 
-    ```
-    $ poetry run tox
-    ```
-
-7. Commit your changes and push your branch to GitHub:
-
-    ```
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
+    ```bash
+    poetry run tox
     ```
 
-8. Submit a pull request through the GitHub website.
+1. Commit your changes and push your branch to GitHub:
+
+    ```bash
+    git add .
+    git commit -m "Your detailed description of your changes."
+    git push origin name-of-your-bugfix-or-feature
+    ```
+
+1. Submit a pull request through the GitHub website.
 
 ## Pull Request Guidelines
 
@@ -95,14 +122,14 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.md.
-3. The pull request should work for Python 3.6, 3.7, 3.8 and 3.9. Check
-   https://github.com/pietrolesci/pytorch-energizer/actions
+3. The pull request should work for Python 3.7, 3.8, 3.9, 3.10. Check
+   https://github.com/pietrolesci/energizer/actions
    and make sure that the tests pass for all supported Python versions.
 
 ## Tips
 
-```
-$ poetry run pytest tests/test_energizer.py
+```bash
+poetry run pytest tests/some_test_file.py
 ```
 
 To run a subset of tests.
@@ -114,10 +141,12 @@ A reminder for the maintainers on how to deploy.
 Make sure all your changes are committed (including an entry in CHANGELOG.md).
 Then run:
 
+```bash
+poetry run bump2version patch  #(1)
+git push
+git push --tags
 ```
-$ poetry run bump2version patch # possible: major / minor / patch
-$ git push
-$ git push --tags
-```
+
+1. Possible values: `major` / `minor` / `patch`.
 
 GitHub Actions will then deploy to PyPI if tests pass.

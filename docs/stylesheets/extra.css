@@ -1,0 +1,8 @@
+/* make code font-size smaller: JetBrains Mono is bigger than others */
+.md-typeset code {
+    font-size: 0.6rem;
+}
+
+.highlighttable .linenos {
+    font-size: 0.6rem;
+}

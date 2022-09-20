@@ -1,6 +1,7 @@
 ---
 hide:
   - navigation
+  - toc
 ---
 
 # Welcome to Energizer :rocket:
@@ -29,4 +30,6 @@ pip install energizer
 
 ## Get started
 
-- [`Energizer` in 15 minutes](./get-started/energizer-in-15.md)
+- [Installation](./get-started/installation.md)
+- [`Energizer` in 2 minutes](./get-started/energizer-in-2.md)
+- [Implement a query strategy from scratch](./get-started/implement-new-strategies.ipynb)

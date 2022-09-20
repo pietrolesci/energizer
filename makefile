@@ -6,8 +6,8 @@ test: format lint unittest
 format:
 	isort $(sources) tests examples
 	black $(sources) tests examples
-	nbqa isort examples
-	nbqa black examples
+	nbqa isort docs/examples
+	nbqa black docs/examples --line-length 85
 
 lint:
 	flake8 $(sources) tests

@@ -66,6 +66,7 @@ torchvision = {version = "^0.13", optional = true}
 # plotting
 matplotlib = {version = "^3.5.3", optional = true}
 seaborn = {version = "^0.12", optional = true}
+mknotebooks = {version = "^0.7.1", optional = true}
 
 
 [tool.poetry.extras]
@@ -90,6 +91,7 @@ doc = [
     "mkdocs-material-extension",
     "mkdocs-autorefs",
     "mkdocs-git-revision-date-localized-plugin",
+    "mknotebooks",
     ]
 vision = ["torchvision"]
 text = ["transformers", "datasets", "sentence-transformers"]
