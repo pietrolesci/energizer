@@ -1,4 +1,4 @@
-# `Energizer` at a glance
+# Energizer at a glance
 
 
 ## Features
