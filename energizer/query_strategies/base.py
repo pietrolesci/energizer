@@ -4,6 +4,7 @@ from typing import Any, List, Optional
 import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loops.loop import Loop
+from pytorch_lightning.utilities.model_helpers import is_overridden
 from torch import Tensor
 
 from energizer.loops.pool_loops import AccumulateTopK, PoolEvaluationLoop, PoolNoEvaluationLoop
@@ -60,6 +61,8 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
         return self.model.forward(*args, **kwargs)
 
     def get_inputs_from_batch(self, batch: BATCH_TYPE) -> MODEL_INPUT:
+        if is_overridden("get_inputs_from_batch", self.model, BaseQueryStrategy):
+            return self.model.get_inputs_from_batch(batch)
         return batch
 
 
