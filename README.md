@@ -12,6 +12,22 @@
 * Free software: Apache-2.0
 
 
+## Installation
+
+```bash
+pip install energizer
+```
+
+To contribute, install `energizer` locally
+
+```bash
+conda create -n energizer-dev python=3.9 -y
+# conda install poetry -y
+curl -sSL https://install.python-poetry.org | python3 -
+poetry install --all-extras --sync
+```
+
+
 ## Features
 
 `Energizer`
@@ -198,19 +214,6 @@ So if you are in a research setting (your batch contains the labels and needs to
 1. Define a `forward` method that expects only the inputs in your `LightningModule` (as it is usually done), subclass a query strategy (e.g, `EntropyStrategy`), and implement the `get_inputs_from_batch`
 
 1. Define a `forward` method that expects only the inputs in your `LightningModule` (as it is usually done), subclass a query strategy (e.g, `EntropyStrategy`), and implement the `pool_step` from scratch including the batch unpacking logic
-
-
-
-## Contributing
-
-Install `energizer` locally
-
-```bash
-conda create -n energizer-dev python=3.9 -y
-# conda install poetry -y
-curl -sSL https://install.python-poetry.org | python3 -
-poetry install --all-extras --sync
-```
 
 
 ## Credits
