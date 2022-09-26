@@ -15,7 +15,6 @@ classifiers=[
     "License :: OSI Approved :: Apache Software Licens",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
 ]
@@ -25,11 +24,14 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<3.10"
+python = ">=3.8,<3.10"
 torch = "^1.12.0"
 pytorch-lightning = "^1.7.0"
 colorlog = "^6.6.0"
 rich = "^12.5.1"
+torchmetrics = "^0.9.3"
+numpy = "^1.23.3"
+pandas = "^1.5.0"
 # test
 black = {version = "^22.6.0", optional = true}
 isort  = {version = "^5.10.1", optional = true}
@@ -57,6 +59,7 @@ mkdocstrings = {version = "^0.19.0", optional = true}
 mkdocstrings-python = {version="^0.7.1", optional=true}
 mkdocs-autorefs = {version = "^0.4.1", optional = true}
 mkdocs-git-revision-date-localized-plugin = {version="^1.1.0", optional=true}
+mknotebooks = "^0.7.1"
 # text
 transformers = {version = "^4.21.1", optional = true}
 datasets = {version = "^2.4", optional = true}
@@ -66,8 +69,6 @@ torchvision = {version = "^0.13", optional = true}
 # plotting
 matplotlib = {version = "^3.5.3", optional = true}
 seaborn = {version = "^0.12", optional = true}
-mknotebooks = {version = "^0.7.1", optional = true}
-
 
 [tool.poetry.extras]
 test = [
@@ -100,7 +101,7 @@ plotting = ["matplotlib", "seaborn"]
 [tool.black]
 line-length = 120
 skip-string-normalization = true
-target-version = ['py37', 'py38', 'py39']
+target-version = ['py38', 'py39']
 include = '\.pyi?$'
 exclude = '''
 /(
