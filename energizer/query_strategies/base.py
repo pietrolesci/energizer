@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Callable
 
 import torch
 from pytorch_lightning import LightningModule
@@ -10,6 +10,10 @@ from energizer.loops.pool_loops import AccumulateTopK, PoolEvaluationLoop, PoolN
 from energizer.query_strategies.hooks import ModelHooks
 from energizer.utilities.mcdropout import patch_dropout_layers
 from energizer.utilities.types import BATCH_TYPE, MODEL_INPUT
+
+
+def identity(x: Any) -> Any:
+    return x
 
 
 class PostInitCaller(type):
@@ -23,9 +27,10 @@ class PostInitCaller(type):
 
 
 class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
-    def __init__(self, model: LightningModule) -> None:
+    def __init__(self, model: LightningModule, get_inputs_from_batch_fn: Optional[Callable] = None) -> None:
         super().__init__()
         self.model = deepcopy(model)
+        self.get_inputs_from_batch_fn = get_inputs_from_batch_fn if get_inputs_from_batch_fn else identity
 
     def __post_init__(self) -> None:
         raise NotImplementedError("You need to attach a pool loop.")
@@ -60,7 +65,7 @@ class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
         return self.model.forward(*args, **kwargs)
 
     def get_inputs_from_batch(self, batch: BATCH_TYPE) -> MODEL_INPUT:
-        return batch
+        return self.get_inputs_from_batch_fn(batch)
 
 
 class NoAccumulatorStrategy(BaseQueryStrategy):
@@ -106,6 +111,7 @@ class MCAccumulatorStrategy(AccumulatorStrategy):
         num_inference_iters: Optional[int] = 10,
         consistent: Optional[bool] = False,
         prob: Optional[float] = None,
+        **kwargs,
     ) -> None:
         """Instantiates a new learner (same as `learner`) with patched dropout layers.
 
@@ -121,7 +127,7 @@ class MCAccumulatorStrategy(AccumulatorStrategy):
         self.num_inference_iters = num_inference_iters
         self.consistent = consistent
         self.prob = prob
-        super().__init__(model)
+        super().__init__(model, **kwargs)
 
     def __post_init__(self) -> None:
         super().__post_init__()
