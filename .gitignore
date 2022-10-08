@@ -115,7 +115,7 @@ site/
 
 # custom
 */lightning_logs/
-*/data
+*/*/data
 */results
 */*.ipynb
 */*.faiss

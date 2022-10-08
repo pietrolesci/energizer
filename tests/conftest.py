@@ -1,5 +1,6 @@
 import datasets
 import pytest
+from torch import nn
 from torch.utils.data import DataLoader
 from transformers import default_data_collator
 
@@ -40,3 +41,16 @@ def dataloader_arg(request):
 @pytest.fixture
 def boring_model():
     return BoringModel
+
+
+@pytest.fixture
+def dropout_module():
+    module = nn.Sequential(
+        nn.Linear(1, 1),
+        nn.Dropout(0.1),
+        nn.Dropout2d(0.2),
+        nn.Dropout3d(0.3),
+        nn.AlphaDropout(0.4),
+        nn.FeatureAlphaDropout(0.5),
+    )
+    return module
