@@ -20,7 +20,7 @@ classifiers=[
 ]
 packages = [
     { include = "energizer" },
-    { include = "tests", format = "sdist" },
+    { include = "tests", format = "sdist"},
 ]
 
 [tool.poetry.dependencies]
