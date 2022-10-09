@@ -8,22 +8,27 @@ edit_uri: tree/main/docs
 
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - API:
-    - Trainer: ./api/trainer.md
-    - Query strategies: ./api/query_strategies.md
-    - Acquisition function: ./api/acquisition_functions.md
+  - Examples:
+    - examples/index.md
+    # - Simple CNN on MNIST: examples/cnn-mnist.ipynb
+    # - BERT on AG-News: examples/bert-agnews.ipynb
+  - API Reference:
+    - Trainer: api/trainer.md
+    - Query strategies: api/query_strategies.md
+    - Acquisition function: api/acquisition_functions.md
   - Contributing: contributing.md
   - Changelog: changelog.md
-  - About: about.md
 
 theme:
   name: material
   custom_dir: docs/overrides
   language: en
+  icon:
+    logo: material/book-education-outline
+    repo: fontawesome/brands/github
   font:
-    text: Roboto
-    code: Roboto Mono
+    text: Fira Sans Condensed
+    code: JetBrains Mono
 
   #logo: assets/logo.png
   palette:
@@ -59,7 +64,7 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
-    # - navigation.indexes
+    - navigation.indexes
     # - toc.integrate
     - navigation.top
     - search.suggest
@@ -67,9 +72,8 @@ theme:
     - search.share
     - header.autohide
     - announce.dismiss
-
-  icon:
-    repo: fontawesome/brands/github
+    - content.tabs.link
+    - content.code.annotate
 
 markdown_extensions:
   - admonition
@@ -109,6 +113,11 @@ markdown_extensions:
 plugins:
   - tags
   - include-markdown
+  - mknotebooks
+      # binder: true
+      # binder_service_name: "gh"
+      # binder_branch: "main"
+      # binder_ui: "lab"
   - git-revision-date-localized:
       enable_creation_date: true
   - search:
@@ -144,6 +153,9 @@ extra_javascript:
   - javascripts/mathjax.js
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/extra.css
 
 copyright: Copyright &copy; 2022 - Pietro Lesci
   # to enable disqus, uncomment the following and put your disqus id below

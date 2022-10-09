@@ -1,0 +1,15 @@
+/* make code font-size smaller: JetBrains Mono is bigger than others */
+
+/* .md-typeset .code {
+    font-size: 0.7rem;
+}
+
+.highlighttable .linenos {
+    font-size: 0.7rem;
+} */
+
+.highlighttable .linenos a {
+
+    /* make link in linenumber of the same color as background */
+    background-color: var(--md-code-bg-color);
+}

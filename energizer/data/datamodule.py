@@ -1,9 +1,10 @@
-from typing import Any, Dict, List, Optional, Union, Iterable
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import numpy as np
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch.utils.data import DataLoader, Dataset, Subset
+
 from energizer.utilities.types import check_type
 
 
