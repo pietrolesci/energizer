@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: dev CI workflow
+name: dev
 
 # Controls when the action will run.
 on:
@@ -20,7 +20,7 @@ jobs:
     # The type of runner that the job will run on
     strategy:
       matrix:
-        python-versions: [3.7, 3.8, 3.9]
+        python-versions: [3.8, 3.9]
         os: [ubuntu-20.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
