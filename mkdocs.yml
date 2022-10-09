@@ -10,8 +10,8 @@ nav:
   - Home: index.md
   - Examples:
     - examples/index.md
-    - Simple CNN on MNIST: examples/cnn-mnist.ipynb
-    - BERT on AG-News: examples/bert-agnews.ipynb
+    # - Simple CNN on MNIST: examples/cnn-mnist.ipynb
+    # - BERT on AG-News: examples/bert-agnews.ipynb
   - API Reference:
     - Trainer: api/trainer.md
     - Query strategies: api/query_strategies.md
