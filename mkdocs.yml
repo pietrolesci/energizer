@@ -8,12 +8,8 @@ edit_uri: tree/main/docs
 
 nav:
   - Home: index.md
-  - Get started: 
-    - get-started/index.md
-    - Installation: get-started/installation.md
-    - Energizer in 2 minutes: get-started/energizer-in-2.md
-    - Implement a query strategy from scratch: get-started/implement-new-strategies.ipynb
   - Examples:
+    - examples/index.md
     - Simple CNN on MNIST: examples/cnn-mnist.ipynb
     - BERT on AG-News: examples/bert-agnews.ipynb
   - API Reference:

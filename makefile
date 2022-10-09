@@ -29,3 +29,6 @@ clean:
 	rm -rf coverage.xml .coverage
 	rm -rf */lightning_logs/
 	rm -rf site
+
+serve_docs:
+	mkdocs serve --watch .
