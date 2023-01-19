@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Any, List, Optional, Callable
 
 import numpy
@@ -31,7 +30,7 @@ class PostInitCaller(type):
 class BaseQueryStrategy(LightningModule, ModelHooks, metaclass=PostInitCaller):
     def __init__(self, model: LightningModule, get_inputs_from_batch_fn: Optional[Callable] = None) -> None:
         super().__init__()
-        self.model = deepcopy(model)
+        self.model = model
         self.get_inputs_from_batch_fn = get_inputs_from_batch_fn if get_inputs_from_batch_fn else identity
 
     def __post_init__(self) -> None:

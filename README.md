@@ -212,8 +212,6 @@ from energizer.query_strategies import EntropyStrategy
 entropy_strategy = EntropyStrategy(model=model)
 ```
 
-> __NOTE__: When a strategy is instantiated, internally it creates a deep copy of the model passed. This is to avoid sharing states if you want to try out different query strategies on the same model. Therefore, `model` and `entropy_strategy.model` are two different objects: only the latter will be trainer by energizer. This might change in the future!
-
 Ok, now we have the dataloaders, the model, and the query strategy. We are ready to start. In order to use the active learning loop, instead of importing the trainer from Lightning, you need to import it from energizer. This is the same old trainer with the added bonus that it implements the `active_fit` method
 
 ```diff
