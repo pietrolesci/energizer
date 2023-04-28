@@ -1,107 +1,54 @@
-[tool]
 [tool.poetry]
-name = "energizer"
-version = "0.2.0"
-description = "An active learning library for PyTorch based on Pytorch-Lightning."
+name = "allset"
+version = "0.1.0"
+description = "active learning via influence functions"
 authors = ["Pietro Lesci <pietrolesci@outlook.com>"]
-license =  "Apache-2.0"
+license = "Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/pietrolesci/energizer"
-repository = "https://github.com/pietrolesci/energizer"
-documentation = "https://pietrolesci.github.io/energizer"
-classifiers=[
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software Licens",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-]
 packages = [
-    { include = "energizer" },
-    { include = "tests", format = "sdist"},
+    { include = "src" },
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.10"
-torch = "^1.12.0"
-pytorch-lightning = "^1.7.0"
-colorlog = "^6.6.0"
-rich = "^12.5.1"
-torchmetrics = "^0.9.3"
-numpy = "^1.23.3"
-pandas = "^1.5.0"
-# test
-black = {version = "^22.6.0", optional = true}
-isort  = {version = "^5.10.1", optional = true}
-nbqa = {version = "^1.4.0", optional = true}
-flake8 = {version = "^3", optional = true}
-flake8-docstrings = {version = "^1.6.0", optional = true}
-mypy = {version = "^0.971", optional = true}
-pytest  = {version = "^6.2.4", optional = true}
-pytest-cov  = {version = "^2.12.0", optional = true}
-types-pyyaml = {version = "^6.0.11", optional = true}
-# dev
-ipykernel = {version = "^6.13.0", optional=true}
-ipywidgets = {version = "^7.7.0", optional=true}
-tox = {version = "^3.20.1", optional = true}
-pre-commit = {version = "^2.12.0", optional = true}
-twine  = {version = "^3.3.0", optional = true}
-toml = {version = "^0.10.2", optional = true}
-bump2version = {version = "^1.0.1", optional = true}
-# docs
-mkdocs = {version = "^1.3.1", optional = true}
-mkdocs-include-markdown-plugin  = {version = "^1.0.0", optional = true}
-mkdocs-material  = {version = "^8.4.3", optional = true}
-mkdocs-material-extensions  = {version = "^1.0.3", optional = true}
-mkdocstrings = {version = "^0.19.0", optional = true}
-mkdocstrings-python = {version="^0.7.1", optional=true}
-mkdocs-autorefs = {version = "^0.4.1", optional = true}
-mkdocs-git-revision-date-localized-plugin = {version="^1.1.0", optional=true}
-mknotebooks = "^0.7.1"
-# text
-transformers = {version = "^4.21.1", optional = true}
-datasets = {version = "^2.4", optional = true}
-sentence-transformers = {version = "^2.2", optional = true}
-# vision
-torchvision = {version = "^0.13", optional = true}
-# plotting
-matplotlib = {version = "^3.5.3", optional = true}
-seaborn = {version = "^0.12", optional = true}
+python = "^3.8"
+lightning = "^1.9.0"
+transformers = "^4.25.1"
+datasets = "^2.10.1"
+pandas = "^1.5.3"
+sentence-transformers = "^2.2.2"
+hydra-core = "^1.3.1"
+omegaconf = "^2.3.0"
+colorlog = "^6.7.0"
+fastapi = "^0.86.0"
+torch-optimizer = "^0.3.0"
+matplotlib = "^3.6.3"
+seaborn = "^0.12.2"
+srsly = "^2.4.5"
+hydra-colorlog = "^1.2.0"
+hnswlib = {git = "https://github.com/nmslib/hnswlib.git"}
+tensorboard = "^2.12.0"
+torch-tb-profiler = "^0.4.1"
+tabulate = "^0.9.0"
+openpyxl = "^3.1.1"
+hydra-joblib-launcher = "^1.2.0"
 
-[tool.poetry.extras]
-test = [
-    "black",
-    "isort",
-    "nbqa",
-    "flake8",
-    "flake8-docstrings",
-    "mypy",
-    "pytest",
-    "pytest-cov",
-    "types-pyyaml",
-    ]
-dev = ["tox", "pre-commit", "twine", "toml", "bump2version", "ipykernel", "ipywidgets"]
-doc = [
-    "mkdocs",
-    "mkdocs-include-markdown-plugin",
-    "mkdocs-material",
-    "mkdocstrings",
-    "mkdocstrings-python",
-    "mkdocs-material-extension",
-    "mkdocs-autorefs",
-    "mkdocs-git-revision-date-localized-plugin",
-    "mknotebooks",
-    ]
-vision = ["torchvision"]
-text = ["transformers", "datasets", "sentence-transformers"]
-plotting = ["matplotlib", "seaborn"]
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.12.0"
+nbqa = "^1.6.1"
+ipykernel = "^6.20.2"
+ipywidgets = "7.7.1"
+isort = "^5.11.4"
+pytest = "^7.2.1"
+nvitop = "^1.0.0"
+
 
 [tool.black]
 line-length = 120
-skip-string-normalization = true
-target-version = ['py38', 'py39']
+skip-string-normalization = false
+target-version = ['py38']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -118,6 +65,11 @@ exclude = '''
 )/
 '''
 
+[tool.ruff]
+line-length = 120
+src = ["src", "test"]
+target-version = "py38"
+
 [tool.isort]
 multi_line_output = 3
 include_trailing_comma = true
@@ -126,9 +78,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 120
 skip_gitignore = true
-# you can skip files as below
-#skip_glob = docs/conf.py
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
