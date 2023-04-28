@@ -4,10 +4,10 @@ import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
 from torch.optim import Optimizer
 
-from src.energizer.enums import OutputKeys
-from src.energizer.estimator import Estimator, FitEpochOutput
-from src.energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
-from src.energizer.utilities import move_to_cpu
+from energizer.enums import OutputKeys
+from energizer.estimators.estimator import Estimator, FitEpochOutput
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
+from energizer.utilities import move_to_cpu
 
 
 class Callback:

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
@@ -13,28 +12,15 @@ from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
-from src.energizer.enums import OutputKeys, RunningStage
-from src.energizer.progress_trackers import ProgressTracker
-from src.energizer.registries import OPTIMIZER_REGISTRY
-from src.energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
-from src.energizer.utilities import init_deterministic, move_to_cpu
-from src.energizer.utilities.model_summary import summarize
+from energizer.enums import OutputKeys, RunningStage
+from energizer.estimators.base_progress_trackers import ProgressTracker
+from energizer.registries import OPTIMIZER_REGISTRY
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC, FIT_OUTPUT
+from energizer.utilities import init_deterministic, move_to_cpu
+from energizer.utilities.model_summary import summarize
 
-
-@dataclass
-class FitEpochOutput:
-    """Simple container for train and validation outputs for each epoch of fitting.
-
-    This deserves a separate container bacause during fit we obtain EpochOutput's
-    from both train and, possibly, validation.
-    """
-
-    train: EPOCH_OUTPUT = None
-    validation: EPOCH_OUTPUT = None
-
-
+    
 class Estimator(HyperparametersMixin):
-    _hparams_ignore: List[str] = ["model", "loggers", "callbacks"]
     _progress_tracker: ProgressTracker = None
 
     def __init__(
@@ -55,7 +41,7 @@ class Estimator(HyperparametersMixin):
         )
         self.model = model
         init_deterministic(deterministic)
-        self.save_hyperparameters(ignore=self._hparams_ignore)
+        self.save_hyperparameters(ignore=["model", "loggers", "callbacks"])
 
     @property
     def device(self) -> torch.device:
@@ -83,7 +69,9 @@ class Estimator(HyperparametersMixin):
         scheduler: Optional[str] = None,
         scheduler_kwargs: Optional[Dict] = None,
         **kwargs,
-    ) -> List[FitEpochOutput]:
+    ) -> List[FIT_OUTPUT]:
+        
+        self.fabric.launch()
 
         # start progress tracking
         self.progress_tracker.setup(
@@ -114,7 +102,7 @@ class Estimator(HyperparametersMixin):
         validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
         scheduler: Optional[str],
-    ) -> FitEpochOutput:
+    ) -> FIT_OUTPUT:
 
         self.progress_tracker.start_fit()
 
@@ -151,7 +139,7 @@ class Estimator(HyperparametersMixin):
         validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
         scheduler: Optional[str],
-    ) -> FitEpochOutput:
+    ) -> FIT_OUTPUT:
         """Runs a training epoch."""
 
         # configure progress tracking
@@ -231,7 +219,7 @@ class Estimator(HyperparametersMixin):
 
         self.progress_tracker.end()
 
-        return FitEpochOutput(train=train_out, validation=validation_out)
+        return train_out, validation_out
 
     def run_training_step(
         self,
@@ -271,6 +259,8 @@ class Estimator(HyperparametersMixin):
 
     def test(self, test_loader: DataLoader, **kwargs) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
+        self.fabric.launch()
+        
         self.progress_tracker.setup(RunningStage.TEST, num_batches=len(test_loader), **kwargs)
 
         # configuration
@@ -429,22 +419,38 @@ class Estimator(HyperparametersMixin):
 
         # return scheduler
 
-    def configure_loss_fn(self, stage: RunningStage) -> torch.nn.Module:
-        ...
-
     def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:
-        """Does not move the dataloader to the device."""
-        if loader is None:
-            return
+        if loader is None: return
+        return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)
 
-        return self.fabric.setup_dataloaders(loader, replace_sampler=False, move_to_device=False)
+    def log(self, name: str, value: Any, step: int) -> None:
+        """Automatically moves to cpu and then logs value."""
+        if self.progress_tracker.should_log():
+            self.fabric.log(name, move_to_cpu(value), step)
+
+    def log_dict(self, value_dict: Mapping[str, Any], step: int) -> None:
+        """Automatically moves to cpu and then logs mapping of values."""
+        if self.progress_tracker.should_log():
+            self.fabric.log_dict(value_dict, step)
+
+    def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        self.fabric.save(self.model.state_dict(), cache_dir / name)
+
+    def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
+        cache_dir = Path(cache_dir)
+        self.model.load_state_dict(self.fabric.load(cache_dir / name))
 
     """
     Hooks
     """
 
+    def configure_loss_fn(self, stage: RunningStage) -> torch.nn.Module:
+        ...
+
     def configure_metrics(self, stage: Optional[RunningStage] = None) -> Optional[METRIC]:
-        pass
+        ...
 
     def train_step(
         self,
@@ -454,7 +460,7 @@ class Estimator(HyperparametersMixin):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> BATCH_OUTPUT:
-        raise NotImplementedError
+        ...
 
     def validation_step(
         self,
@@ -485,21 +491,4 @@ class Estimator(HyperparametersMixin):
     def test_epoch_end(self, output: List, metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output
 
-    def log(self, name: str, value: Any, step: int) -> None:
-        """Automatically moves to cpu and then logs value."""
-        if self.progress_tracker.should_log():
-            self.fabric.log(name, move_to_cpu(value), step)
-
-    def log_dict(self, value_dict: Mapping[str, Any], step: int) -> None:
-        """Automatically moves to cpu and then logs mapping of values."""
-        if self.progress_tracker.should_log():
-            self.fabric.log_dict(value_dict, step)
-
-    def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
-        cache_dir = Path(cache_dir)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        self.fabric.save(self.model.state_dict(), cache_dir / name)
-
-    def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
-        cache_dir = Path(cache_dir)
-        self.model.load_state_dict(self.fabric.load(cache_dir / name))
+  

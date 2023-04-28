@@ -3,12 +3,12 @@ from typing import Any
 
 from lightning.fabric.wrappers import _FabricModule
 
-from src.energizer.active_learning.active_estimator import ActiveEstimator
-from src.energizer.active_learning.data import ActiveDataModule
-from src.energizer.active_learning.progress_trackers import ActiveProgressTracker
-from src.energizer.callbacks.timer import Timer
-from src.energizer.enums import RunningStage
-from src.energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC, ROUND_OUTPUT
+from energizer.callbacks.timer import Timer
+from energizer.datastores.base import ActiveDataModule
+from energizer.enums import RunningStage
+from energizer.estimators.active_estimator import ActiveEstimator
+from energizer.estimators.progress_trackers import ActiveProgressTracker
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC, ROUND_OUTPUT
 
 
 class ActiveLearningCallbackMixin:
@@ -54,7 +54,6 @@ class ActiveLearningCallbackMixin:
 
 
 class Timer(ActiveLearningCallbackMixin, Timer):
-
     def on_active_fit_start(self, *args, **kwargs) -> None:
         self.active_fit_start = time.perf_counter()
 

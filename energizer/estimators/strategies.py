@@ -8,12 +8,12 @@ from sklearn.utils.validation import (
 )
 from torch.utils.data import DataLoader
 
-from src.energizer.active_learning.active_estimator import ActiveEstimator
-from src.energizer.active_learning.data import ActiveDataModule
-from src.energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
-from src.energizer.registries import SCORING_FUNCTIONS
-from src.energizer.types import BATCH_OUTPUT, METRIC
-from src.energizer.utilities import ld_to_dl
+from energizer.datastores.base import ActiveDataModule
+from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
+from energizer.estimators.active_estimator import ActiveEstimator
+from energizer.registries import SCORING_FUNCTIONS
+from energizer.types import BATCH_OUTPUT, METRIC
+from energizer.utilities import ld_to_dl
 
 
 class RandomStrategy(ActiveEstimator):
@@ -34,9 +34,11 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         super().__init__(*args, **kwargs)
         self.score_fn = score_fn if isinstance(score_fn, Callable) else self._scoring_fn_registry[score_fn]
 
-    def _compute_most_uncertain(self, model: _FabricModule, pool_loader: _FabricDataLoader, query_size: int) -> List[int]:
+    def _compute_most_uncertain(
+        self, model: _FabricModule, pool_loader: _FabricDataLoader, query_size: int
+    ) -> List[int]:
         # calls the evaluation step that we override
-        output = self.run_evaluation(model, pool_loader, RunningStage.POOL)  
+        output = self.run_evaluation(model, pool_loader, RunningStage.POOL)
 
         # if user does not aggregate, try to automatically convert List[Dict] to Dict[List]
         if not isinstance(output, Dict):
@@ -63,7 +65,7 @@ class UncertaintyBasedStrategy(ActiveEstimator):
     def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
         pool_loader = self.configure_dataloader(active_datamodule.pool_loader())
         return self._compute_most_uncertain(model, pool_loader, query_size)
-    
+
     def evaluation_step(
         self,
         model: _FabricModule,
@@ -113,18 +115,20 @@ class SimilaritySearchStrategy(RandomStrategy):
 
     def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
         train_embeddings = active_datamodule.get_train_embeddings()
-        
+
         if not train_embeddings.size > 0:
             # random sample
             return super().run_query(model, active_datamodule=active_datamodule, query_size=query_size)
-        
+
         train_size = int(train_embeddings.shape[0])
         ids, dists = active_datamodule.search_index(
-            train_embeddings, 
-            query_size=query_size if (train_size * query_size) < self.MAX_QUERY_SIZE else max(int(train_size / self.MAX_QUERY_SIZE), 1), 
+            train_embeddings,
+            query_size=query_size
+            if (train_size * query_size) < self.MAX_QUERY_SIZE
+            else max(int(train_size / self.MAX_QUERY_SIZE), 1),
             query_in_set=False,
         )
-        
+
         # remove duplicates and order from smaller to larger distance
         ids, dists = ids.flatten(), dists.flatten()
         _, unique_ids = np.unique(ids, return_index=True)
@@ -135,7 +139,6 @@ class SimilaritySearchStrategy(RandomStrategy):
 
 
 class SimilaritySearchStrategyWithUncertainty(UncertaintyBasedStrategy):
-
     def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
         # TODO: fix when no initial budget
         train_dataset = active_datamodule.train_loader().dataset
@@ -143,12 +146,12 @@ class SimilaritySearchStrategyWithUncertainty(UncertaintyBasedStrategy):
         self.progress_tracker.pool_tracker.max = len(train_loader)
 
         train_loader = self.configure_dataloader(train_loader)
-        most_uncertain_train_ids = self._compute_most_uncertain(model, train_loader, query_size)        
-        
+        most_uncertain_train_ids = self._compute_most_uncertain(model, train_loader, query_size)
+
         train_embeddings = active_datamodule.get_embeddings(most_uncertain_train_ids)
         ids, dists = active_datamodule.search_index(train_embeddings, query_size=query_size, query_in_set=False)
-         
-         # remove duplicates and order from smaller to larger distance
+
+        # remove duplicates and order from smaller to larger distance
         ids, dists = ids.flatten(), dists.flatten()
         _, unique_ids = np.unique(ids, return_index=True)
         ids, dists = ids[unique_ids], dists[unique_ids]

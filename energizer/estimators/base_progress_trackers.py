@@ -4,7 +4,7 @@ from typing import List, Optional
 import numpy as np
 from tqdm.auto import tqdm
 
-from src.energizer.enums import RunningStage
+from energizer.enums import RunningStage
 
 
 @dataclass

@@ -3,7 +3,7 @@ from typing import Union
 
 import torch
 
-from src.energizer.callbacks.base import Callback
+from energizer.callbacks.base import Callback
 
 
 class PytorchTensorboardProfiler(Callback):

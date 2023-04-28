@@ -1,11 +1,12 @@
+import math
 from dataclasses import dataclass, field
 from typing import Optional
 
 from tqdm.auto import tqdm
 
-from src.energizer.enums import RunningStage
-from src.energizer.progress_trackers import ProgressTracker, StageTracker, Tracker
-import math
+from energizer.enums import RunningStage
+from energizer.estimators.base_progress_trackers import ProgressTracker, StageTracker, Tracker
+
 
 @dataclass
 class RoundTracker(Tracker):
@@ -44,7 +45,7 @@ class BudgetTracker(Tracker):
     def max_reached(self) -> bool:
         if self.max is not None:
             return self.max < (self.query_size + self.total)
-    
+
     @property
     def remaining_budget(self) -> Optional[int]:
         return self.max - self.current if self.max is not None else None
@@ -146,7 +147,7 @@ class ActiveProgressTracker(ProgressTracker):
         if max_budget is not None:
             assert max_budget - initial_budget > 0, ValueError("`max_budget` must be bigger than `initial_budget`.")
             if (max_budget - initial_budget) > 0:
-                max_rounds = min(max_rounds, math.ceil((max_budget - initial_budget) / query_size))        
+                max_rounds = min(max_rounds, math.ceil((max_budget - initial_budget) / query_size))
         self.round_tracker.max = max_rounds + 1
         self.budget_tracker = BudgetTracker(
             max=max_budget, total=initial_budget, current=initial_budget, query_size=query_size

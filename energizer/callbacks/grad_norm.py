@@ -1,12 +1,13 @@
-from lightning.pytorch.utilities.grads import grad_norm
-from src.energizer.callbacks import Callback
-from src.energizer.estimator import Estimator
-from lightning.fabric.wrappers import _FabricOptimizer, _FabricModule
 from typing import Union
+
+from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
+from lightning.pytorch.utilities.grads import grad_norm
+
+from energizer.callbacks import Callback
+from energizer.estimators.estimator import Estimator
 
 
 class GradNorm(Callback):
-
     def __init__(self, norm_type: Union[float, int, str], group_separator: str = "/") -> None:
         """Compute each parameter's gradient's norm and their overall norm.
 

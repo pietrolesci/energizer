@@ -1,8 +1,8 @@
 import time
 
-from src.energizer.callbacks.base import Callback
-from src.energizer.enums import RunningStage
-from src.energizer.estimator import Estimator
+from energizer.callbacks.base import Callback
+from energizer.enums import RunningStage
+from energizer.estimators.estimator import Estimator
 
 
 class Timer(Callback):

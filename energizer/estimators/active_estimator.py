@@ -5,11 +5,11 @@ from typing import Any, Dict, List, Optional, Union
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from torch.utils.data import DataLoader
 
-from src.energizer.active_learning.data import ActiveDataModule
-from src.energizer.active_learning.progress_trackers import ActiveProgressTracker
-from src.energizer.enums import RunningStage
-from src.energizer.estimator import Estimator, FitEpochOutput
-from src.energizer.types import EPOCH_OUTPUT, ROUND_OUTPUT
+from energizer.datastores.base import ActiveDataModule
+from energizer.enums import RunningStage
+from energizer.estimators.estimator import Estimator, FitEpochOutput
+from energizer.estimators.progress_trackers import ActiveProgressTracker
+from energizer.types import EPOCH_OUTPUT, ROUND_OUTPUT
 
 
 @dataclass
@@ -59,7 +59,9 @@ class ActiveEstimator(Estimator):
     ) -> Any:
 
         # configure progress tracking
-        assert max_budget is not None or max_rounds is not None, ValueError("At least one of `max_rounds` or `max_budget` must be not None.")
+        assert max_budget is not None or max_rounds is not None, ValueError(
+            "At least one of `max_rounds` or `max_budget` must be not None."
+        )
         self.progress_tracker.setup(
             max_rounds=max_rounds or float("Inf"),
             max_budget=min(active_datamodule.pool_size(), max_budget or float("Inf")),
@@ -292,9 +294,7 @@ class ActiveEstimator(Estimator):
             and not self.progress_tracker.is_last_round  # last round is used only to test
             and active_datamodule.pool_size(num_round) > query_size  # enough instances
         ):
-            n_labelled = self.run_annotation(
-                model, active_datamodule, query_size, validation_perc, validation_sampling
-            )
+            n_labelled = self.run_annotation(model, active_datamodule, query_size, validation_perc, validation_sampling)
         elif replay:
             n_labelled = active_datamodule.query_size(num_round)
 
@@ -316,7 +316,7 @@ class ActiveEstimator(Estimator):
 
         indices = self.run_query(model, active_datamodule=active_datamodule, query_size=query_size)
         if self.progress_tracker.budget_tracker.remaining_budget < query_size:
-            indices = indices[:self.progress_tracker.budget_tracker.remaining_budget]
+            indices = indices[: self.progress_tracker.budget_tracker.remaining_budget]
 
         self.fabric.call("on_query_end", estimator=self, model=model, output=indices)
 

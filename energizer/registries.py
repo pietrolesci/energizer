@@ -8,7 +8,7 @@ import torch_optimizer
 import transformers
 from transformers.optimization import TYPE_TO_SCHEDULER_FUNCTION
 
-from src.energizer.active_learning import acquisition_functions
+from energizer import acquisition_functions
 
 
 def camel_to_snake(name):

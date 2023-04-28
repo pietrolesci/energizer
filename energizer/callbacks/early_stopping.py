@@ -5,10 +5,10 @@ import numpy as np
 import srsly
 from lightning.fabric.wrappers import _FabricModule
 
-from src.energizer.callbacks.base import CallbackWithMonitor
-from src.energizer.enums import Interval, RunningStage
-from src.energizer.estimator import Estimator
-from src.energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
+from energizer.callbacks.base import CallbackWithMonitor
+from energizer.enums import Interval, RunningStage
+from energizer.estimators.estimator import Estimator
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
 
 
 class EarlyStopping(CallbackWithMonitor):

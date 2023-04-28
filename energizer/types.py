@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Union, Tuple
 
 from torch import Tensor
 from torchmetrics import Metric
@@ -9,5 +9,6 @@ DATASET = Iterable[Mapping]
 BATCH_OUTPUT = Union[Tensor, Dict]
 
 EPOCH_OUTPUT = List[Union[BATCH_OUTPUT, Any]]
+FIT_OUTPUT = Tuple[EPOCH_OUTPUT, EPOCH_OUTPUT]
 
 ROUND_OUTPUT = Union[Mapping[str, Any], Any]

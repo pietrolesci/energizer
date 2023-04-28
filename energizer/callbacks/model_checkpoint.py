@@ -6,11 +6,11 @@ from typing import Dict, Optional, Union
 import srsly
 from lightning.fabric.wrappers import _FabricModule
 
-from src.energizer.callbacks.base import CallbackWithMonitor
-from src.energizer.enums import RunningStage
-from src.energizer.estimator import Estimator
-from src.energizer.types import EPOCH_OUTPUT, METRIC
-from src.energizer.utilities import make_dict_json_serializable
+from energizer.callbacks.base import CallbackWithMonitor
+from energizer.enums import RunningStage
+from energizer.estimators.estimator import Estimator
+from energizer.types import EPOCH_OUTPUT, METRIC
+from energizer.utilities import make_dict_json_serializable
 
 
 class ModelCheckpoint(CallbackWithMonitor):
