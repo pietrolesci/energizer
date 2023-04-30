@@ -54,7 +54,7 @@ class BaseDataStore(ABC):
         ...
 
 
-class DataStore(BaseDataStore, HyperparametersMixin):
+class Datastore(BaseDataStore, HyperparametersMixin):
     """Defines dataloading for training and evaluation."""
 
     _rng: RandomState
@@ -126,8 +126,8 @@ class DataStore(BaseDataStore, HyperparametersMixin):
     def get_collate_fn(self, stage: Optional[str] = None) -> Optional[Callable]:
         return None
 
-    def show_batch(self, stage: RunningStage = RunningStage.TRAIN) -> Optional[Any]:
-        loader = getattr(self, f"{stage}_loader")()
+    def show_batch(self, stage: RunningStage = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+        loader = getattr(self, f"{stage}_loader")(*args, **kwargs)
         if loader is not None:
             return next(iter(loader))
 

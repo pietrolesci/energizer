@@ -64,7 +64,7 @@ class BaseDataStore(ABC):
         ...
 
 
-class DataStore(BaseDataStore, HyperparametersMixin):
+class Datastore(BaseDataStore, HyperparametersMixin):
     """Defines dataloading for training and evaluation."""
 
     _rng: RandomState
@@ -142,7 +142,7 @@ class DataStore(BaseDataStore, HyperparametersMixin):
             return next(iter(loader))
 
 
-class PandasDataStore(DataStore):
+class PandasDataStore(Datastore):
     data: pd.DataFrame = None
     test_data: Optional[DATASET] = None
     validation_data: Optional[DATASET] = None
@@ -249,7 +249,7 @@ class PandasDataStore(DataStore):
         return mask.sum()
 
 
-class PandasHSNWDataStore(DataStore):
+class PandasHSNWDataStore(Datastore):
     """DataModule that defines dataloading and indexing logic."""
 
     index: hb.Index = None
@@ -275,7 +275,7 @@ class PandasHSNWDataStore(DataStore):
         return indices, distances
 
 
-# class ActiveDataModule(DataModule):
+# class Datastore(DataModule):
 #     data: pd.DataFrame = None
 
 

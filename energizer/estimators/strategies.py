@@ -8,7 +8,7 @@ from sklearn.utils.validation import (
 )
 from torch.utils.data import DataLoader
 
-from energizer.datastores.base import ActiveDataModule
+from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.estimators.active_estimator import ActiveEstimator
 from energizer.registries import SCORING_FUNCTIONS
@@ -22,8 +22,8 @@ class RandomStrategy(ActiveEstimator):
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility
 
-    def run_query(self, *_, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
-        pool_indices = active_datamodule.pool_indices()
+    def run_query(self, *_, datastore: Datastore, query_size: int) -> List[int]:
+        pool_indices = datastore.pool_indices()
         return self.rng.choice(pool_indices, size=query_size, replace=False).tolist()
 
 
@@ -62,8 +62,8 @@ class UncertaintyBasedStrategy(ActiveEstimator):
 
         return output[SpecialKeys.ID][topk_ids].tolist()
 
-    def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
-        pool_loader = self.configure_dataloader(active_datamodule.pool_loader())
+    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int) -> List[int]:
+        pool_loader = self.configure_dataloader(datastore.pool_loader())
         return self._compute_most_uncertain(model, pool_loader, query_size)
 
     def evaluation_step(
@@ -113,15 +113,15 @@ class SimilaritySearchStrategy(RandomStrategy):
         super().__init__(*args, **kwargs)
         self.inverse = inverse
 
-    def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
-        train_embeddings = active_datamodule.get_train_embeddings()
+    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int) -> List[int]:
+        train_embeddings = datastore.get_train_embeddings()
 
         if not train_embeddings.size > 0:
             # random sample
-            return super().run_query(model, active_datamodule=active_datamodule, query_size=query_size)
+            return super().run_query(model, datastore=datastore, query_size=query_size)
 
         train_size = int(train_embeddings.shape[0])
-        ids, dists = active_datamodule.search_index(
+        ids, dists = datastore.search_index(
             train_embeddings,
             query_size=query_size
             if (train_size * query_size) < self.MAX_QUERY_SIZE
@@ -139,17 +139,17 @@ class SimilaritySearchStrategy(RandomStrategy):
 
 
 class SimilaritySearchStrategyWithUncertainty(UncertaintyBasedStrategy):
-    def run_query(self, model: _FabricModule, active_datamodule: ActiveDataModule, query_size: int) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int) -> List[int]:
         # TODO: fix when no initial budget
-        train_dataset = active_datamodule.train_loader().dataset
-        train_loader = active_datamodule.get_loader(RunningStage.POOL, train_dataset)
+        train_dataset = datastore.train_loader().dataset
+        train_loader = datastore.get_loader(RunningStage.POOL, train_dataset)
         self.progress_tracker.pool_tracker.max = len(train_loader)
 
         train_loader = self.configure_dataloader(train_loader)
         most_uncertain_train_ids = self._compute_most_uncertain(model, train_loader, query_size)
 
-        train_embeddings = active_datamodule.get_embeddings(most_uncertain_train_ids)
-        ids, dists = active_datamodule.search_index(train_embeddings, query_size=query_size, query_in_set=False)
+        train_embeddings = datastore.get_embeddings(most_uncertain_train_ids)
+        ids, dists = datastore.search_index(train_embeddings, query_size=query_size, query_in_set=False)
 
         # remove duplicates and order from smaller to larger distance
         ids, dists = ids.flatten(), dists.flatten()
@@ -167,31 +167,31 @@ class RandomPoolSubsamplingMixin:
     subsampling_size: Union[int, float] = None
     subsampling_rng: int = None
 
-    def get_pool_loader(self, active_datamodule: ActiveDataModule) -> DataLoader:
-        pool_indices = active_datamodule.pool_indices
+    def get_pool_loader(self, datastore: Datastore) -> DataLoader:
+        pool_indices = datastore.pool_indices
         if isinstance(self.subsampling_size, int):
             pool_size = min(self.subsampling_size, len(pool_indices))
         else:
             pool_size = int(self.subsampling_size * len(pool_indices))
 
         subset_indices = self.subsampling_rng.choice(pool_indices, size=pool_size)
-        return active_datamodule.pool_loader(subset_indices)
+        return datastore.pool_loader(subset_indices)
 
 
 class SEALSMixin:
     num_neighbours: int
 
-    def get_pool_loader(self, active_datamodule: ActiveDataModule) -> DataLoader:
+    def get_pool_loader(self, datastore: Datastore) -> DataLoader:
         # get the embeddings of the instances not labelled
-        train_embeddings = active_datamodule.get_train_embeddings()
+        train_embeddings = datastore.get_train_embeddings()
 
         # get neighbours of training instances from the pool
-        subset_indices, _ = active_datamodule.index.search_index(
+        subset_indices, _ = datastore.index.search_index(
             query=train_embeddings, query_size=self.num_neighbours, query_in_set=False
         )
         subset_indices = np.unique(subset_indices.flatten()).tolist()
 
-        return active_datamodule.pool_loader(subset_indices)
+        return datastore.pool_loader(subset_indices)
 
 
 """

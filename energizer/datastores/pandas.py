@@ -2,30 +2,31 @@ from collections import Counter
 from functools import partial
 from math import floor
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union, MutableMapping
+from typing import Callable, Dict, List, MutableMapping, Optional, Tuple, Union
 
 import hnswlib as hb
 import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset, DatasetDict
+from lightning.pytorch.utilities.parsing import AttributeDict
 from numpy.random import RandomState
 from sklearn.utils import resample
 from torch import Tensor
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import DataStore
+from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.types import DATASET
 from energizer.utilities import _pad, ld_to_dl
-from lightning.pytorch.utilities.parsing import AttributeDict
+
 
 def _resolve_round(round: Optional[int] = None) -> Union[float, int]:
     return round if round is not None else float("Inf")
 
 
-class PandasDataStore(DataStore):
+class PandasDataStore(Datastore):
     data: pd.DataFrame = None
     test_data: Optional[DATASET] = None
     validation_data: Optional[DATASET] = None
@@ -80,8 +81,9 @@ class PandasDataStore(DataStore):
         )
 
     def train_dataset(self, round: Optional[int] = None, passive: Optional[bool] = False) -> Optional[DATASET]:
-        if passive: return Dataset.from_pandas(self.data, preserve_index=False)
-        
+        if passive:
+            return Dataset.from_pandas(self.data, preserve_index=False)
+
         round = _resolve_round(round)
         mask = self._train_mask(round)
         if mask.sum() > 0:
@@ -236,7 +238,7 @@ class PandasDataStoreForSequenceClassification(PandasDataStore):
             replacement,
         )
         self.max_length = max_length
-    
+
     @property
     def hparams(self) -> Union[AttributeDict, MutableMapping]:
         hparams = super().hparams
@@ -261,13 +263,12 @@ class PandasDataStoreForSequenceClassification(PandasDataStore):
     @property
     def label2id(self) -> Dict[str, int]:
         return {v: k for k, v in self.id2label.items()}
-    
+
     def label_distribution(self, normalized: bool = False) -> Dict[str, Union[float, int]]:
         if normalized:
             total = sum(self._label_distribution.values())
             return {k: self._label_distribution[k] / total for k in self._label_distribution}
         return dict(self._label_distribution)
-
 
     def from_dataset_dict(
         self,

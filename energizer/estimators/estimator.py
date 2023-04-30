@@ -13,13 +13,13 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from energizer.enums import OutputKeys, RunningStage
-from energizer.estimators.base_progress_trackers import ProgressTracker
+from energizer.estimators.progress_trackers import ProgressTracker
 from energizer.registries import OPTIMIZER_REGISTRY
-from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC, FIT_OUTPUT
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from energizer.utilities import init_deterministic, move_to_cpu
 from energizer.utilities.model_summary import summarize
 
-    
+
 class Estimator(HyperparametersMixin):
     _progress_tracker: ProgressTracker = None
 
@@ -70,8 +70,8 @@ class Estimator(HyperparametersMixin):
         scheduler_kwargs: Optional[Dict] = None,
         **kwargs,
     ) -> List[FIT_OUTPUT]:
-        
-        self.fabric.launch()
+
+        # self.fabric.launch()  # NOTE: do not support distributed yet
 
         # start progress tracking
         self.progress_tracker.setup(
@@ -241,7 +241,7 @@ class Estimator(HyperparametersMixin):
         loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
 
         # compute gradients
-        self.fabric.backward(loss)  # instead of loss.backward()
+        self.backward(loss)  # instead of loss.backward()
 
         # update parameters
         self.fabric.call("on_before_optimizer_step", self, model, optimizer)
@@ -257,10 +257,13 @@ class Estimator(HyperparametersMixin):
 
         return output
 
+    def backward(self, loss: torch.Tensor) -> None:
+        self.fabric.backward(loss)
+
     def test(self, test_loader: DataLoader, **kwargs) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
-        self.fabric.launch()
-        
+        # self.fabric.launch()  # NOTE: do not support distributed yet
+
         self.progress_tracker.setup(RunningStage.TEST, num_batches=len(test_loader), **kwargs)
 
         # configuration
@@ -352,6 +355,7 @@ class Estimator(HyperparametersMixin):
     """
 
     def transfer_to_device(self, batch: Any) -> Any:
+        # NOTE: fabric knows how to handle non-gpu stuff so the batch can have anything inside
         return self.fabric.to_device(batch)
 
     def configure_optimizer(
@@ -420,7 +424,8 @@ class Estimator(HyperparametersMixin):
         # return scheduler
 
     def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:
-        if loader is None: return
+        if loader is None:
+            return
         return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)
 
     def log(self, name: str, value: Any, step: int) -> None:
@@ -490,5 +495,3 @@ class Estimator(HyperparametersMixin):
 
     def test_epoch_end(self, output: List, metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output
-
-  
