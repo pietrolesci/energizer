@@ -129,7 +129,7 @@ class Summary:
         return str(self)
 
 
-def summarize(estimator, max_depth: int = 1) -> None:
+def summarize(estimator, max_depth: int = 1) -> str:
     model_summary = Summary(estimator, max_depth)
     summary_data = model_summary._get_summary_data()
     total_parameters = model_summary.total_parameters

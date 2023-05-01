@@ -5,7 +5,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from energizer.enums import RunningStage
-
+import math
 
 @dataclass
 class Tracker:
@@ -79,7 +79,7 @@ class ProgressTracker:
     validation_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.VALIDATION))
     test_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.TEST))
 
-    validation_interval: Optional[List[int]] = None
+    num_validation_per_epoch: Optional[List[int]] = None
     stop_training: bool = False
     has_validation: bool = False
     log_interval: int = 1
@@ -119,7 +119,7 @@ class ProgressTracker:
         return (
             self.validation_tracker.max is not None
             and self.has_validation
-            and (self.is_done() or self.train_tracker.current in self.validation_interval)
+            and (self.is_done() or self.train_tracker.current in self.num_validation_per_epoch)
         )
 
     """Outer loops"""
@@ -220,7 +220,7 @@ class ProgressTracker:
         num_validation_batches: int,
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
-        validation_interval: Optional[int] = True,
+        num_validation_per_epoch: Optional[int] = True,
     ) -> None:
         self.stop_training = False
 
@@ -245,20 +245,20 @@ class ProgressTracker:
         max_validation_batches = min(num_validation_batches, limit_validation_batches or float("Inf"))
         if (
             max_validation_batches is not None
-            and validation_interval is not None
-            and max_train_batches > validation_interval
+            and num_validation_per_epoch is not None
+            and max_train_batches > num_validation_per_epoch
         ):
-            validation_interval = np.linspace(
-                max_train_batches / validation_interval, max_train_batches, validation_interval, dtype=int
+            num_validation_per_epoch = np.linspace(
+                max_train_batches / num_validation_per_epoch, max_train_batches, num_validation_per_epoch, dtype=int
             ).tolist()[:-1]
         else:
-            validation_interval = []
+            num_validation_per_epoch = []
 
         self.epoch_tracker.max = max_epochs
         self.step_tracker.max = min_steps
         self.train_tracker.max = max_train_batches
         self.validation_tracker.max = max_validation_batches
-        self.validation_interval = validation_interval
+        self.num_validation_per_epoch = num_validation_per_epoch
 
 
 @dataclass
@@ -389,6 +389,10 @@ class ActiveProgressTracker(ProgressTracker):
     ) -> None:
         """Create progress bars."""
 
+        assert max_budget is not None or max_rounds is not None, ValueError(
+            "At least one of `max_rounds` or `max_budget` must be not None."
+        )
+
         self.log_interval = log_interval
         self.enable_progress_bar = enable_progress_bar
         self.has_validation = has_validation
@@ -400,7 +404,8 @@ class ActiveProgressTracker(ProgressTracker):
         if max_budget is not None:
             assert max_budget - initial_budget > 0, ValueError("`max_budget` must be bigger than `initial_budget`.")
             if (max_budget - initial_budget) > 0:
-                max_rounds = min(max_rounds, math.ceil((max_budget - initial_budget) / query_size))
+                max_rounds = min(max_rounds or float("Inf"), math.ceil((max_budget - initial_budget) / query_size))
+        
         self.round_tracker.max = max_rounds + 1
         self.budget_tracker = BudgetTracker(
             max=max_budget, total=initial_budget, current=initial_budget, query_size=query_size
@@ -425,7 +430,7 @@ class ActiveProgressTracker(ProgressTracker):
             num_validation_batches=kwargs.get("num_validation_batches"),
             limit_train_batches=kwargs.get("limit_train_batches"),
             limit_validation_batches=kwargs.get("limit_validation_batches"),
-            validation_interval=kwargs.get("validation_interval"),
+            num_validation_per_epoch=kwargs.get("num_validation_per_epoch"),
         )
         for stage in (RunningStage.TEST, RunningStage.POOL):
             if getattr(self, f"has_{stage}"):

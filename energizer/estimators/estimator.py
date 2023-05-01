@@ -21,12 +21,12 @@ from energizer.utilities.model_summary import summarize
 
 
 class Estimator(HyperparametersMixin):
-    _progress_tracker: ProgressTracker = None
+    _progress_tracker: ProgressTracker = ProgressTracker()
 
     def __init__(
         self,
         model: torch.nn.Module,
-        accelerator: Optional[Union[str, Accelerator]] = None,
+        accelerator: Union[str, Accelerator] = "cpu",
         precision: _PRECISION_INPUT = 32,
         callbacks: Optional[Union[List[Any], Any]] = None,
         loggers: Optional[Union[Logger, List[Logger]]] = None,
@@ -91,9 +91,7 @@ class Estimator(HyperparametersMixin):
         model, optimizer = self.fabric.setup(self.model, optimizer)
 
         # run epochs
-        output = self.run_fit(model, train_loader, validation_loader, optimizer, scheduler)
-
-        return output
+        return self.run_fit(model, train_loader, validation_loader, optimizer, scheduler)
 
     def run_fit(
         self,
@@ -101,8 +99,8 @@ class Estimator(HyperparametersMixin):
         train_loader: _FabricDataLoader,
         validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
-        scheduler: Optional[str],
-    ) -> FIT_OUTPUT:
+        scheduler: Optional[_LRScheduler],
+    ) -> List[FIT_OUTPUT]:
 
         self.progress_tracker.start_fit()
 
@@ -138,7 +136,7 @@ class Estimator(HyperparametersMixin):
         train_loader: _FabricDataLoader,
         validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
-        scheduler: Optional[str],
+        scheduler: Optional[_LRScheduler],
     ) -> FIT_OUTPUT:
         """Runs a training epoch."""
 
@@ -227,7 +225,7 @@ class Estimator(HyperparametersMixin):
         batch: Any,
         batch_idx: int,
         optimizer: _FabricOptimizer,
-        scheduler: _LRScheduler,
+        scheduler: Optional[_LRScheduler],
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
     ) -> BATCH_OUTPUT:
@@ -391,9 +389,7 @@ class Estimator(HyperparametersMixin):
             params = filter(lambda p: p.requires_grad, self.model.parameters())
 
         # instantiate optimizer
-        optimizer = optimizer_fn(params, lr=learning_rate, **optimizer_kwargs)
-
-        return optimizer
+        return optimizer_fn(params, lr=learning_rate, **optimizer_kwargs)
 
     def configure_scheduler(
         self,
@@ -441,7 +437,7 @@ class Estimator(HyperparametersMixin):
     def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
-        self.fabric.save(self.model.state_dict(), cache_dir / name)
+        self.fabric.save(state=self.model.state_dict(), path=cache_dir / name)
 
     def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
         cache_dir = Path(cache_dir)

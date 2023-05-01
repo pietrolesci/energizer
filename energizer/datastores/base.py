@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, List
 
 import torch
-from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
+# from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
@@ -53,25 +53,53 @@ class BaseDataStore(ABC):
     def label(self, *args, **kwargs) -> int:
         ...
 
+    @abstractmethod
+    def sample_from_pool(self, *args, **kwargs) -> List[int]:
+        ...
 
-class Datastore(BaseDataStore, HyperparametersMixin):
+    @abstractmethod
+    def pool_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def train_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def test_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def validation_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def labelled_size(self, *args, **kwargs) -> int:
+        ...
+
+
+class Datastore(BaseDataStore):
     """Defines dataloading for training and evaluation."""
 
     _rng: RandomState
 
-    def __init__(
+    def __init__(self, seed: int = 42) -> None:
+        super().__init__()
+        self.seed = seed
+        self.reset_rng(seed)
+
+    def prepare_for_loading(
         self,
-        batch_size: Optional[int] = 32,
-        eval_batch_size: Optional[int] = 32,
-        num_workers: Optional[int] = 0,
-        pin_memory: Optional[bool] = True,
-        drop_last: Optional[bool] = False,
-        persistent_workers: Optional[bool] = False,
-        shuffle: Optional[bool] = True,
-        seed: Optional[int] = 42,
+        batch_size: int = 32,
+        eval_batch_size: int = 32,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        drop_last: bool = False,
+        persistent_workers: bool = False,
+        shuffle: bool = True,
+        data_seed: int = 42,
         replacement: bool = False,
     ) -> None:
-        super().__init__()
         self.batch_size = batch_size
         self.eval_batch_size = eval_batch_size
         self.num_workers = num_workers
@@ -79,16 +107,13 @@ class Datastore(BaseDataStore, HyperparametersMixin):
         self.drop_last = drop_last
         self.persistent_workers = persistent_workers
         self.shuffle = shuffle
-        self.seed = seed
         self.replacement = replacement
+        self.data_seed = data_seed
 
-        self.save_hyperparameters()
-        self.reset_rng()
+    def reset_rng(self, seed: int) -> None:
+        self._rng = check_random_state(seed)
 
-    def reset_rng(self) -> None:
-        self._rng = check_random_state(self.seed)
-
-    def train_loader(self, *args, **kwargs) -> DataLoader:
+    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
         return self.get_loader(RunningStage.TRAIN, *args, **kwargs)
 
     def validation_loader(self, *args, **kwargs) -> Optional[DataLoader]:
@@ -101,10 +126,9 @@ class Datastore(BaseDataStore, HyperparametersMixin):
         return self.get_loader(RunningStage.POOL, *args, **kwargs)
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
-        fn = getattr(self, f"{stage}_dataset", None)
-        if fn is None:
+        dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
+        if dataset is None:
             return
-        dataset = fn(*args, **kwargs)
 
         batch_size = self.batch_size if stage == RunningStage.TRAIN else self.eval_batch_size
         batch_size = min(batch_size, len(dataset))
@@ -112,7 +136,7 @@ class Datastore(BaseDataStore, HyperparametersMixin):
             dataset,
             shuffle=self.shuffle if stage == RunningStage.TRAIN else False,
             replacement=self.replacement,
-            seed=self.seed,
+            seed=self.data_seed,
         )
 
         return DataLoader(

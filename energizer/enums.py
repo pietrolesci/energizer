@@ -1,27 +1,47 @@
-from lightning.pytorch.utilities.enums import LightningEnum
+from lightning_utilities.core.enums import StrEnum as _StrEnum
+from enum import EnumMeta
 
 
-class RunningStage(LightningEnum):
+class ValueOnlyEnumMeta(EnumMeta):
+
+    # def __members__(cls):
+    #     return {member.value: member for member in cls}
+
+    def __iter__(cls):
+        """
+        Returns members in definition order.
+        """
+        return (cls._member_map_[name].value for name in cls._member_names_)
+
+
+class StrEnum(_StrEnum, metaclass=ValueOnlyEnumMeta):
+    def __str__(self):
+        # behaves like string when used in interpolation
+        return str(self.value)
+    
+
+
+class RunningStage(StrEnum):
     TRAIN: str = "train"
     VALIDATION: str = "validation"
     TEST: str = "test"
     POOL: str = "pool"
 
 
-class Interval(LightningEnum):
+class Interval(StrEnum):
     BATCH: str = "batch"
     EPOCH: str = "epoch"
     ROUND: str = "round"
 
 
-class SpecialKeys(LightningEnum):
+class SpecialKeys(StrEnum):
     ID: str = "unique_id"
     IS_LABELLED: str = "is_labelled"
     IS_VALIDATION: str = "is_validation"
     LABELLING_ROUND: str = "labelling_round"
 
 
-class InputKeys(LightningEnum):
+class InputKeys(StrEnum):
     TARGET: str = "labels"
     INPUT_IDS: str = "input_ids"
     ATT_MASK: str = "attention_mask"
@@ -30,7 +50,7 @@ class InputKeys(LightningEnum):
     TEXT: str = "text"
 
 
-class OutputKeys(LightningEnum):
+class OutputKeys(StrEnum):
     PRED: str = "y_hat"
     TARGET: str = "y"
     LOSS: str = "loss"

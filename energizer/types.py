@@ -4,7 +4,7 @@ from torch import Tensor
 from torchmetrics import Metric
 
 METRIC = Union[Metric, Any]
-DATASET = Iterable[Mapping]
+DATASET = List[Mapping]
 
 BATCH_OUTPUT = Union[Tensor, Dict]
 
