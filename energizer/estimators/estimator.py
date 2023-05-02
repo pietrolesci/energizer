@@ -49,8 +49,6 @@ class Estimator(HyperparametersMixin):
 
     @property
     def progress_tracker(self) -> ProgressTracker:
-        if self._progress_tracker is None:
-            self._progress_tracker = ProgressTracker()
         return self._progress_tracker
 
     @property
@@ -68,30 +66,40 @@ class Estimator(HyperparametersMixin):
         optimizer_kwargs: Optional[Dict] = None,
         scheduler: Optional[str] = None,
         scheduler_kwargs: Optional[Dict] = None,
-        **kwargs,
+        log_interval: int = 1,
+        enable_progress_bar: bool = True,
+        num_validation_per_epoch: int = 1,
+        limit_train_batches: Optional[int] = None,
+        limit_validation_batches: Optional[int] = None,
     ) -> List[FIT_OUTPUT]:
 
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
+        assert max_epochs is not None or min_steps is not None, "`max_epochs` or `min_steps` must be passed."
+
         # start progress tracking
         self.progress_tracker.setup(
             RunningStage.TRAIN,
+            log_interval,
+            enable_progress_bar,
             max_epochs=max_epochs,
             min_steps=min_steps,
             num_train_batches=len(train_loader),
             num_validation_batches=len(validation_loader or []),
-            **kwargs,
+            num_validation_per_epoch=num_validation_per_epoch,
+            limit_train_batches=limit_train_batches,
+            limit_validation_batches=limit_validation_batches,
         )
 
         # configuration
-        train_loader = self.configure_dataloader(train_loader)
-        validation_loader = self.configure_dataloader(validation_loader)
-        optimizer = self.configure_optimizer(optimizer, learning_rate, optimizer_kwargs)
-        scheduler = self.configure_scheduler(scheduler, optimizer, scheduler_kwargs)
-        model, optimizer = self.fabric.setup(self.model, optimizer)
+        _train_loader = self.configure_dataloader(train_loader)
+        _validation_loader = self.configure_dataloader(validation_loader)
+        _optimizer = self.configure_optimizer(optimizer, learning_rate, optimizer_kwargs)
+        _scheduler = self.configure_scheduler(scheduler, _optimizer, scheduler_kwargs)
+        model, _optimizer = self.fabric.setup(self.model, _optimizer)
 
         # run epochs
-        return self.run_fit(model, train_loader, validation_loader, optimizer, scheduler)
+        return self.run_fit(model, _train_loader, _validation_loader, _optimizer, _scheduler)  # type: ignore
 
     def run_fit(
         self,
@@ -189,7 +197,7 @@ class Estimator(HyperparametersMixin):
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
-            if self.progress_tracker.should_validate():
+            if self.progress_tracker.should_validate() and validation_loader is not None:
                 out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
                 if out is not None:
                     validation_out.append(out)
@@ -210,7 +218,7 @@ class Estimator(HyperparametersMixin):
         )
 
         # validation loop
-        if self.progress_tracker.should_validate():
+        if self.progress_tracker.should_validate() and validation_loader is not None:
             out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
             if out is not None:
                 validation_out.append(out)
@@ -258,16 +266,28 @@ class Estimator(HyperparametersMixin):
     def backward(self, loss: torch.Tensor) -> None:
         self.fabric.backward(loss)
 
-    def test(self, test_loader: DataLoader, **kwargs) -> EPOCH_OUTPUT:
+    def test(
+        self,
+        test_loader: DataLoader,
+        log_interval: int = 1,
+        enable_progress_bar: bool = True,
+        limit_batches: Optional[int] = None,
+    ) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
-        self.progress_tracker.setup(RunningStage.TEST, num_batches=len(test_loader), **kwargs)
+        self.progress_tracker.setup(
+            RunningStage.TEST,
+            log_interval,
+            enable_progress_bar,
+            num_batches=len(test_loader),
+            limit_batches=limit_batches,
+        )
 
         # configuration
         loader = self.configure_dataloader(test_loader)
         model = self.fabric.setup(self.model)
-        return self.run_evaluation(model, loader, RunningStage.TEST)
+        return self.run_evaluation(model, loader, RunningStage.TEST)  # type: ignore
 
     def run_evaluation(self, model: _FabricModule, loader: _FabricDataLoader, stage: RunningStage) -> EPOCH_OUTPUT:
         """Runs over an entire evaluation dataloader."""
@@ -393,7 +413,7 @@ class Estimator(HyperparametersMixin):
 
     def configure_scheduler(
         self,
-        scheduler: str,
+        scheduler: Optional[str],
         optimizer: Optimizer,
         scheduler_kwargs: Optional[Dict] = None,
     ) -> Optional[_LRScheduler]:
@@ -422,7 +442,7 @@ class Estimator(HyperparametersMixin):
     def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:
         if loader is None:
             return
-        return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)
+        return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)  # type: ignore
 
     def log(self, name: str, value: Any, step: int) -> None:
         """Automatically moves to cpu and then logs value."""

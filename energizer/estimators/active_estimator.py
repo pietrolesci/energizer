@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -9,7 +8,7 @@ from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
 from energizer.estimators.estimator import Estimator
 from energizer.estimators.progress_trackers import ActiveProgressTracker
-from energizer.types import EPOCH_OUTPUT, FIT_OUTPUT, ROUND_OUTPUT
+from energizer.types import ROUND_OUTPUT
 
 
 class ActiveEstimator(Estimator):
@@ -17,8 +16,6 @@ class ActiveEstimator(Estimator):
 
     @property
     def progress_tracker(self) -> ActiveProgressTracker:
-        if self._progress_tracker is None:
-            self._progress_tracker = ActiveProgressTracker()
         return self._progress_tracker
 
     """
@@ -41,32 +38,40 @@ class ActiveEstimator(Estimator):
         optimizer_kwargs: Optional[Dict] = None,
         scheduler: Optional[str] = None,
         scheduler_kwargs: Optional[Dict] = None,
-        model_cache_dir: Optional[Union[str, Path]] = ".model_cache",
-        log_interval: Optional[int] = 1,
-        enable_progress_bar: Optional[bool] = True,
+        model_cache_dir: Union[str, Path] = ".model_cache",
+        log_interval: int = 1,
+        enable_progress_bar: bool = True,
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
         limit_test_batches: Optional[int] = None,
         limit_pool_batches: Optional[int] = None,
         num_validation_per_epoch: Optional[int] = None,
     ) -> Any:
+        assert (
+            max_budget is not None or max_rounds is not None
+        ), "At least one of `max_rounds` or `max_budget` must be not None."
+        assert not reinit_model or (
+            reinit_model and model_cache_dir
+        ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
         self.progress_tracker.setup(
             max_rounds=max_rounds,
-            max_budget=min(datastore.pool_size(), max_budget or float("Inf")),
+            max_budget=int(min(datastore.pool_size(), max_budget or float("Inf"))),
             initial_budget=datastore.labelled_size(),
             query_size=query_size,
             has_test=datastore.test_size() > 0,
-            has_pool=getattr(self, "pool_step", None) is not None,
+            run_on_pool=getattr(self, "pool_step", None) is not None,
             has_validation=datastore.validation_size() > 0 or validation_perc is not None,
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
         )
 
         return self.run_active_fit(
-            replay=False,
             datastore=datastore,
+            replay=False,
+            reinit_model=reinit_model,
+            model_cache_dir=model_cache_dir,
             max_epochs=max_epochs,
             min_steps=min_steps,
             learning_rate=learning_rate,
@@ -74,11 +79,9 @@ class ActiveEstimator(Estimator):
             optimizer_kwargs=optimizer_kwargs,
             scheduler=scheduler,
             scheduler_kwargs=scheduler_kwargs,
-            reinit_model=reinit_model,
             query_size=query_size,
             validation_sampling=validation_sampling,
             validation_perc=validation_perc,
-            model_cache_dir=model_cache_dir,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
             limit_test_batches=limit_test_batches,
@@ -86,23 +89,12 @@ class ActiveEstimator(Estimator):
             num_validation_per_epoch=num_validation_per_epoch,
         )
 
-
     def run_active_fit(
         self,
-        replay: bool,
         datastore: Datastore,
-        max_epochs: Optional[int],
-        min_steps: Optional[int],
-        learning_rate: float,
-        optimizer: str,
-        optimizer_kwargs: Optional[Dict],
-        scheduler: Optional[str],
-        scheduler_kwargs: Optional[Dict],
+        replay: bool,
         reinit_model: bool,
-        query_size: Optional[int],
-        validation_sampling: Optional[str],
-        validation_perc: Optional[float],
-        model_cache_dir: Optional[Union[str, Path]],
+        model_cache_dir: Union[str, Path],
         **kwargs,
     ) -> Any:
 
@@ -120,24 +112,10 @@ class ActiveEstimator(Estimator):
 
             self.fabric.call("on_round_start", estimator=self, datastore=datastore)
 
-            out = self.run_round(
-                replay=replay,
-                datastore=datastore,
-                query_size=query_size,
-                validation_perc=validation_perc,
-                validation_sampling=validation_sampling,
-                max_epochs=max_epochs,
-                min_steps=min_steps,
-                learning_rate=learning_rate,
-                optimizer=optimizer,
-                optimizer_kwargs=optimizer_kwargs,
-                scheduler=scheduler,
-                scheduler_kwargs=scheduler_kwargs,
-                **kwargs,
-            )
+            out = self.run_round(datastore=datastore, replay=replay, **kwargs)
 
             # method to possibly aggregate
-            output = self.round_epoch_end(output, datastore)
+            out = self.round_epoch_end(out, datastore)
 
             self.fabric.call("on_round_end", estimator=self, datastore=datastore, output=out)
 
@@ -165,8 +143,8 @@ class ActiveEstimator(Estimator):
 
     def run_round(
         self,
-        replay: bool,
         datastore: Datastore,
+        replay: bool,
         max_epochs: Optional[int],
         min_steps: Optional[int],
         learning_rate: float,
@@ -174,34 +152,35 @@ class ActiveEstimator(Estimator):
         optimizer_kwargs: Optional[Dict],
         scheduler: Optional[str],
         scheduler_kwargs: Optional[Dict],
-        query_size: Optional[int],
+        query_size: int,
         validation_perc: Optional[float],
         validation_sampling: Optional[str],
+        num_validation_per_epoch: int,
         limit_train_batches: Optional[int],
         limit_validation_batches: Optional[int],
         limit_test_batches: Optional[int],
         limit_pool_batches: Optional[int],
-        num_validation_per_epoch: Optional[int],
     ) -> ROUND_OUTPUT:
 
         num_round = self.progress_tracker.global_round if replay else None
-
-        self.progress_tracker.setup_round_tracking(
-            # fit
+        self.progress_tracker.setup_fit(
             max_epochs=max_epochs,
             min_steps=min_steps,
             num_train_batches=len(datastore.train_loader(num_round) or []),
             num_validation_batches=len(datastore.validation_loader(num_round) or []),
+            num_validation_per_epoch=num_validation_per_epoch,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
-            num_validation_per_epoch=num_validation_per_epoch,
-            # test
-            num_test_batches=len(datastore.test_loader() or []),
-            limit_test_batches=limit_test_batches,
-            # pool
-            num_pool_batches=len(datastore.pool_loader(num_round) or []) if not replay else None,
-            limit_pool_batches=limit_pool_batches if not replay else None,
         )
+        self.progress_tracker.setup_eval(
+            RunningStage.TEST, num_batches=len(datastore.test_loader() or []), limit_batches=limit_test_batches
+        )
+        if not replay:
+            self.progress_tracker.setup_eval(
+                RunningStage.POOL,
+                num_batches=len(datastore.pool_loader(num_round) or []),
+                limit_batches=limit_pool_batches,
+            )
 
         # loaders
         train_loader = self.configure_dataloader(datastore.train_loader(num_round))
@@ -209,19 +188,19 @@ class ActiveEstimator(Estimator):
         test_loader = self.configure_dataloader(datastore.test_loader())
 
         # optimization
-        optimizer = self.configure_optimizer(optimizer, learning_rate, optimizer_kwargs)
-        scheduler = self.configure_scheduler(scheduler, optimizer, scheduler_kwargs)
-        model, optimizer = self.fabric.setup(self.model, optimizer)
+        _optimizer = self.configure_optimizer(optimizer, learning_rate, optimizer_kwargs)
+        _scheduler = self.configure_scheduler(scheduler, _optimizer, scheduler_kwargs)
+        model, _optimizer = self.fabric.setup(self.model, _optimizer)
 
         output = {}
 
         # fit
         if datastore.train_size(num_round) > 0:
-            output["fit"] = self.run_fit(model, train_loader, validation_loader, optimizer, scheduler)
+            output["fit"] = self.run_fit(model, train_loader, validation_loader, _optimizer, _scheduler)  # type: ignore
 
         # test
         if datastore.test_size() > 0:
-            output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)
+            output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)  # type: ignore
 
         # query and label
         n_labelled = None
@@ -232,7 +211,7 @@ class ActiveEstimator(Estimator):
         ):
             n_labelled = self.run_annotation(model, datastore, query_size, validation_perc, validation_sampling)
         elif replay:
-            n_labelled = datastore.query_size(num_round)
+            n_labelled = datastore.get_num_labelled_at_round(num_round)
 
         if n_labelled:
             self.progress_tracker.increment_budget(n_labelled)
@@ -252,8 +231,11 @@ class ActiveEstimator(Estimator):
         self.fabric.call("on_query_start", estimator=self, model=model)
 
         indices = self.run_query(model, datastore=datastore, query_size=query_size)
-        if self.progress_tracker.budget_tracker.remaining_budget < query_size:
-            indices = indices[: self.progress_tracker.budget_tracker.remaining_budget]
+
+        # if with the current query we overrun the budget
+        remaining_budget = self.progress_tracker.budget_tracker.get_remaining_budget()
+        if remaining_budget < query_size:
+            indices = indices[:remaining_budget]
 
         self.fabric.call("on_query_end", estimator=self, model=model, output=indices)
 
@@ -284,10 +266,8 @@ class ActiveEstimator(Estimator):
     Methods
     """
 
-    def get_pool_loader(self, datastore: Datastore) -> DataLoader:
+    def get_pool_loader(self, datastore: Datastore) -> Optional[DataLoader]:
         return datastore.pool_loader()
-
-
 
     def replay_active_fit(
         self,
@@ -300,9 +280,9 @@ class ActiveEstimator(Estimator):
         optimizer_kwargs: Optional[Dict] = None,
         scheduler: Optional[str] = None,
         scheduler_kwargs: Optional[Dict] = None,
-        model_cache_dir: Optional[Union[str, Path]] = ".model_cache",
-        log_interval: Optional[int] = 1,
-        enable_progress_bar: Optional[bool] = True,
+        model_cache_dir: Union[str, Path] = ".model_cache",
+        log_interval: int = 1,
+        enable_progress_bar: bool = True,
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
         limit_test_batches: Optional[int] = None,
@@ -310,22 +290,28 @@ class ActiveEstimator(Estimator):
         num_validation_per_epoch: Optional[int] = None,
     ) -> Any:
 
+        assert not reinit_model or (
+            reinit_model and model_cache_dir
+        ), "If `reinit_model` is True then you must specify `model_cache_dir`."
+
         # configure progress tracking
         self.progress_tracker.setup(
-            max_rounds=datastore.last_labelling_round,
+            max_rounds=datastore.total_rounds(),
             max_budget=None,
-            initial_budget=datastore.initial_budget,
-            query_size=datastore.query_size(1),
-            has_validation=datastore.has_validation_data(),
-            has_test=datastore.has_test_data,
-            has_pool=False,
+            initial_budget=datastore.labelled_size(0),
+            query_size=datastore.get_num_labelled_at_round(1),
+            has_test=datastore.test_size() > 0,
+            run_on_pool=False,
+            has_validation=datastore.validation_size() > 0,
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
         )
 
         return self.run_active_fit(
-            replay=True,
             datastore=datastore,
+            replay=True,
+            reinit_model=reinit_model,
+            model_cache_dir=model_cache_dir,
             max_epochs=max_epochs,
             min_steps=min_steps,
             learning_rate=learning_rate,
@@ -333,14 +319,12 @@ class ActiveEstimator(Estimator):
             optimizer_kwargs=optimizer_kwargs,
             scheduler=scheduler,
             scheduler_kwargs=scheduler_kwargs,
-            reinit_model=reinit_model,
-            model_cache_dir=model_cache_dir,
+            query_size=None,
+            validation_sampling=None,
+            validation_perc=None,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
             limit_test_batches=limit_test_batches,
             limit_pool_batches=limit_pool_batches,
             num_validation_per_epoch=num_validation_per_epoch,
-            query_size=None,
-            validation_perc=None,
-            validation_sampling=None,
         )

@@ -3,13 +3,13 @@ from functools import partial
 from math import floor
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
-from click import Option
 
 import hnswlib as hb
 import numpy as np
 import pandas as pd
 import srsly
 import torch
+from click import Option
 from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from numpy.random import RandomState
 from sklearn.utils import resample
@@ -51,7 +51,9 @@ class PandasDataStore(Datastore):
         if self.test_data is not None:
             return self.test_data
 
-    def pool_dataset(self, round: Optional[int] = None, subset_indices: Optional[List[int]] = None) -> Optional[Dataset]:
+    def pool_dataset(
+        self, round: Optional[int] = None, subset_indices: Optional[List[int]] = None
+    ) -> Optional[Dataset]:
         df = self.data.loc[self._pool_mask(round), [i for i in self.data.columns if i != self.target_name]]
         if subset_indices is not None:
             df = df.loc[df[SpecialKeys.ID].isin(subset_indices)]
@@ -89,7 +91,9 @@ class PandasDataStore(Datastore):
 
         return mask.sum()
 
-    def sample_from_pool(self, size: int, mode: Optional[str], round: Optional[int] = None, random_state: Optional[RandomState] = None) -> List[int]:
+    def sample_from_pool(
+        self, size: int, mode: Optional[str], round: Optional[int] = None, random_state: Optional[RandomState] = None
+    ) -> List[int]:
         data = self.data.loc[self._pool_mask(round), [SpecialKeys.ID, self.target_name]]
         return sample(
             indices=data[SpecialKeys.ID].tolist(),
@@ -98,7 +102,7 @@ class PandasDataStore(Datastore):
             labels=data[self.target_name].tolist(),
             sampling=mode,
         )
-    
+
     def pool_size(self, round: Optional[int] = None) -> int:
         return self._pool_mask(round).sum()
 
@@ -115,7 +119,15 @@ class PandasDataStore(Datastore):
 
     def test_size(self) -> int:
         return len(self.test_data) if self.test_data is not None else 0
-        
+
+    def get_num_labelled_at_round(self, round: Optional[int] = None) -> int:
+        last_round = round or self.data[SpecialKeys.LABELLING_ROUND].max()
+        if last_round < 0:
+            return self.labelled_size(last_round)
+        return self.labelled_size(last_round) - self.labelled_size(last_round - 1)
+
+    def total_rounds(self) -> int:
+        return self.data[SpecialKeys.LABELLING_ROUND].max()
 
     def from_datasets(
         self,
@@ -131,11 +143,11 @@ class PandasDataStore(Datastore):
         self.target_name = target_name
         self.input_names = [input_names] if isinstance(input_names, str) else input_names
         on_cpu = on_cpu or []
-        self.on_cpu = [on_cpu] if isinstance(on_cpu, str) else on_cpu        
+        self.on_cpu = [on_cpu] if isinstance(on_cpu, str) else on_cpu
         # cols = self.input_names + [self.target_name] + list(SpecialKeys) + self.on_cpu
-        
+
         # create training data
-        data: pd.DataFrame = train_dataset.to_pandas()
+        data: pd.DataFrame = train_dataset.to_pandas()  # type: ignore
         features = {k: v for k, v in train_dataset.features.items()}
 
         # add special columns if not present
@@ -155,7 +167,7 @@ class PandasDataStore(Datastore):
                 data[k.value] = v
                 features[k.value] = f
 
-        self.data = data  #.loc[:, cols]
+        self.data = data  # .loc[:, cols]
         self._features = Features(**features)
         if validation_dataset is not None:
             self.validation_data = validation_dataset
@@ -182,7 +194,7 @@ class PandasDataStore(Datastore):
         return self.data.loc[self.data[SpecialKeys.ID].isin(ids)]
 
     def _labelled_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = (self.data[SpecialKeys.IS_LABELLED] == True)
+        mask = self.data[SpecialKeys.IS_LABELLED] == True
         if round is not None:
             mask = mask & (self.data[SpecialKeys.LABELLING_ROUND] <= round)
         return mask
@@ -194,7 +206,7 @@ class PandasDataStore(Datastore):
         return self._labelled_mask(round) & (self.data[SpecialKeys.IS_VALIDATION] == True)
 
     def _pool_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = (self.data[SpecialKeys.IS_LABELLED] == False)
+        mask = self.data[SpecialKeys.IS_LABELLED] == False
         if round is not None:
             mask = mask | (self.data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
@@ -219,7 +231,9 @@ class PandasDataStoreWithIndex(PandasDataStore):
                 self.index.mark_deleted(idx)
         return out
 
-    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> Tuple[List[List[int]], np.ndarray]:
+    def search(
+        self, query: np.ndarray, query_size: int, query_in_set: bool = True
+    ) -> Tuple[List[List[int]], np.ndarray]:
         # retrieve one additional element if the query is in the set we are looking in
         # because the query itself is returned as the most similar element and we need to remove it
         query_size = query_size + 1 if query_in_set else query_size
@@ -256,7 +270,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
     def load_index(self, dir: Union[str, Path]) -> None:
         dir = Path(dir)
         if (dir / "hnswlib_index_config.json").exists():
-            meta: Dict = srsly.read_json(dir / "hnswlib_index_config.json")
+            meta: Dict = srsly.read_json(dir / "hnswlib_index_config.json")  # type: ignore
             index = hb.Index(space=meta["metric"], dim=meta["dim"])
             index.load_index(str(dir / "hnswlib_index.bin"))
             self.index = index
@@ -393,24 +407,25 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
     def load(cls, dir: Union[str, Path]) -> "PandasDataStoreForSequenceClassification":
         dir = Path(dir)
         datasets = {split: load_from_disk(dir / split) for split in RunningStage if (dir / split).exists()}
-        meta: Dict = srsly.read_json(dir / "metadata.json")
+        meta: Dict = srsly.read_json(dir / "metadata.json")  # type: ignore
         tokenizer = None
         if meta["name_or_path"] is not None:
             from transformers import AutoTokenizer
+
             tokenizer = AutoTokenizer.from_pretrained(meta["name_or_path"])
-        
+
         out = cls(meta["seed"])
         out.from_datasets(
-            train_dataset=datasets.get(RunningStage.TRAIN, None),
-            validation_dataset=datasets.get(RunningStage.VALIDATION, None),
-            test_dataset=datasets.get(RunningStage.TEST, None),
+            train_dataset=datasets.get(RunningStage.TRAIN, None),  # type: ignore
+            validation_dataset=datasets.get(RunningStage.VALIDATION, None),  # type: ignore
+            test_dataset=datasets.get(RunningStage.TEST, None),  # type: ignore
             input_names=meta["input_names"],
             target_name=meta["target_name"],
             on_cpu=meta["on_cpu"],
             tokenizer=tokenizer,
         )
         out.load_index(dir)
-            
+
         return out
 
 

@@ -25,6 +25,7 @@ class RandomStrategy(ActiveEstimator):
     def run_query(self, *_, datastore: Datastore, query_size: int) -> List[int]:
         return datastore.sample_from_pool(size=query_size, mode="uniform", random_state=self.rng)
 
+
 class UncertaintyBasedStrategy(ActiveEstimator):
     _scoring_fn_registry = SCORING_FUNCTIONS
 

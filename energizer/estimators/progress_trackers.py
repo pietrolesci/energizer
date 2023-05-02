@@ -1,27 +1,27 @@
+import math
 from dataclasses import dataclass, field
+from gc import enable
 from typing import List, Optional
 
 import numpy as np
+from fastapi import Query
+from torch import log_
 from tqdm.auto import tqdm
 
 from energizer.enums import RunningStage
-import math
+
 
 @dataclass
 class Tracker:
-    max: Optional[int] = None
-    total: int = 0
-    current: int = 0
-    progress_bar: Optional[tqdm] = None
+    current: int
+    max: Optional[int]
+
+    def __post_init__(self) -> None:
+        self.total = self.current
+        self.progress_bar = None
 
     def max_reached(self) -> bool:
-        """If a max is not set, it will never stop."""
         return self.max is not None and self.current >= self.max
-
-    def reset(self) -> None:
-        self.current = 0
-        if self.progress_bar is not None:
-            self.progress_bar.reset(total=self.max)
 
     def increment(self) -> None:
         self.current += 1
@@ -29,7 +29,12 @@ class Tracker:
         if self.progress_bar is not None:
             self.progress_bar.update(1)
 
-    def make_progress_bar(self) -> None:
+    def reset(self) -> None:
+        self.current = 0
+        if self.progress_bar is not None:
+            self.progress_bar.reset(total=self.max)
+
+    def make_progress_bar(self) -> Optional[tqdm]:
         pass
 
     def terminate_progress_bar(self) -> None:
@@ -46,7 +51,7 @@ class Tracker:
 
 @dataclass
 class EpochTracker(Tracker):
-    def make_progress_bar(self) -> None:
+    def make_progress_bar(self) -> Optional[tqdm]:
         self.progress_bar = tqdm(
             total=self.max,
             desc="Completed epochs",
@@ -57,9 +62,9 @@ class EpochTracker(Tracker):
 
 @dataclass
 class StageTracker(Tracker):
-    stage: str = None
+    stage: str
 
-    def make_progress_bar(self) -> None:
+    def make_progress_bar(self) -> Optional[tqdm]:
         desc = f"Epoch {self.total}".strip() if self.stage == RunningStage.TRAIN else f"{self.stage.title()}"
         self.progress_bar = tqdm(
             total=self.max,
@@ -71,20 +76,83 @@ class StageTracker(Tracker):
 
 @dataclass
 class ProgressTracker:
-    epoch_tracker: EpochTracker = field(default_factory=lambda: EpochTracker())
-    step_tracker: Tracker = field(default_factory=lambda: Tracker())
+    def __post_init__(self) -> None:
+        self.epoch_tracker = EpochTracker(current=0, max=None)
+        self.step_tracker = Tracker(current=0, max=None)
 
-    # stage trackers
-    train_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.TRAIN))
-    validation_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.VALIDATION))
-    test_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.TEST))
+        self.train_tracker = StageTracker(stage=RunningStage.TRAIN, current=0, max=None)
+        self.validation_tracker = StageTracker(stage=RunningStage.VALIDATION, current=0, max=None)
+        self.test_tracker = StageTracker(stage=RunningStage.TEST, current=0, max=None)
 
-    num_validation_per_epoch: Optional[List[int]] = None
-    stop_training: bool = False
-    has_validation: bool = False
-    log_interval: int = 1
-    enable_progress_bar: bool = True
-    current_stage: RunningStage = None
+        self.stop_training: bool = False
+        self.log_interval: int = 1
+        self.enable_progress_bar: bool = True
+
+        self.steps_to_validate: List[int] = []
+        self.has_validation: bool = False
+        self.current_stage: Optional[RunningStage] = None
+
+    def setup(self, stage: RunningStage, log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
+        """Do all the math here and create progress bars for every stage."""
+
+        self.log_interval = log_interval
+        self.enable_progress_bar = enable_progress_bar
+
+        if stage == RunningStage.TRAIN:
+            self.setup_fit(**kwargs)  # type: ignore
+        else:
+            self.setup_eval(**kwargs)  # type: ignore
+
+        self.make_progress_bars(stage)
+
+    def setup_fit(
+        self,
+        max_epochs: Optional[int],
+        min_steps: Optional[int],
+        num_train_batches: int,
+        num_validation_batches: int,
+        num_validation_per_epoch: int,
+        limit_train_batches: Optional[int] = None,
+        limit_validation_batches: Optional[int] = None,
+    ) -> None:
+
+        # limit batches
+        max_train_batches = int(min(num_train_batches, limit_train_batches or float("Inf")))
+        max_validation_batches = int(min(num_validation_batches, limit_validation_batches or float("Inf")))
+
+        # convert steps into max_epochs
+        if min_steps is not None:
+            max_epochs_for_num_steps = int(np.ceil(min_steps / max_train_batches))
+            if max_epochs is None or max_epochs < max_epochs_for_num_steps:
+                # if we do not have enough batches across epochs, adjust epoch number
+                max_epochs = max_epochs_for_num_steps
+
+        # validation interval
+        if max_validation_batches > 0 and num_validation_per_epoch > 0 and max_train_batches > num_validation_per_epoch:
+            self.steps_to_validate = np.linspace(
+                max_train_batches / num_validation_per_epoch, max_train_batches, num_validation_per_epoch, dtype=int
+            ).tolist()[:-1]
+
+        self.stop_training = False
+        self.has_validation = num_validation_batches > 0
+        self.epoch_tracker.max = max_epochs
+        self.train_tracker.max = max_train_batches
+        self.validation_tracker.max = max_validation_batches
+
+    def setup_eval(self, stage: RunningStage, num_batches: int, limit_batches: Optional[int]) -> None:
+        getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
+
+    def make_progress_bars(self, stage: RunningStage) -> None:
+        if not self.enable_progress_bar:
+            return
+
+        if stage in (RunningStage.TRAIN, RunningStage.VALIDATION):
+            self.epoch_tracker.make_progress_bar()
+            self.train_tracker.make_progress_bar()
+            if self.has_validation:
+                self.validation_tracker.make_progress_bar()
+        else:
+            getattr(self, f"{stage}_tracker").make_progress_bar()
 
     """Properties"""
 
@@ -102,9 +170,7 @@ class ProgressTracker:
 
     @property
     def global_epoch(self) -> int:
-        if self.is_fitting:
-            return self.epoch_tracker.total
-        return 0
+        return self.epoch_tracker.total if self.is_fitting else 0
 
     @property
     def safe_global_epoch(self) -> int:
@@ -116,16 +182,12 @@ class ProgressTracker:
         return (self.global_batch + 1) % self.log_interval == 0
 
     def should_validate(self) -> bool:
-        return (
-            self.validation_tracker.max is not None
-            and self.has_validation
-            and (self.is_done() or self.train_tracker.current in self.num_validation_per_epoch)
-        )
+        return self.has_validation and (self.is_done() or self.train_tracker.current in self.steps_to_validate)
 
     """Outer loops"""
 
     def is_fit_done(self) -> bool:
-        return self.epoch_tracker.max_reached() or self.stop_training or self.step_tracker.max_reached()
+        return self.epoch_tracker.max_reached() or self.stop_training
 
     def start_fit(self) -> None:
         self.epoch_tracker.reset()
@@ -152,57 +214,30 @@ class ProgressTracker:
     def start(self, stage: RunningStage) -> None:
         """Make progress bars and reset the counters."""
         self.current_stage = stage
-        self.get_stage_tracker().reset()
 
-        if self.get_stage_tracker().progress_bar is not None:
-            self.get_stage_tracker().progress_bar.set_postfix_str("")
+        tracker = self.get_stage_tracker()
+        tracker.reset()
+        if tracker.progress_bar is not None:
+            tracker.progress_bar.set_postfix_str("")
 
+        if self.train_tracker.progress_bar is not None:
             if self.current_stage == RunningStage.TRAIN:
                 self.train_tracker.progress_bar.set_description(f"Epoch {self.epoch_tracker.current}")
-
-            if self.current_stage == RunningStage.VALIDATION:
+            elif self.current_stage == RunningStage.VALIDATION:
                 self.train_tracker.progress_bar.set_postfix_str("Validating")
 
     def end(self) -> None:
         if not self.is_fitting:
-            return getattr(self, f"{self.current_stage}_tracker").close_progress_bar()
+            return self.get_stage_tracker().close_progress_bar()
 
         self.get_stage_tracker().terminate_progress_bar()
         if self.current_stage == RunningStage.VALIDATION:
             self.current_stage = RunningStage.TRAIN  # reattach training
-            if self.enable_progress_bar:
+            if self.train_tracker.progress_bar is not None:
                 self.train_tracker.progress_bar.set_postfix_str("")
 
     def increment(self) -> None:
         self.get_stage_tracker().increment()
-
-    """Setup"""
-
-    def setup(self, stage: RunningStage, **kwargs) -> None:
-        """Do all the math here and create progress bars."""
-        self.log_interval = kwargs.pop("log_interval", 1)
-        self.enable_progress_bar = kwargs.pop("enable_progress_bar", True)
-
-        if stage == RunningStage.TRAIN:
-            self.has_validation = kwargs.get("num_validation_batches", 0) > 0
-            self._setup_fit(**kwargs)
-        else:
-            limit_batches = kwargs.get("limit_batches") or float("Inf")
-            getattr(self, f"{stage}_tracker").max = min(kwargs.get("num_batches"), limit_batches)
-
-        self.make_progress_bars(stage)
-
-    def make_progress_bars(self, stage: RunningStage) -> None:
-        if not self.enable_progress_bar:
-            return
-
-        if stage in (RunningStage.TRAIN, RunningStage.VALIDATION):
-            self.epoch_tracker.make_progress_bar()
-            self.train_tracker.make_progress_bar()
-            if self.has_validation:
-                self.validation_tracker.make_progress_bar()
-        else:
-            getattr(self, f"{stage}_tracker").make_progress_bar()
 
     """Helpers"""
 
@@ -212,61 +247,10 @@ class ProgressTracker:
     def get_stage_tracker(self) -> StageTracker:
         return getattr(self, f"{self.current_stage}_tracker")
 
-    def _setup_fit(
-        self,
-        max_epochs: Optional[int],
-        min_steps: Optional[int],
-        num_train_batches: int,
-        num_validation_batches: int,
-        limit_train_batches: Optional[int] = None,
-        limit_validation_batches: Optional[int] = None,
-        num_validation_per_epoch: Optional[int] = True,
-    ) -> None:
-        self.stop_training = False
-
-        assert max_epochs is not None or min_steps is not None, "`max_epochs` or `min_steps` must be passed."
-
-        # train: limit batches
-        max_train_batches = min(num_train_batches, limit_train_batches or float("Inf"))
-
-        # train: epochs and steps
-        if max_epochs is None:
-            max_epochs = np.ceil(min_steps / max_train_batches)
-        if min_steps is not None:
-            max_epochs_for_num_steps = int(np.ceil(min_steps / max_train_batches))
-            if max_epochs < max_epochs_for_num_steps:
-                # if we do not have enough batches across epochs, adjust epoch number
-                max_epochs = max_epochs_for_num_steps
-            else:
-                # if we have enough batches to cover the num steps, do nothing
-                min_steps = None
-
-        # validation: limit batches and validation interval
-        max_validation_batches = min(num_validation_batches, limit_validation_batches or float("Inf"))
-        if (
-            max_validation_batches is not None
-            and num_validation_per_epoch is not None
-            and max_train_batches > num_validation_per_epoch
-        ):
-            num_validation_per_epoch = np.linspace(
-                max_train_batches / num_validation_per_epoch, max_train_batches, num_validation_per_epoch, dtype=int
-            ).tolist()[:-1]
-        else:
-            num_validation_per_epoch = []
-
-        self.epoch_tracker.max = max_epochs
-        self.step_tracker.max = min_steps
-        self.train_tracker.max = max_train_batches
-        self.validation_tracker.max = max_validation_batches
-        self.num_validation_per_epoch = num_validation_per_epoch
-
 
 @dataclass
 class RoundTracker(Tracker):
-    current: int = 0
-    total: int = 0
-
-    def make_progress_bar(self) -> None:
+    def make_progress_bar(self) -> Optional[tqdm]:
         self.progress_bar = tqdm(
             total=self.max,
             desc="Completed rounds",
@@ -284,40 +268,81 @@ class RoundTracker(Tracker):
 
 @dataclass
 class BudgetTracker(Tracker):
-    query_size: int = None
+    query_size: int
 
     def increment(self, n_labelled: Optional[int] = None) -> None:
         n_labelled = n_labelled or self.query_size
         self.current += n_labelled
         self.total += n_labelled
 
-    def set_initial_budget(self, initial_budget: int) -> None:
-        self.current = initial_budget
-        self.total = initial_budget
-
     def max_reached(self) -> bool:
-        if self.max is not None:
-            return self.max < (self.query_size + self.total)
+        return self.max is not None and self.max < (self.query_size + self.total)
 
-    @property
-    def remaining_budget(self) -> Optional[int]:
-        return self.max - self.current if self.max is not None else None
+    def get_remaining_budget(self) -> int:
+        return self.max - self.current if self.max is not None else int(float("Inf"))
 
 
 @dataclass
 class ActiveProgressTracker(ProgressTracker):
-    round_tracker: RoundTracker = field(default_factory=lambda: RoundTracker())
-    budget_tracker: BudgetTracker = field(default_factory=lambda: BudgetTracker())
-    pool_tracker: StageTracker = field(default_factory=lambda: StageTracker(stage=RunningStage.POOL))
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.round_tracker = RoundTracker(current=0, max=None)
+        self.pool_tracker = StageTracker(stage=RunningStage.POOL, current=0, max=None)
 
-    has_pool: bool = False
-    has_test: bool = False
+        self.run_on_pool = False
+        self.has_test = False
+
+    def setup(
+        self,
+        max_rounds: Optional[int],
+        max_budget: int,
+        query_size: int,
+        initial_budget: int,
+        run_on_pool: bool,
+        has_test: bool,
+        has_validation: bool,
+        log_interval: int,
+        enable_progress_bar: bool,
+    ) -> None:
+        """Create progress bars."""
+
+        assert max_budget > initial_budget, ValueError("`max_budget` must be bigger than `initial_budget`.")
+
+        self.log_interval = log_interval
+        self.enable_progress_bar = enable_progress_bar
+
+        self.has_validation = has_validation
+        self.run_on_pool = run_on_pool
+        self.has_test = has_test
+
+        max_rounds_per_budget = int(np.ceil((max_budget - initial_budget) / query_size))
+        if max_rounds is None or max_rounds > max_rounds_per_budget:
+            max_rounds = max_rounds_per_budget
+
+        self.round_tracker.reset()
+        self.round_tracker.max = max_rounds + 1  # type: ignore
+        self.budget_tracker = BudgetTracker(
+            max=max_budget,
+            current=initial_budget,
+            query_size=query_size,
+        )
+
+        if self.enable_progress_bar:
+            self.round_tracker.make_progress_bar()
+            self.epoch_tracker.make_progress_bar()
+            self.train_tracker.make_progress_bar()
+            if self.has_validation:
+                self.validation_tracker.make_progress_bar()
+            if self.has_test:
+                self.test_tracker.make_progress_bar()
+            if self.run_on_pool:
+                self.pool_tracker.make_progress_bar()
 
     """Properties"""
 
     @property
     def is_last_round(self) -> bool:
-        return self.round_tracker.current >= (self.round_tracker.max - 1)
+        return self.round_tracker.current >= (self.round_tracker.max - 1)  # type: ignore
 
     @property
     def global_round(self) -> int:
@@ -374,65 +399,3 @@ class ActiveProgressTracker(ProgressTracker):
             self.current_stage = RunningStage.TRAIN  # reattach training
 
     """Helpers"""
-
-    def setup(
-        self,
-        max_rounds: Optional[int],
-        max_budget: Optional[int],
-        query_size: int,
-        initial_budget: int,
-        has_pool: bool,
-        has_test: bool,
-        has_validation: bool,
-        log_interval: Optional[int] = 1,
-        enable_progress_bar: Optional[bool] = True,
-    ) -> None:
-        """Create progress bars."""
-
-        assert max_budget is not None or max_rounds is not None, ValueError(
-            "At least one of `max_rounds` or `max_budget` must be not None."
-        )
-
-        self.log_interval = log_interval
-        self.enable_progress_bar = enable_progress_bar
-        self.has_validation = has_validation
-        self.has_pool = has_pool
-        self.has_test = has_test
-
-        self.round_tracker.reset()
-        self.budget_tracker.reset()
-        if max_budget is not None:
-            assert max_budget - initial_budget > 0, ValueError("`max_budget` must be bigger than `initial_budget`.")
-            if (max_budget - initial_budget) > 0:
-                max_rounds = min(max_rounds or float("Inf"), math.ceil((max_budget - initial_budget) / query_size))
-        
-        self.round_tracker.max = max_rounds + 1
-        self.budget_tracker = BudgetTracker(
-            max=max_budget, total=initial_budget, current=initial_budget, query_size=query_size
-        )
-
-        if self.enable_progress_bar:
-            self.round_tracker.make_progress_bar()
-            self.epoch_tracker.make_progress_bar()
-            self.train_tracker.make_progress_bar()
-            if self.has_validation:
-                self.validation_tracker.make_progress_bar()
-            if self.has_test:
-                self.test_tracker.make_progress_bar()
-            if self.has_pool:
-                self.pool_tracker.make_progress_bar()
-
-    def setup_round_tracking(self, **kwargs) -> None:
-        self._setup_fit(
-            max_epochs=kwargs.get("max_epochs"),
-            min_steps=kwargs.get("min_steps"),
-            num_train_batches=kwargs.get("num_train_batches"),
-            num_validation_batches=kwargs.get("num_validation_batches"),
-            limit_train_batches=kwargs.get("limit_train_batches"),
-            limit_validation_batches=kwargs.get("limit_validation_batches"),
-            num_validation_per_epoch=kwargs.get("num_validation_per_epoch"),
-        )
-        for stage in (RunningStage.TEST, RunningStage.POOL):
-            if getattr(self, f"has_{stage}"):
-                limit_batches = kwargs.get(f"limit_{stage}_batches") or float("Inf")
-                getattr(self, f"{stage}_tracker").max = min(kwargs.get(f"num_{stage}_batches"), limit_batches)

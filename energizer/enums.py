@@ -1,26 +1,36 @@
-from lightning_utilities.core.enums import StrEnum as _StrEnum
-from enum import EnumMeta
+from enum import EnumMeta, Enum
+from typing import Any, Generator
 
 
 class ValueOnlyEnumMeta(EnumMeta):
-
-    # def __members__(cls):
-    #     return {member.value: member for member in cls}
-
-    def __iter__(cls):
-        """
-        Returns members in definition order.
-        """
+    def __iter__(cls) -> Generator[Any, None, None]:
         return (cls._member_map_[name].value for name in cls._member_names_)
+    
 
-
-class StrEnum(_StrEnum, metaclass=ValueOnlyEnumMeta):
-    def __str__(self):
+class StrEnum(str, Enum, metaclass=ValueOnlyEnumMeta):
+    def __str__(self) -> str:
         # behaves like string when used in interpolation
         return str(self.value)
     
+    def __eq__(self, other: object) -> bool:
+        """Compare two instances."""
+        if isinstance(other, Enum):
+            other = other.value
+        return self.value.lower() == str(other).lower()
 
+    def __hash__(self) -> int:
+        """Return unique hash."""
+        # re-enable hashtable, so it can be used as a dict key or in a set
+        return hash(self.value.lower())
+    
+    def __getattribute__(self, __name: str) -> Any:
+        return super().__getattribute__(__name)
+    
 
+# pyright: reportGeneralTypeIssues=false
+# use this otherwise complains with the literal string assigned to the enum
+# https://github.com/microsoft/pyright/issues/1521
+# https://stackoverflow.com/questions/70310588/python-type-hint-enum-member-value
 class RunningStage(StrEnum):
     TRAIN: str = "train"
     VALIDATION: str = "validation"

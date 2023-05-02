@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, List
+from typing import Any, Callable, List, Optional
 
 import torch
+
 # from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
@@ -75,6 +76,14 @@ class BaseDataStore(ABC):
 
     @abstractmethod
     def labelled_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def get_num_labelled_at_round(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def total_rounds(self, *args, **kwargs) -> int:
         ...
 
 
