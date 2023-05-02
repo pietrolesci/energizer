@@ -1,17 +1,17 @@
-from enum import EnumMeta, Enum
+from enum import Enum, EnumMeta
 from typing import Any, Generator
 
 
 class ValueOnlyEnumMeta(EnumMeta):
     def __iter__(cls) -> Generator[Any, None, None]:
         return (cls._member_map_[name].value for name in cls._member_names_)
-    
+
 
 class StrEnum(str, Enum, metaclass=ValueOnlyEnumMeta):
     def __str__(self) -> str:
         # behaves like string when used in interpolation
         return str(self.value)
-    
+
     def __eq__(self, other: object) -> bool:
         """Compare two instances."""
         if isinstance(other, Enum):
@@ -22,10 +22,10 @@ class StrEnum(str, Enum, metaclass=ValueOnlyEnumMeta):
         """Return unique hash."""
         # re-enable hashtable, so it can be used as a dict key or in a set
         return hash(self.value.lower())
-    
+
     def __getattribute__(self, __name: str) -> Any:
         return super().__getattribute__(__name)
-    
+
 
 # pyright: reportGeneralTypeIssues=false
 # use this otherwise complains with the literal string assigned to the enum
