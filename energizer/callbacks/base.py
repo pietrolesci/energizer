@@ -1,11 +1,10 @@
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
 from torch.optim import Optimizer
 
 from energizer.datastores.base import Datastore
-from energizer.enums import OutputKeys
 from energizer.estimators.active_estimator import ActiveEstimator
 from energizer.estimators.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC, ROUND_OUTPUT
@@ -141,6 +140,8 @@ class Callback(BaseCallback, ActiveLearningCallbackMixin):
 
 
 class CallbackWithMonitor(Callback):
+    mode: str
+    monitor: str
     mode_dict = {"min": np.less, "max": np.greater}
     optim_dict = {"min": min, "max": max}
     reverse_optim_dict = {"min": max, "max": min}
@@ -158,11 +159,12 @@ class CallbackWithMonitor(Callback):
         return self.reverse_optim_dict[self.mode]
 
     def _get_monitor(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT]) -> Optional[float]:
-        if self.monitor is None:
-            return
+        if not isinstance(output, Dict):
+            raise RuntimeError(
+                "From `*_step` and `*_epoch_end` method you need to return dict to use monitoring Callbacks like EarlyStopping and ModelCheckpoint."
+            )
 
-        # look for monitored metric in output or in metrics
-        monitor = output.get(self.monitor) or output[OutputKeys.METRICS].get(self.monitor)
+        monitor = output.get(self.monitor)
         if monitor is None:
             raise ValueError(f"`{self.monitor}` is not logged.")
 

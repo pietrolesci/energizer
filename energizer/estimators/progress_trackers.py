@@ -116,9 +116,15 @@ class ProgressTracker:
         limit_validation_batches: Optional[int] = None,
     ) -> None:
 
+        self.stop_training = False
+        self.has_validation = num_validation_batches > 0
+
         # limit batches
         max_train_batches = int(min(num_train_batches, limit_train_batches or float("Inf")))
         max_validation_batches = int(min(num_validation_batches, limit_validation_batches or float("Inf")))
+
+        if max_train_batches < 1:
+            return
 
         # convert steps into max_epochs
         if min_steps is not None:
@@ -133,8 +139,6 @@ class ProgressTracker:
                 max_train_batches / num_validation_per_epoch, max_train_batches, num_validation_per_epoch, dtype=int
             ).tolist()[:-1]
 
-        self.stop_training = False
-        self.has_validation = num_validation_batches > 0
         self.epoch_tracker.max = max_epochs
         self.train_tracker.max = max_train_batches
         self.validation_tracker.max = max_validation_batches
@@ -397,5 +401,3 @@ class ActiveProgressTracker(ProgressTracker):
         self.get_stage_tracker().terminate_progress_bar()
         if self.current_stage == RunningStage.VALIDATION:
             self.current_stage = RunningStage.TRAIN  # reattach training
-
-    """Helpers"""

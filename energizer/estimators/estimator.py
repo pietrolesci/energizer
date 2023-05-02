@@ -363,7 +363,7 @@ class Estimator(HyperparametersMixin):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
         stage: RunningStage,
-    ) -> Optional[BATCH_OUTPUT]:
+    ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
         # this might seems redundant but it's useful for active learning to hook in
         return getattr(self, f"{stage}_step")(model, batch, batch_idx, loss_fn, metrics)
@@ -506,8 +506,8 @@ class Estimator(HyperparametersMixin):
     def train_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output
 
-    def validation_epoch_end(self, output: List, metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def validation_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output
 
-    def test_epoch_end(self, output: List, metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def test_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output

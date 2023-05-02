@@ -1,0 +1,15 @@
+{"best_score":1.0,"best_step":8,"stage":"train","interval":"epoch","stopping_step":11,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":17,"stage":"train","interval":"epoch","stopping_step":20,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":27,"stage":"train","interval":"epoch","stopping_step":30,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":8,"stage":"train","interval":"epoch","stopping_step":11,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":17,"stage":"train","interval":"epoch","stopping_step":20,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":27,"stage":"train","interval":"epoch","stopping_step":30,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":35,"stage":"train","interval":"epoch","stopping_step":38,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":8,"stage":"train","interval":"epoch","stopping_step":11,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":17,"stage":"train","interval":"epoch","stopping_step":20,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":1.0,"best_step":24,"stage":"train","interval":"epoch","stopping_step":27,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":0.995321,"best_step":30,"stage":"train","interval":"epoch","stopping_step":33,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":0.5,"best_step":6,"stage":"train","interval":"epoch","stopping_step":9,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":0.5,"best_step":14,"stage":"train","interval":"epoch","stopping_step":17,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":0.5,"best_step":20,"stage":"train","interval":"epoch","stopping_step":23,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}
+{"best_score":0.347132,"best_step":0,"stage":"train","interval":"epoch","stopping_step":3,"reason":"Monitored metric `f1_macro` did not improve in the last 3 epochs."}

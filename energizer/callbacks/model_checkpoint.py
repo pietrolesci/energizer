@@ -18,13 +18,13 @@ class ModelCheckpoint(CallbackWithMonitor):
 
     def __init__(
         self,
-        dirpath: Union[Path, str] = ".checkpoints",
-        monitor: Optional[str] = None,
-        stage: Optional[RunningStage] = None,
+        dirpath: Union[Path, str],
+        monitor: str,
+        stage: RunningStage,
         mode: str = "min",
         save_last: Optional[bool] = None,
         save_top_k: int = 1,
-        verbose: bool = False,
+        verbose: bool = True,
     ):
         super().__init__()
         self.dirpath = Path(dirpath)
