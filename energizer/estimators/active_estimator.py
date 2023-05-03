@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from dataclasses import field
 
 from lightning.fabric.wrappers import _FabricModule
 from torch.utils.data import DataLoader
@@ -7,12 +8,14 @@ from torch.utils.data import DataLoader
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
 from energizer.estimators.estimator import Estimator
-from energizer.estimators.progress_trackers import ActiveProgressTracker
+from energizer.estimators.progress_trackers import ActiveProgressTracker, ProgressTracker
 from energizer.types import ROUND_OUTPUT
 
 
 class ActiveEstimator(Estimator):
-    _progress_tracker: ActiveProgressTracker = ActiveProgressTracker()
+    
+    def setup_tracking(self) -> None:
+        self._progress_tracker = ActiveProgressTracker()
 
     @property
     def progress_tracker(self) -> ActiveProgressTracker:

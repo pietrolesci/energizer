@@ -135,19 +135,23 @@ class Datastore(BaseDataStore):
         return self.get_loader(RunningStage.POOL, *args, **kwargs)
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
+        # get dataset
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is None:
             return
-
+   
         batch_size = self.batch_size if stage == RunningStage.TRAIN else self.eval_batch_size
         batch_size = min(batch_size, len(dataset))
+        
+        # sampler
         sampler = _get_sampler(
             dataset,
             shuffle=self.shuffle if stage == RunningStage.TRAIN else False,
             replacement=self.replacement,
             seed=self.data_seed,
         )
-
+        
+        # put everything together
         return DataLoader(
             dataset=dataset,
             batch_size=batch_size,
@@ -160,6 +164,7 @@ class Datastore(BaseDataStore):
         return None
 
     def show_batch(self, stage: RunningStage = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+        self.prepare_for_loading(batch_size=1, eval_batch_size=1, shuffle=False)
         loader = getattr(self, f"{stage}_loader")(*args, **kwargs)
         if loader is not None:
             return next(iter(loader))

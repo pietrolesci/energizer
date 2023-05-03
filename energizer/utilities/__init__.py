@@ -102,11 +102,10 @@ def sample(
             n_samples=size,
             random_state=random_state,
         )
-        # sample = [i for arr in sample for i in arr.flatten()]
 
     else:
         raise ValueError("Only `uniform` and `stratified` are supported by default.")
 
     assert len(set(sample)) == size
 
-    return sample
+    return sample  # type: ignore

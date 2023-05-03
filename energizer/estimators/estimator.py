@@ -1,3 +1,4 @@
+from dataclasses import field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
@@ -21,7 +22,6 @@ from energizer.utilities.model_summary import summarize
 
 
 class Estimator(HyperparametersMixin):
-    _progress_tracker: ProgressTracker = ProgressTracker()
 
     def __init__(
         self,
@@ -42,14 +42,18 @@ class Estimator(HyperparametersMixin):
         self.model = model
         init_deterministic(deterministic)
         self.save_hyperparameters(ignore=["model", "loggers", "callbacks"])
+        self.setup_tracking()
 
-    @property
-    def device(self) -> torch.device:
-        return self.fabric.device
+    def setup_tracking(self) -> None:
+        self._progress_tracker = ProgressTracker()
 
     @property
     def progress_tracker(self) -> ProgressTracker:
         return self._progress_tracker
+
+    @property
+    def device(self) -> torch.device:
+        return self.fabric.device
 
     @property
     def model_summary(self) -> str:

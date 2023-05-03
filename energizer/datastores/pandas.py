@@ -190,7 +190,7 @@ class PandasDataStore(Datastore):
         )
 
     def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
-        return self.data.loc[self.data[SpecialKeys.ID].isin(ids)]
+        return self.data.loc[self.data[SpecialKeys.ID].isin(ids)]  # type: ignore
 
     def _labelled_mask(self, round: Optional[int] = None) -> pd.Series:
         mask = self.data[SpecialKeys.IS_LABELLED] == True
