@@ -9,16 +9,15 @@ import numpy as np
 import pandas as pd
 import srsly
 import torch
-from click import Option
 from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from numpy.random import RandomState
-from sklearn.utils import resample
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
 from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import _pad, ld_to_dl
+from energizer.utilities import sample
 
 
 class PandasDataStore(Datastore):
@@ -464,33 +463,3 @@ def collate_fn(
         new_batch[InputKeys.ON_CPU] = values_on_cpu
 
     return new_batch
-
-
-def sample(
-    indices: List[int],
-    size: int,
-    random_state: RandomState,
-    labels: Optional[List[int]] = None,
-    sampling: Optional[str] = None,
-) -> List[int]:
-    """Makes sure to seed everything consistently."""
-
-    if sampling is None or sampling == "uniform":
-        sample = random_state.choice(indices, size=size, replace=False).tolist()
-
-    elif sampling == "stratified" and labels is not None:
-        sample = resample(
-            indices,
-            replace=False,
-            stratify=labels,
-            n_samples=size,
-            random_state=random_state,
-        )
-        sample = [i for arr in sample for i in arr.flatten()]
-
-    else:
-        raise ValueError("Only `uniform` and `stratified` are supported by default.")
-
-    assert len(set(sample)) == size
-
-    return sample

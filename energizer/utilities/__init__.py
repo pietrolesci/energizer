@@ -2,7 +2,9 @@
 import contextlib
 import os
 import random
-from typing import Any, Dict, Generator, List, Union
+from typing import Any, Dict, Generator, List, Union, Optional
+from numpy.random import RandomState
+from sklearn.utils import resample
 
 import numpy as np
 import torch
@@ -79,3 +81,32 @@ def _pad(inputs: List[int], padding_value: float, max_length: int) -> Tensor:
         batch_first=True,
         padding_value=padding_value,
     )
+
+def sample(
+    indices: List[int],
+    size: int,
+    random_state: RandomState,
+    labels: Optional[List[int]] = None,
+    sampling: Optional[str] = None,
+) -> List[int]:
+    """Makes sure to seed everything consistently."""
+
+    if sampling is None or sampling == "uniform":
+        sample = random_state.choice(indices, size=size, replace=False).tolist()
+
+    elif sampling == "stratified" and labels is not None:
+        sample = resample(
+            indices,
+            replace=False,
+            stratify=labels,
+            n_samples=size,
+            random_state=random_state,
+        )
+        # sample = [i for arr in sample for i in arr.flatten()]
+
+    else:
+        raise ValueError("Only `uniform` and `stratified` are supported by default.")
+
+    assert len(set(sample)) == size
+
+    return sample
