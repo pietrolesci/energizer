@@ -1,4 +1,3 @@
-from dataclasses import field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
@@ -485,7 +484,7 @@ class Estimator(HyperparametersMixin):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> BATCH_OUTPUT:
-        ...
+        return self.step(RunningStage.TRAIN, model, batch, batch_idx, loss_fn, metrics)
 
     def validation_step(
         self,
@@ -495,7 +494,7 @@ class Estimator(HyperparametersMixin):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> Optional[BATCH_OUTPUT]:
-        ...
+        return self.step(RunningStage.VALIDATION, model, batch, batch_idx, loss_fn, metrics)
 
     def test_step(
         self,
@@ -505,13 +504,27 @@ class Estimator(HyperparametersMixin):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> Optional[BATCH_OUTPUT]:
-        ...
+        return self.step(RunningStage.TEST, model, batch, batch_idx, loss_fn, metrics)
+
+    def step(
+        self,
+        stage: RunningStage,
+        model: _FabricModule,
+        batch: Any,
+        batch_idx: int,
+        loss_fn: Optional[Union[torch.nn.Module, Callable]],
+        metrics: Optional[METRIC] = None,
+    ) -> BATCH_OUTPUT:
+        raise NotImplementedError
 
     def train_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
-        return output
+        return self.epoch_end(RunningStage.TRAIN, output, metrics)
 
     def validation_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
-        return output
+        return self.epoch_end(RunningStage.VALIDATION, output, metrics)
 
     def test_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+        return self.epoch_end(RunningStage.TEST, output, metrics)
+
+    def epoch_end(self, stage: RunningStage, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return output

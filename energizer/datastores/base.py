@@ -18,6 +18,10 @@ class BaseDataStore(ABC):
     def __init__(self) -> None:
         super().__init__()
 
+    """
+    Datasets
+    """
+
     @abstractmethod
     def train_dataset(self, *args, **kwargs) -> DATASET:
         ...
@@ -33,6 +37,10 @@ class BaseDataStore(ABC):
     @abstractmethod
     def pool_dataset(self, *args, kwargs) -> DATASET:
         ...
+
+    """
+    Loaders
+    """
 
     @abstractmethod
     def train_loader(self, *args, **kwargs) -> DataLoader:
@@ -50,6 +58,10 @@ class BaseDataStore(ABC):
     def pool_loader(self, *args, kwargs) -> DataLoader:
         ...
 
+    """
+    Methods
+    """
+
     @abstractmethod
     def label(self, *args, **kwargs) -> int:
         ...
@@ -59,15 +71,15 @@ class BaseDataStore(ABC):
         ...
 
     @abstractmethod
-    def pool_size(self, *args, **kwargs) -> int:
+    def prepare_for_loading(self, *args, **kwargs) -> List[int]:
         ...
+
+    """
+    Status
+    """
 
     @abstractmethod
     def train_size(self, *args, **kwargs) -> int:
-        ...
-
-    @abstractmethod
-    def test_size(self, *args, **kwargs) -> int:
         ...
 
     @abstractmethod
@@ -75,11 +87,19 @@ class BaseDataStore(ABC):
         ...
 
     @abstractmethod
+    def test_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
+    def pool_size(self, *args, **kwargs) -> int:
+        ...
+
+    @abstractmethod
     def labelled_size(self, *args, **kwargs) -> int:
         ...
 
     @abstractmethod
-    def get_num_labelled_at_round(self, *args, **kwargs) -> int:
+    def query_size(self, *args, **kwargs) -> int:
         ...
 
     @abstractmethod

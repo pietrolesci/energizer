@@ -51,12 +51,12 @@ class PandasDataStore(Datastore):
             return self.test_data
 
     def pool_dataset(
-        self, round: Optional[int] = None, subset_indices: Optional[List[int]] = None
+        self, round: Optional[int] = None, with_indices: Optional[List[int]] = None
     ) -> Optional[Dataset]:
-        df = self.data.loc[self._pool_mask(round), [i for i in self.data.columns if i != self.target_name]]
-        if subset_indices is not None:
-            df = df.loc[df[SpecialKeys.ID].isin(subset_indices)]
-        return Dataset.from_pandas(df, preserve_index=False)
+        mask = self._pool_mask(round)
+        if with_indices:
+            mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
+        return Dataset.from_pandas(self.data.loc[mask, [i for i in self.data.columns if i != self.target_name]])
 
     def label(
         self,
@@ -91,9 +91,20 @@ class PandasDataStore(Datastore):
         return mask.sum()
 
     def sample_from_pool(
-        self, size: int, mode: Optional[str], round: Optional[int] = None, random_state: Optional[RandomState] = None
+        self, 
+        size: int, 
+        mode: Optional[str], 
+        round: Optional[int] = None, 
+        random_state: Optional[RandomState] = None, 
+        with_indices: Optional[List[int]] = None,
     ) -> List[int]:
-        data = self.data.loc[self._pool_mask(round), [SpecialKeys.ID, self.target_name]]
+        """Performs `uniform` or `stratified` sampling from the pool."""
+        
+        mask = self._pool_mask(round)
+        if with_indices:
+            mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
+        data = self.data.loc[mask, [SpecialKeys.ID, self.target_name]]
+        
         return sample(
             indices=data[SpecialKeys.ID].tolist(),
             size=size,
@@ -119,7 +130,7 @@ class PandasDataStore(Datastore):
     def test_size(self) -> int:
         return len(self.test_data) if self.test_data is not None else 0
 
-    def get_num_labelled_at_round(self, round: Optional[int] = None) -> int:
+    def query_size(self, round: Optional[int] = None) -> int:
         last_round = round or self.data[SpecialKeys.LABELLING_ROUND].max()
         if last_round < 0:
             return self.labelled_size(last_round)
@@ -209,12 +220,18 @@ class PandasDataStore(Datastore):
         if round is not None:
             mask = mask | (self.data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
+    
+    def save_labelled_dataset(self, save_dir: Union[str, Path]) -> None:
+        path = Path(save_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        self.data.loc[self._labelled_mask()].to_parquet(path / "labelled_dataset.parquet", index=False)
 
 
 class PandasDataStoreWithIndex(PandasDataStore):
     """DataModule that defines dataloading and indexing logic."""
 
     index: hb.Index = None
+    embedding_name: str
 
     def label(
         self,
@@ -225,9 +242,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
     ) -> int:
         out = super().label(indices, round, validation_perc, validation_sampling)
         # remove instance from the index
-        if self.index is not None:
-            for idx in indices:
-                self.index.mark_deleted(idx)
+        self.mask_ids_from_index(indices)
         return out
 
     def search(
@@ -251,6 +266,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
         M: int = 64,
         num_threads: int = 5,
     ) -> None:
+        self.embedding_name = embedding_name
         embeddings = np.stack(self.data[embedding_name].tolist())
         max_elements, dim = embeddings.shape
 
@@ -263,7 +279,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
     def save_index(self, dir: Union[str, Path]) -> None:
         if self.index is not None:
             self.index.save_index(str(Path(dir) / "hnswlib_index.bin"))
-            meta = {"dim": self.index.dim, "metric": self.index.space}
+            meta = {"dim": self.index.dim, "metric": self.index.space, "embedding_name": self.embedding_name}
             srsly.write_json(Path(dir) / "hnswlib_index_config.json", meta)
 
     def load_index(self, dir: Union[str, Path]) -> None:
@@ -273,6 +289,29 @@ class PandasDataStoreWithIndex(PandasDataStore):
             index = hb.Index(space=meta["metric"], dim=meta["dim"])
             index.load_index(str(dir / "hnswlib_index.bin"))
             self.index = index
+            self.embedding_name = meta["embedding_name"]
+
+    def get_train_ids(self, round: Optional[int] = None) -> List[int]:
+        return self.data.loc[self._train_mask(round), SpecialKeys.ID].tolist()
+
+    def get_validation_ids(self, round: Optional[int] = None) -> List[int]:
+        return self.data.loc[self._validation_mask(round), SpecialKeys.ID].tolist()
+
+    def get_pool_ids(self, round: Optional[int] = None) -> List[int]:
+        return self.data.loc[self._pool_mask(round), SpecialKeys.ID].tolist()
+
+    def mask_ids_from_index(self, ids: List[int]) -> None:
+        for i in ids:
+            self.index.mark_deleted(i)
+
+    def unmask_ids_from_index(self, ids: List[int]) -> None:
+        for i in ids:
+            self.index.unmark_deleted(i)
+
+    def get_embeddings(self, ids: List[int]) -> List[np.ndarray]:
+        mask = self.data[SpecialKeys.ID].isin(ids)
+        return self.data.loc[mask, self.embedding_name].tolist()
+
 
 
 class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):

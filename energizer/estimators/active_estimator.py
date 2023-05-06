@@ -1,14 +1,12 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from dataclasses import field
 
 from lightning.fabric.wrappers import _FabricModule
-from torch.utils.data import DataLoader
 
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
 from energizer.estimators.estimator import Estimator
-from energizer.estimators.progress_trackers import ActiveProgressTracker, ProgressTracker
+from energizer.estimators.progress_trackers import ActiveProgressTracker
 from energizer.types import ROUND_OUTPUT
 
 
@@ -169,8 +167,8 @@ class ActiveEstimator(Estimator):
         self.progress_tracker.setup_fit(
             max_epochs=max_epochs,
             min_steps=min_steps,
-            num_train_batches=len(datastore.train_loader(num_round) or []),
-            num_validation_batches=len(datastore.validation_loader(num_round) or []),
+            num_train_batches=len(datastore.train_loader(round=num_round) or []),
+            num_validation_batches=len(datastore.validation_loader(round=num_round) or []),
             num_validation_per_epoch=num_validation_per_epoch,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
@@ -181,13 +179,13 @@ class ActiveEstimator(Estimator):
         if not replay:
             self.progress_tracker.setup_eval(
                 RunningStage.POOL,
-                num_batches=len(datastore.pool_loader(num_round) or []),
+                num_batches=len(datastore.pool_loader(round=num_round) or []),
                 limit_batches=limit_pool_batches,
             )
 
         # loaders
-        train_loader = self.configure_dataloader(datastore.train_loader(num_round))
-        validation_loader = self.configure_dataloader(datastore.validation_loader(num_round))
+        train_loader = self.configure_dataloader(datastore.train_loader(round=num_round))
+        validation_loader = self.configure_dataloader(datastore.validation_loader(round=num_round))
         test_loader = self.configure_dataloader(datastore.test_loader())
 
         # optimization
@@ -214,7 +212,7 @@ class ActiveEstimator(Estimator):
         ):
             n_labelled = self.run_annotation(model, datastore, query_size, validation_perc, validation_sampling)
         elif replay:
-            n_labelled = datastore.get_num_labelled_at_round(num_round)
+            n_labelled = datastore.query_size(num_round)
 
         if n_labelled:
             self.progress_tracker.increment_budget(n_labelled)
@@ -235,10 +233,9 @@ class ActiveEstimator(Estimator):
 
         indices = self.run_query(model, datastore=datastore, query_size=query_size)
 
-        # if with the current query we overrun the budget
-        remaining_budget = self.progress_tracker.budget_tracker.get_remaining_budget()
-        if remaining_budget < query_size:
-            indices = indices[:remaining_budget]
+        # prevent to query more than available budget
+        remaining_budget = min(query_size, self.progress_tracker.budget_tracker.get_remaining_budget())
+        indices = indices[:remaining_budget]
 
         self.fabric.call("on_query_end", estimator=self, model=model, output=indices)
 
@@ -264,13 +261,6 @@ class ActiveEstimator(Estimator):
 
     def round_epoch_end(self, output: ROUND_OUTPUT, datastore: Datastore) -> ROUND_OUTPUT:
         return output
-
-    """
-    Methods
-    """
-
-    def get_pool_loader(self, datastore: Datastore) -> Optional[DataLoader]:
-        return datastore.pool_loader()
 
     def replay_active_fit(
         self,
@@ -300,9 +290,9 @@ class ActiveEstimator(Estimator):
         # configure progress tracking
         self.progress_tracker.setup(
             max_rounds=datastore.total_rounds(),
-            max_budget=None,
+            max_budget=datastore.labelled_size(),
             initial_budget=datastore.labelled_size(0),
-            query_size=datastore.get_num_labelled_at_round(1),
+            query_size=datastore.query_size(1),
             has_test=datastore.test_size() > 0,
             run_on_pool=False,
             has_validation=datastore.validation_size() > 0,
