@@ -113,4 +113,3 @@ class UncertaintyBasedStrategySEALS(UncertaintyBasedStrategy):
         self.to_search = annotated_ids  # to search in the next round
         
         return annotated_ids
-
