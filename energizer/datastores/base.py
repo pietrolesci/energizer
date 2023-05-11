@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Union
 
 import torch
 
@@ -183,7 +183,7 @@ class Datastore(BaseDataStore):
     def get_collate_fn(self, stage: Optional[str] = None) -> Optional[Callable]:
         return None
 
-    def show_batch(self, stage: RunningStage = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+    def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
         self.prepare_for_loading(batch_size=1, eval_batch_size=1, shuffle=False)
         loader = getattr(self, f"{stage}_loader")(*args, **kwargs)
         if loader is not None:

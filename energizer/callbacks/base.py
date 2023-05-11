@@ -33,7 +33,7 @@ class Callback:
     Epoch
     """
 
-    def on_epoch_start(self, stage: RunningStage, estimator: Estimator, model: _FabricModule, **kwargs) -> None:
+    def on_epoch_start(self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, **kwargs) -> None:
         ...
 
     def on_train_epoch_start(self, estimator: Estimator, model: _FabricModule, optimizer: Optimizer) -> None:
@@ -49,7 +49,7 @@ class Callback:
         return self.on_epoch_start(RunningStage.POOL, estimator, model)
 
     def on_epoch_end(
-        self, stage: RunningStage, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
+        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
     ) -> None:
         ...
 
@@ -78,7 +78,7 @@ class Callback:
     """
 
     def on_batch_start(
-        self, stage: RunningStage, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, **kwargs
+        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, **kwargs
     ) -> None:
         ...
 
@@ -103,7 +103,7 @@ class Callback:
 
     def on_batch_end(
         self,
-        stage: RunningStage,
+        stage: Union[str, RunningStage],
         estimator: Estimator,
         model: _FabricModule,
         output: BATCH_OUTPUT,
@@ -190,7 +190,7 @@ class CallbackWithMonitor(Callback):
     def reverse_optim_op(self) -> Callable:
         return self.reverse_optim_dict[self.mode]
 
-    def _get_monitor(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT]) -> Optional[float]:
+    def _get_monitor(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT]) -> float:
         if not isinstance(output, Dict):
             raise RuntimeError(
                 "From `*_step` and `*_epoch_end` method you need to return dict to use monitoring Callbacks like EarlyStopping and ModelCheckpoint."

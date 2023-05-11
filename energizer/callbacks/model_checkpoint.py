@@ -19,7 +19,7 @@ class ModelCheckpoint(CallbackWithMonitor):
         self,
         dirpath: Union[Path, str],
         monitor: str,
-        stage: RunningStage,
+        stage: Union[str, RunningStage],
         mode: str = "min",
         save_last: Optional[bool] = None,
         save_top_k: int = 1,
@@ -81,7 +81,7 @@ class ModelCheckpoint(CallbackWithMonitor):
     Helpers
     """
 
-    def epoch_end(self, estimator: Estimator, output: EPOCH_OUTPUT, stage: RunningStage) -> None:
+    def epoch_end(self, estimator: Estimator, output: EPOCH_OUTPUT, stage: Union[str, RunningStage]) -> None:
         if stage != self.stage:
             return
 
@@ -109,7 +109,7 @@ class ModelCheckpoint(CallbackWithMonitor):
                     append_new_line=False,
                 )
 
-    def _check_should_save(self, stage: RunningStage, current: Optional[float]) -> bool:
+    def _check_should_save(self, stage: Union[str, RunningStage], current: Optional[float]) -> bool:
         should_save = False
 
         # if you do not monitor it will save every time the stage is finished
@@ -128,7 +128,7 @@ class ModelCheckpoint(CallbackWithMonitor):
 
         return should_save
 
-    def _get_name(self, estimator: Estimator, stage: RunningStage, current: Optional[float] = None) -> str:
+    def _get_name(self, estimator: Estimator, stage: Union[str, RunningStage], current: Optional[float] = None) -> str:
         # build filename
         step = "step" if stage == RunningStage.VALIDATION else "epoch"
         name = f"{stage}_{step}={estimator.progress_tracker.safe_global_epoch}"

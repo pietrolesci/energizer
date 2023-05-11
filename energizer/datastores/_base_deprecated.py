@@ -136,7 +136,7 @@ class Datastore(BaseDataStore, HyperparametersMixin):
     def get_collate_fn(self, stage: Optional[str] = None) -> Optional[Callable]:
         return None
 
-    def show_batch(self, stage: RunningStage = RunningStage.TRAIN) -> Optional[Any]:
+    def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN) -> Optional[Any]:
         loader = getattr(self, f"{stage}_loader")()
         if loader is not None:
             return next(iter(loader))

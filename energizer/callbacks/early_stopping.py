@@ -17,7 +17,7 @@ class EarlyStopping(CallbackWithMonitor):
     def __init__(
         self,
         monitor: str,
-        stage: RunningStage,
+        stage: Union[str, RunningStage],
         interval: Interval = Interval.EPOCH,
         mode: str = "min",
         min_delta=0.00,
@@ -38,7 +38,7 @@ class EarlyStopping(CallbackWithMonitor):
         self.verbose = verbose
         self.dirpath = Path("./.early_stopping.jsonl")
 
-    def _check_stopping_criteria(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int) -> Tuple[bool, str]:
+    def _check_stopping_criteria(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int) -> Tuple[bool, Union[str, None]]:
         current = self._get_monitor(output)
 
         should_stop = False
@@ -78,7 +78,7 @@ class EarlyStopping(CallbackWithMonitor):
         return should_stop, reason
 
     def check(
-        self, estimator: Estimator, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], stage: RunningStage, interval: Interval
+        self, estimator: Estimator, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], stage: Union[str, RunningStage], interval: Interval
     ) -> None:
         if (self.stage == stage and self.interval == interval) and estimator.progress_tracker.is_fitting:
             step = (

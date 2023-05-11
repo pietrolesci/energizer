@@ -4,21 +4,22 @@ from energizer.callbacks.base import Callback
 from energizer.enums import RunningStage
 from energizer.estimators.active_estimator import ActiveEstimator
 from energizer.estimators.estimator import Estimator
+from typing import Union
 
 
 class Timer(Callback):
-    def epoch_start(self, stage: RunningStage) -> None:
+    def epoch_start(self, stage: Union[str, RunningStage]) -> None:
         setattr(self, f"{stage}_epoch_start_time", time.perf_counter())
 
-    def epoch_end(self, estimator: Estimator, stage: RunningStage) -> None:
+    def epoch_end(self, estimator: Estimator, stage: Union[str, RunningStage]) -> None:
         setattr(self, f"{stage}_epoch_end_time", time.perf_counter())
         runtime = getattr(self, f"{stage}_epoch_end_time") - getattr(self, f"{stage}_epoch_start_time")
         estimator.log(f"timer/{stage}_epoch_time", runtime, step=estimator.progress_tracker.safe_global_epoch)
 
-    def batch_start(self, stage: RunningStage) -> None:
+    def batch_start(self, stage: Union[str, RunningStage]) -> None:
         setattr(self, f"{stage}_batch_start_time", time.perf_counter())
 
-    def batch_end(self, estimator: Estimator, stage: RunningStage) -> None:
+    def batch_end(self, estimator: Estimator, stage: Union[str, RunningStage]) -> None:
         setattr(self, f"{stage}_batch_end_time", time.perf_counter())
         runtime = getattr(self, f"{stage}_batch_end_time") - getattr(self, f"{stage}_batch_start_time")
         estimator.log(f"timer/{stage}_batch_time", runtime, step=estimator.progress_tracker.global_batch)

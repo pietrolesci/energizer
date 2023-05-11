@@ -155,8 +155,11 @@ class PandasDataStore(Datastore):
             dataset_dict["test"] = test_dataset
         dataset_dict = DatasetDict(dataset_dict)
 
+        # normalize column name
+        dataset_dict = dataset_dict.rename_columns({target_name: InputKeys.TARGET})
+        self.target_name = InputKeys.TARGET
+        
         # set attributes
-        self.target_name = target_name
         self.input_names = [input_names] if isinstance(input_names, str) else input_names
         on_cpu = on_cpu or []
         self.on_cpu = [on_cpu] if isinstance(on_cpu, str) else on_cpu
@@ -252,8 +255,10 @@ class PandasDataStoreWithIndex(PandasDataStore):
         validation_sampling: Optional[str] = None,
     ) -> int:
         out = super().label(indices, round, validation_perc, validation_sampling)
-        # remove instance from the index
-        self.mask_ids_from_index(indices)
+        
+        if self.index is not None:
+            # remove instance from the index
+            self.mask_ids_from_index(indices)
         return out
 
     def search(

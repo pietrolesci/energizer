@@ -45,7 +45,7 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         batch_idx: int,
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
-        stage: RunningStage,
+        stage: Union[str, RunningStage],
     ) -> Union[List[Dict], BATCH_OUTPUT]:
         if stage != RunningStage.POOL:
             return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)

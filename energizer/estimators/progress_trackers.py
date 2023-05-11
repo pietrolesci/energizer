@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -88,7 +88,7 @@ class ProgressTracker:
         self.has_validation: bool = False
         self.current_stage: Optional[RunningStage] = None
 
-    def setup(self, stage: RunningStage, log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
+    def setup(self, stage: Union[str, RunningStage], log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
         """Do all the math here and create progress bars for every stage."""
 
         self.log_interval = log_interval
@@ -139,10 +139,10 @@ class ProgressTracker:
         self.train_tracker.max = max_train_batches
         self.validation_tracker.max = max_validation_batches
 
-    def setup_eval(self, stage: RunningStage, num_batches: int, limit_batches: Optional[int]) -> None:
+    def setup_eval(self, stage: Union[str, RunningStage], num_batches: int, limit_batches: Optional[int]) -> None:
         getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
 
-    def make_progress_bars(self, stage: RunningStage) -> None:
+    def make_progress_bars(self, stage: Union[str, RunningStage]) -> None:
         if not self.enable_progress_bar:
             return
 
@@ -211,7 +211,7 @@ class ProgressTracker:
             self.current_stage == RunningStage.TRAIN and self.stop_training
         )
 
-    def start(self, stage: RunningStage) -> None:
+    def start(self, stage: Union[str, RunningStage]) -> None:
         """Make progress bars and reset the counters."""
         self.current_stage = stage
 
