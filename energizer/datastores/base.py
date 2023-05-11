@@ -184,8 +184,13 @@ class Datastore(BaseDataStore):
         return None
 
     def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+        batch_size, eval_batch_size, shuffle = self.batch_size, self.eval_batch_size, self.shuffle
+        
         self.prepare_for_loading(batch_size=1, eval_batch_size=1, shuffle=False)
         loader = getattr(self, f"{stage}_loader")(*args, **kwargs)
+
+        self.batch_size, self.eval_batch_size, self.shuffle = batch_size, eval_batch_size, shuffle
+
         if loader is not None:
             return next(iter(loader))
 

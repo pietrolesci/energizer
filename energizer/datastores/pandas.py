@@ -263,7 +263,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
 
     def search(
         self, query: np.ndarray, query_size: int, query_in_set: bool = True
-    ) -> Tuple[List[List[int]], np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
         # retrieve one additional element if the query is in the set we are looking in
         # because the query itself is returned as the most similar element and we need to remove it
         query_size = query_size + 1 if query_in_set else query_size
@@ -271,7 +271,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
         if query_in_set:
             # remove the first element retrieved if the query is in the set since it's the element itself
             indices, distances = indices[:, 1:], distances[:, 1:]
-        return indices.tolist(), distances
+        return indices, distances
 
     def add_index(
         self,
