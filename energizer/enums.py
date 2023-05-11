@@ -45,7 +45,7 @@ class Interval(StrEnum):
 
 
 class SpecialKeys(StrEnum):
-    ID: str = "unique_id"
+    ID: str = "uid"
     IS_LABELLED: str = "is_labelled"
     IS_VALIDATION: str = "is_validation"
     LABELLING_ROUND: str = "labelling_round"

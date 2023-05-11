@@ -9,15 +9,14 @@ import numpy as np
 import pandas as pd
 import srsly
 import torch
-from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
+from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets, load_from_disk
 from numpy.random import RandomState
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
 from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
-from energizer.utilities import _pad, ld_to_dl
-from energizer.utilities import sample
+from energizer.utilities import _pad, ld_to_dl, sample, sequential_numbers
 
 
 class PandasDataStore(Datastore):
@@ -50,9 +49,7 @@ class PandasDataStore(Datastore):
         if self.test_data is not None:
             return self.test_data
 
-    def pool_dataset(
-        self, round: Optional[int] = None, with_indices: Optional[List[int]] = None
-    ) -> Optional[Dataset]:
+    def pool_dataset(self, round: Optional[int] = None, with_indices: Optional[List[int]] = None) -> Optional[Dataset]:
         mask = self._pool_mask(round)
         if with_indices:
             mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
@@ -91,20 +88,20 @@ class PandasDataStore(Datastore):
         return mask.sum()
 
     def sample_from_pool(
-        self, 
-        size: int, 
-        mode: Optional[str], 
-        round: Optional[int] = None, 
-        random_state: Optional[RandomState] = None, 
+        self,
+        size: int,
+        mode: Optional[str],
+        round: Optional[int] = None,
+        random_state: Optional[RandomState] = None,
         with_indices: Optional[List[int]] = None,
     ) -> List[int]:
         """Performs `uniform` or `stratified` sampling from the pool."""
-        
+
         mask = self._pool_mask(round)
         if with_indices:
             mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
         data = self.data.loc[mask, [SpecialKeys.ID, self.target_name]]
-        
+
         return sample(
             indices=data[SpecialKeys.ID].tolist(),
             size=size,
@@ -147,48 +144,61 @@ class PandasDataStore(Datastore):
         validation_dataset: Optional[Dataset] = None,
         test_dataset: Optional[Dataset] = None,
         on_cpu: Optional[Union[str, List[str]]] = None,
+        uid_name: Optional[str] = None,
     ) -> None:
+
+        # register datasets
+        dataset_dict = {"train": train_dataset}
+        if validation_dataset is not None:
+            dataset_dict["train"] = concatenate_datasets([train_dataset, validation_dataset])
+        if test_dataset is not None:
+            dataset_dict["test"] = test_dataset
+        dataset_dict = DatasetDict(dataset_dict)
 
         # set attributes
         self.target_name = target_name
         self.input_names = [input_names] if isinstance(input_names, str) else input_names
         on_cpu = on_cpu or []
         self.on_cpu = [on_cpu] if isinstance(on_cpu, str) else on_cpu
-        # cols = self.input_names + [self.target_name] + list(SpecialKeys) + self.on_cpu
+
+        # uid column
+        self.uid_name = SpecialKeys.ID
+        if uid_name is None:
+            uid_generator = sequential_numbers()
+            dataset_dict = dataset_dict.map(
+                lambda ex: {SpecialKeys.ID: [next(uid_generator) for _ in range(len(ex[self.target_name]))]}
+            )
+        else:
+            self.uid_name = uid_name
+            dataset_dict = dataset_dict.rename_columns({self.uid_name: SpecialKeys.ID})
+            col = dataset_dict["train"].to_pandas()[SpecialKeys.ID]  # type: ignore
+            assert col.nunique() == len(col), f"`uid_column` {uid_name} is not unique."
 
         # create training data
-        data: pd.DataFrame = train_dataset.to_pandas()  # type: ignore
-        features = {k: v for k, v in train_dataset.features.items()}
+        data: pd.DataFrame = dataset_dict["train"].to_pandas()  # type: ignore
+        features = dict(dataset_dict["train"].features)
 
         # add special columns if not present
         for k, v, f in [
-            (SpecialKeys.ID, None, Value(dtype="int64", id=None)),
             (SpecialKeys.IS_LABELLED, False, Value(dtype="bool", id=None)),
             (SpecialKeys.IS_VALIDATION, False, Value(dtype="bool", id=None)),
             (SpecialKeys.LABELLING_ROUND, -100, Value(dtype="int64", id=None)),
         ]:
-            if k in data.columns:
-                continue
-            elif k == SpecialKeys.ID:
-                data[SpecialKeys.ID.value] = data.index.copy()
-                assert data[SpecialKeys.ID].nunique() == len(data)  # check consistency of the index
-                features[SpecialKeys.ID.value] = f
-            else:
-                data[k.value] = v
-                features[k.value] = f
+            data[k.value] = v
+            features[k.value] = f
 
-        self.data = data  # .loc[:, cols]
+        self.data = data
         self._features = Features(**features)
-        if validation_dataset is not None:
-            self.validation_data = validation_dataset
+
         if test_dataset is not None:
-            self.test_data = test_dataset
+            self.test_data = dataset_dict["test"]
 
     def from_dataset_dict(
         self,
         dataset_dict: DatasetDict,
         input_names: Union[str, List[str]],
         target_name: str,
+        uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
     ) -> None:
         self.from_datasets(
@@ -197,6 +207,7 @@ class PandasDataStore(Datastore):
             test_dataset=dataset_dict.get(RunningStage.TEST, None),
             input_names=input_names,
             target_name=target_name,
+            uid_name=uid_name,
             on_cpu=on_cpu,
         )
 
@@ -220,7 +231,7 @@ class PandasDataStore(Datastore):
         if round is not None:
             mask = mask | (self.data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
-    
+
     def save_labelled_dataset(self, save_dir: Union[str, Path]) -> None:
         path = Path(save_dir)
         path.mkdir(parents=True, exist_ok=True)
@@ -308,10 +319,9 @@ class PandasDataStoreWithIndex(PandasDataStore):
         for i in ids:
             self.index.unmark_deleted(i)
 
-    def get_embeddings(self, ids: List[int]) -> List[np.ndarray]:
+    def get_embeddings(self, ids: List[int]) -> np.ndarray:
         mask = self.data[SpecialKeys.ID].isin(ids)
-        return self.data.loc[mask, self.embedding_name].tolist()
-
+        return self.data.loc[mask, self.embedding_name].values  # type: ignore
 
 
 class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
@@ -374,6 +384,7 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
         train_dataset: Dataset,
         validation_dataset: Optional[Dataset] = None,
         test_dataset: Optional[Dataset] = None,
+        uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
         tokenizer: Optional[PreTrainedTokenizerBase] = None,
     ) -> None:
@@ -386,6 +397,7 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
             test_dataset=test_dataset,
             input_names=input_names,
             target_name=target_name,
+            uid_name=uid_name,
             on_cpu=on_cpu,
         )
 
@@ -394,6 +406,7 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
         dataset_dict: DatasetDict,
         input_names: Union[str, List[str]],
         target_name: str,
+        uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
         tokenizer: Optional[PreTrainedTokenizerBase] = None,
     ) -> None:
@@ -403,6 +416,7 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
             test_dataset=dataset_dict.get(RunningStage.TEST, None),
             input_names=input_names,
             target_name=target_name,
+            uid_name=uid_name,
             on_cpu=on_cpu,
             tokenizer=tokenizer,
         )

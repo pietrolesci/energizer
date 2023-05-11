@@ -159,10 +159,10 @@ class Datastore(BaseDataStore):
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is None:
             return
-   
+
         batch_size = self.batch_size if stage == RunningStage.TRAIN else self.eval_batch_size
         batch_size = min(batch_size, len(dataset))
-        
+
         # sampler
         sampler = _get_sampler(
             dataset,
@@ -170,7 +170,7 @@ class Datastore(BaseDataStore):
             replacement=self.replacement,
             seed=self.data_seed,
         )
-        
+
         # put everything together
         return DataLoader(
             dataset=dataset,

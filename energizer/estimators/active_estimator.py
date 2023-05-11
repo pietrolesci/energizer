@@ -11,7 +11,6 @@ from energizer.types import ROUND_OUTPUT
 
 
 class ActiveEstimator(Estimator):
-    
     def setup_tracking(self) -> None:
         self._progress_tracker = ActiveProgressTracker()
 

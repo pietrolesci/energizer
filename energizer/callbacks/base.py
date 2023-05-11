@@ -1,11 +1,11 @@
 from typing import Any, Callable, Dict, List, Optional, Union
-from energizer.enums import RunningStage
 
 import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
 from torch.optim import Optimizer
 
 from energizer.datastores.base import Datastore
+from energizer.enums import RunningStage
 from energizer.estimators.active_estimator import ActiveEstimator
 from energizer.estimators.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC, ROUND_OUTPUT
@@ -35,7 +35,7 @@ class Callback:
 
     def on_epoch_start(self, stage: RunningStage, estimator: Estimator, model: _FabricModule, **kwargs) -> None:
         ...
-    
+
     def on_train_epoch_start(self, estimator: Estimator, model: _FabricModule, optimizer: Optimizer) -> None:
         return self.on_epoch_start(RunningStage.TRAIN, estimator, model, optimizer=optimizer)
 
@@ -44,11 +44,13 @@ class Callback:
 
     def on_test_epoch_start(self, estimator: Estimator, model: _FabricModule) -> None:
         return self.on_epoch_start(RunningStage.TEST, estimator, model)
-    
+
     def on_pool_epoch_start(self, estimator: ActiveEstimator, model: _FabricModule) -> None:
         return self.on_epoch_start(RunningStage.POOL, estimator, model)
 
-    def on_epoch_end(self, stage: RunningStage, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC) -> None:
+    def on_epoch_end(
+        self, stage: RunningStage, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
+    ) -> None:
         ...
 
     def on_train_epoch_end(
@@ -71,16 +73,22 @@ class Callback:
     ) -> None:
         return self.on_epoch_end(RunningStage.POOL, estimator, model, output, metrics)
 
-
     """
     Batch
     """
 
-    def on_batch_start(self, stage: RunningStage, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, **kwargs) -> None:
+    def on_batch_start(
+        self, stage: RunningStage, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, **kwargs
+    ) -> None:
         ...
 
     def on_train_batch_start(
-        self, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, optimizer: Optimizer,
+        self,
+        estimator: Estimator,
+        model: _FabricModule,
+        batch: Any,
+        batch_idx: int,
+        optimizer: Optimizer,
     ) -> None:
         return self.on_batch_start(RunningStage.TRAIN, estimator, model, batch, batch_idx, optimizer=optimizer)
 
@@ -89,13 +97,21 @@ class Callback:
 
     def on_test_batch_start(self, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int) -> None:
         return self.on_batch_start(RunningStage.TEST, estimator, model, batch, batch_idx)
-    
+
     def on_pool_batch_start(self, estimator: ActiveEstimator, model: _FabricModule, batch: Any, batch_idx: int) -> None:
         return self.on_batch_start(RunningStage.POOL, estimator, model, batch, batch_idx)
 
-    def on_batch_end(self, stage: RunningStage, estimator: Estimator, model: _FabricModule, output: BATCH_OUTPUT, batch: Any, batch_idx: int) -> None:
+    def on_batch_end(
+        self,
+        stage: RunningStage,
+        estimator: Estimator,
+        model: _FabricModule,
+        output: BATCH_OUTPUT,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
         ...
-    
+
     def on_train_batch_end(
         self, estimator: Estimator, model: _FabricModule, output: BATCH_OUTPUT, batch: Any, batch_idx: int
     ) -> None:
@@ -110,13 +126,12 @@ class Callback:
         self, estimator: Estimator, model: _FabricModule, output: BATCH_OUTPUT, batch: Any, batch_idx: int
     ) -> None:
         return self.on_batch_end(RunningStage.TEST, estimator, model, output, batch, batch_idx)
-    
+
     def on_pool_batch_end(
         self, estimator: ActiveEstimator, model: _FabricModule, output: BATCH_OUTPUT, batch: Any, batch_idx: int
     ) -> None:
         return self.on_batch_end(RunningStage.POOL, estimator, model, output, batch, batch_idx)
 
-    
     """
     Step
     """

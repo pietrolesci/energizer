@@ -2,15 +2,15 @@
 import contextlib
 import os
 import random
-from typing import Any, Dict, Generator, List, Union, Optional
-from numpy.random import RandomState
-from sklearn.utils import resample
+from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
 import torch
 from lightning.fabric.utilities.seed import _collect_rng_states, _set_rng_states
 from lightning_utilities.core.apply_func import apply_to_collection
 from numpy import generic, ndarray
+from numpy.random import RandomState
+from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 
@@ -82,6 +82,7 @@ def _pad(inputs: List[int], padding_value: float, max_length: int) -> Tensor:
         padding_value=padding_value,
     )
 
+
 def sample(
     indices: List[int],
     size: int,
@@ -109,3 +110,10 @@ def sample(
     assert len(set(sample)) == size
 
     return sample  # type: ignore
+
+
+def sequential_numbers() -> Generator[int, Any, None]:
+    n = 0
+    while True:
+        yield n
+        n += 1

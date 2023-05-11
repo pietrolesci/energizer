@@ -21,7 +21,6 @@ from energizer.utilities.model_summary import summarize
 
 
 class Estimator(HyperparametersMixin):
-
     def __init__(
         self,
         model: torch.nn.Module,
