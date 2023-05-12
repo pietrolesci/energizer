@@ -51,7 +51,7 @@ class PandasDataStore(Datastore):
 
     def pool_dataset(self, round: Optional[int] = None, with_indices: Optional[List[int]] = None) -> Optional[Dataset]:
         mask = self._pool_mask(round)
-        if with_indices:
+        if with_indices is not None:
             mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
         return Dataset.from_pandas(self.data.loc[mask, [i for i in self.data.columns if i != self.target_name]])
 
@@ -326,7 +326,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
 
     def get_embeddings(self, ids: List[int]) -> np.ndarray:
         mask = self.data[SpecialKeys.ID].isin(ids)
-        return self.data.loc[mask, self.embedding_name].values  # type: ignore
+        return np.stack(self.data.loc[mask, self.embedding_name].tolist())  # type: ignore
 
 
 class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
