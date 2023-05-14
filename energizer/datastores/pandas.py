@@ -169,7 +169,8 @@ class PandasDataStore(Datastore):
         if uid_name is None:
             uid_generator = sequential_numbers()
             dataset_dict = dataset_dict.map(
-                lambda ex: {SpecialKeys.ID: [next(uid_generator) for _ in range(len(ex[self.target_name]))]}
+                lambda ex: {SpecialKeys.ID: [next(uid_generator) for _ in range(len(ex[self.target_name]))]},
+                batched=True,
             )
         else:
             self.uid_name = uid_name
