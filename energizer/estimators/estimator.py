@@ -472,7 +472,7 @@ class Estimator(HyperparametersMixin):
     def configure_loss_fn(self, stage: Union[str, RunningStage]) -> torch.nn.Module:
         ...
 
-    def configure_metrics(self, stage: Optional[RunningStage] = None) -> Optional[METRIC]:
+    def configure_metrics(self, stage: Optional[Union[str, RunningStage]] = None) -> Optional[METRIC]:
         ...
 
     def train_step(
