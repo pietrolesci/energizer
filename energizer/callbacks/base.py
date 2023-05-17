@@ -158,10 +158,10 @@ class Callback:
     def on_round_end(self, estimator: ActiveEstimator, datastore: Datastore, output: ROUND_OUTPUT) -> None:
         ...
 
-    def on_query_start(self, estimator: ActiveEstimator, model: _FabricModule) -> None:
+    def on_query_start(self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore) -> None:
         ...
 
-    def on_query_end(self, estimator: ActiveEstimator, model: _FabricModule, output) -> None:
+    def on_query_end(self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore, indices: List[int]) -> None:
         ...
 
     def on_label_start(self, estimator: ActiveEstimator, datastore: Datastore) -> None:
@@ -196,8 +196,8 @@ class CallbackWithMonitor(Callback):
                 "From `*_step` and `*_epoch_end` method you need to return dict to use monitoring Callbacks like EarlyStopping and ModelCheckpoint."
             )
 
-        monitor = output.get(self.monitor)
+        monitor = output.get(self.monitor, None)
         if monitor is None:
-            raise ValueError(f"`{self.monitor}` is not logged.")
+            raise ValueError(f"`{self.monitor}` is not logged. Currently logged metrics {list(output.keys())}")
 
         return move_to_cpu(monitor)
