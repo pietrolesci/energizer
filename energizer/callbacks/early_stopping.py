@@ -9,7 +9,7 @@ from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import Interval, RunningStage
 from energizer.estimators.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
-
+from energizer.utilities import make_dict_json_serializable
 
 class EarlyStopping(CallbackWithMonitor):
     order_dict = {"min": "<", "max": ">"}
@@ -91,14 +91,14 @@ class EarlyStopping(CallbackWithMonitor):
                 estimator.progress_tracker.set_stop_training(True)
                 if self.verbose:
                     _msg = {
-                        "best_score": round(self.best_score.item(), 6),
+                        "best_score": round(self.best_score, 6),
                         "best_step": self.best_step,
                         "stage": stage,
                         "interval": interval,
                         "stopping_step": step,
                         "reason": reason,
                     }
-                    srsly.write_jsonl(self.dirpath, [_msg], append=True, append_new_line=False)
+                    srsly.write_jsonl(self.dirpath, [make_dict_json_serializable(_msg)], append=True, append_new_line=False)
 
     def reset(self) -> None:
         self.wait_count = 0
