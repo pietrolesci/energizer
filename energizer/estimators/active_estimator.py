@@ -55,7 +55,7 @@ class ActiveEstimator(Estimator):
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
-        self.progress_tracker.setup(
+        self.progress_tracker.setup_active(
             max_rounds=max_rounds,
             max_budget=int(min(datastore.pool_size(), max_budget or float("Inf"))),
             initial_budget=datastore.labelled_size(),
@@ -228,7 +228,7 @@ class ActiveEstimator(Estimator):
     ) -> int:
 
         # query
-        self.fabric.call("on_query_start", estimator=self, model=model)
+        self.fabric.call("on_query_start", estimator=self, model=model, datastore=datastore)
 
         indices = self.run_query(model, datastore=datastore, query_size=query_size)
 
@@ -236,7 +236,7 @@ class ActiveEstimator(Estimator):
         remaining_budget = min(query_size, self.progress_tracker.budget_tracker.get_remaining_budget())
         indices = indices[:remaining_budget]
 
-        self.fabric.call("on_query_end", estimator=self, model=model, output=indices)
+        self.fabric.call("on_query_end", estimator=self, model=model, datastore=datastore, indices=indices)
 
         # label
         self.fabric.call("on_label_start", estimator=self, datastore=datastore)
@@ -287,7 +287,7 @@ class ActiveEstimator(Estimator):
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
-        self.progress_tracker.setup(
+        self.progress_tracker.setup_active(
             max_rounds=datastore.total_rounds(),
             max_budget=datastore.labelled_size(),
             initial_budget=datastore.labelled_size(0),

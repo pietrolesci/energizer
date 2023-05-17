@@ -292,7 +292,7 @@ class ActiveProgressTracker(ProgressTracker):
         self.run_on_pool = False
         self.has_test = False
 
-    def setup(
+    def setup_active(
         self,
         max_rounds: Optional[int],
         max_budget: int,
