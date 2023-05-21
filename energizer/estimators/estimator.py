@@ -81,9 +81,9 @@ class Estimator(HyperparametersMixin):
 
         # start progress tracking
         self.progress_tracker.setup(
-            RunningStage.TRAIN,
-            log_interval,
-            enable_progress_bar,
+            stage=RunningStage.TRAIN,
+            log_interval=log_interval,
+            enable_progress_bar=enable_progress_bar,
             max_epochs=max_epochs,
             min_steps=min_steps,
             num_train_batches=len(train_loader),
@@ -279,9 +279,9 @@ class Estimator(HyperparametersMixin):
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
         self.progress_tracker.setup(
-            RunningStage.TEST,
-            log_interval,
-            enable_progress_bar,
+            stage=RunningStage.TEST,
+            log_interval=log_interval,
+            enable_progress_bar=enable_progress_bar,
             num_batches=len(test_loader),
             limit_batches=limit_batches,
         )

@@ -4,7 +4,7 @@ from typing import Dict, Optional, Union
 
 import srsly
 from lightning.fabric.wrappers import _FabricModule
-
+import shutil
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import RunningStage
 from energizer.estimators.estimator import Estimator
@@ -54,7 +54,7 @@ class ModelCheckpoint(CallbackWithMonitor):
             # during active learning we do not want to keep checkpoints from previous iterations
             for i in self.dirpath.glob("*.pt"):
                 os.remove(i.absolute())
-            # shutil.rmtree(self.dirpath)
+            shutil.rmtree(self.dirpath)
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self._best_k_models = {}
 

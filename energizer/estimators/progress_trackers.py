@@ -97,7 +97,7 @@ class ProgressTracker:
         if stage == RunningStage.TRAIN:
             self.setup_fit(**kwargs)  # type: ignore
         else:
-            self.setup_eval(**kwargs)  # type: ignore
+            self.setup_eval(stage, **kwargs)  # type: ignore
 
         self.make_progress_bars(stage)
 
