@@ -36,6 +36,8 @@ class Estimator(HyperparametersMixin):
             precision=precision,
             callbacks=callbacks,
             loggers=loggers,
+            devices=1,
+            num_nodes=1,
         )
         self.model = model
         init_deterministic(deterministic)
