@@ -11,6 +11,7 @@ from energizer.estimators.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
 from energizer.utilities import make_dict_json_serializable
 
+
 class EarlyStopping(CallbackWithMonitor):
     order_dict = {"min": "<", "max": ">"}
 
@@ -38,7 +39,9 @@ class EarlyStopping(CallbackWithMonitor):
         self.verbose = verbose
         self.dirpath = Path("./.early_stopping.jsonl")
 
-    def _check_stopping_criteria(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int) -> Tuple[bool, Union[str, None]]:
+    def _check_stopping_criteria(
+        self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int
+    ) -> Tuple[bool, Union[str, None]]:
         current = self._get_monitor(output)
 
         should_stop = False
@@ -78,7 +81,11 @@ class EarlyStopping(CallbackWithMonitor):
         return should_stop, reason
 
     def check(
-        self, estimator: Estimator, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], stage: Union[str, RunningStage], interval: Interval
+        self,
+        estimator: Estimator,
+        output: Union[BATCH_OUTPUT, EPOCH_OUTPUT],
+        stage: Union[str, RunningStage],
+        interval: Interval,
     ) -> None:
         if (self.stage == stage and self.interval == interval) and estimator.progress_tracker.is_fitting:
             step = (
@@ -98,7 +105,9 @@ class EarlyStopping(CallbackWithMonitor):
                         "stopping_step": step,
                         "reason": reason,
                     }
-                    srsly.write_jsonl(self.dirpath, [make_dict_json_serializable(_msg)], append=True, append_new_line=False)
+                    srsly.write_jsonl(
+                        self.dirpath, [make_dict_json_serializable(_msg)], append=True, append_new_line=False
+                    )
 
     def reset(self) -> None:
         self.wait_count = 0

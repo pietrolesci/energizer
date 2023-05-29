@@ -158,7 +158,7 @@ class PandasDataStore(Datastore):
         # normalize column name
         dataset_dict = dataset_dict.rename_columns({target_name: InputKeys.TARGET})
         self.target_name = InputKeys.TARGET
-        
+
         # set attributes
         self.input_names = [input_names] if isinstance(input_names, str) else input_names
         on_cpu = on_cpu or []
@@ -256,15 +256,13 @@ class PandasDataStoreWithIndex(PandasDataStore):
         validation_sampling: Optional[str] = None,
     ) -> int:
         out = super().label(indices, round, validation_perc, validation_sampling)
-        
+
         if self.index is not None:
             # remove instance from the index
             self.mask_ids_from_index(indices)
         return out
 
-    def search(
-        self, query: np.ndarray, query_size: int, query_in_set: bool = True
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> Tuple[np.ndarray, np.ndarray]:
         # retrieve one additional element if the query is in the set we are looking in
         # because the query itself is returned as the most similar element and we need to remove it
         query_size = query_size + 1 if query_in_set else query_size
@@ -294,19 +292,22 @@ class PandasDataStoreWithIndex(PandasDataStore):
         self.index.add_items(embeddings, self.data[SpecialKeys.ID].values, num_threads=num_threads)
 
     def save_index(self, dir: Union[str, Path]) -> None:
-        if self.index is not None:
-            self.index.save_index(str(Path(dir) / "hnswlib_index.bin"))
-            meta = {"dim": self.index.dim, "metric": self.index.space, "embedding_name": self.embedding_name}
-            srsly.write_json(Path(dir) / "hnswlib_index_config.json", meta)
+        raise NotImplementedError
+        # if self.index is not None:
+        #     self.index.save_index(str(Path(dir) / "hnswlib_index.bin"))
+        #     meta = {"dim": self.index.dim, "metric": self.index.space, "embedding_name": self.embedding_name}
+        #     srsly.write_json(Path(dir) / "hnswlib_index_config.json", meta)
 
-    def load_index(self, dir: Union[str, Path]) -> None:
-        dir = Path(dir)
-        if (dir / "hnswlib_index_config.json").exists():
-            meta: Dict = srsly.read_json(dir / "hnswlib_index_config.json")  # type: ignore
-            index = hb.Index(space=meta["metric"], dim=meta["dim"])
-            index.load_index(str(dir / "hnswlib_index.bin"))
-            self.index = index
-            self.embedding_name = meta["embedding_name"]
+    def load_index(self, index_path: Union[str, Path], metadata_path: Union[str, Path]) -> None:
+        meta: Dict = srsly.read_json(metadata_path)  # type: ignore
+        index = hb.Index(space=meta["metric"], dim=meta["dim"])
+        index.load_index(str(index_path))
+
+        # consistency check: data must be equal
+        assert set(self.data[SpecialKeys.ID]) == set(
+            index.get_ids_list()
+        ), f"{len(self.data[SpecialKeys.ID])}, {len(index.get_ids_list())}"
+        self.index = index
 
     def get_train_ids(self, round: Optional[int] = None) -> List[int]:
         return self.data.loc[self._train_mask(round), SpecialKeys.ID].tolist()
@@ -325,9 +326,18 @@ class PandasDataStoreWithIndex(PandasDataStore):
         for i in ids:
             self.index.unmark_deleted(i)
 
-    def get_embeddings(self, ids: List[int]) -> np.ndarray:
-        mask = self.data[SpecialKeys.ID].isin(ids)
-        return np.stack(self.data.loc[mask, self.embedding_name].tolist())  # type: ignore
+    def get_train_embeddings(self, ids: List[int]) -> np.ndarray:
+        # check all the ids are training ids
+        assert len(set(self.get_train_ids()).intersection(set(ids))) == len(ids)
+
+        # now that we are sure, let's unmask them and get the items
+        self.unmask_ids_from_index(ids)
+        emb = np.stack(self.index.get_items(ids))
+
+        # remask the training ids
+        self.mask_ids_from_index(ids)
+
+        return emb
 
 
 class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):

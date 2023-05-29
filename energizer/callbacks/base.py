@@ -33,7 +33,9 @@ class Callback:
     Epoch
     """
 
-    def on_epoch_start(self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, **kwargs) -> None:
+    def on_epoch_start(
+        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, **kwargs
+    ) -> None:
         ...
 
     def on_train_epoch_start(self, estimator: Estimator, model: _FabricModule, optimizer: Optimizer) -> None:
@@ -49,7 +51,12 @@ class Callback:
         return self.on_epoch_start(RunningStage.POOL, estimator, model)
 
     def on_epoch_end(
-        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
+        self,
+        stage: Union[str, RunningStage],
+        estimator: Estimator,
+        model: _FabricModule,
+        output: EPOCH_OUTPUT,
+        metrics: METRIC,
     ) -> None:
         ...
 
@@ -78,7 +85,13 @@ class Callback:
     """
 
     def on_batch_start(
-        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, **kwargs
+        self,
+        stage: Union[str, RunningStage],
+        estimator: Estimator,
+        model: _FabricModule,
+        batch: Any,
+        batch_idx: int,
+        **kwargs,
     ) -> None:
         ...
 
@@ -161,7 +174,9 @@ class Callback:
     def on_query_start(self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore) -> None:
         ...
 
-    def on_query_end(self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore, indices: List[int]) -> None:
+    def on_query_end(
+        self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore, indices: List[int]
+    ) -> None:
         ...
 
     def on_label_start(self, estimator: ActiveEstimator, datastore: Datastore) -> None:

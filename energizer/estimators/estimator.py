@@ -293,7 +293,9 @@ class Estimator(HyperparametersMixin):
         model = self.fabric.setup(self.model)
         return self.run_evaluation(model, loader, RunningStage.TEST)  # type: ignore
 
-    def run_evaluation(self, model: _FabricModule, loader: _FabricDataLoader, stage: Union[str, RunningStage]) -> EPOCH_OUTPUT:
+    def run_evaluation(
+        self, model: _FabricModule, loader: _FabricDataLoader, stage: Union[str, RunningStage]
+    ) -> EPOCH_OUTPUT:
         """Runs over an entire evaluation dataloader."""
 
         # configure progress tracking
@@ -527,5 +529,7 @@ class Estimator(HyperparametersMixin):
     def test_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TEST, output, metrics)
 
-    def epoch_end(self, stage: Union[str, RunningStage], output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def epoch_end(
+        self, stage: Union[str, RunningStage], output: List[BATCH_OUTPUT], metrics: Optional[METRIC]
+    ) -> EPOCH_OUTPUT:
         return output
