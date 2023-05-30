@@ -52,9 +52,9 @@ class ModelCheckpoint(CallbackWithMonitor):
         # prepare directory
         if self.dirpath.exists():
             # during active learning we do not want to keep checkpoints from previous iterations
-            for i in self.dirpath.glob("*.pt"):
-                os.remove(i.absolute())
-            shutil.rmtree(self.dirpath)
+            # for i in self.dirpath.glob("*.pt"):
+            #     os.remove(i.absolute())
+            shutil.rmtree(str(self.dirpath))
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self._best_k_models = {}
 
