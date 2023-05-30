@@ -302,12 +302,15 @@ class PandasDataStoreWithIndex(PandasDataStore):
         meta: Dict = srsly.read_json(metadata_path)  # type: ignore
         index = hb.Index(space=meta["metric"], dim=meta["dim"])
         index.load_index(str(index_path))
-
-        # consistency check: data must be equal
-        assert set(self.data[SpecialKeys.ID]) == set(
-            index.get_ids_list()
-        ), f"{len(self.data[SpecialKeys.ID])}, {len(index.get_ids_list())}"
         self.index = index
+
+        # consistency check: data in index must be the same or more
+        assert len(index.get_ids_list()) >= len(self.data[SpecialKeys.ID])
+
+        # if dataset has been downsampled, mask the ids
+        if len(index.get_ids_list()) > len(self.data[SpecialKeys.ID]):
+            missing_ids = set(index.get_ids_list()).difference(set(self.data[SpecialKeys.ID]))
+            self.mask_ids_from_index(list(missing_ids))
 
     def get_train_ids(self, round: Optional[int] = None) -> List[int]:
         return self.data.loc[self._train_mask(round), SpecialKeys.ID].tolist()
