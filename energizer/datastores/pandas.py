@@ -29,12 +29,16 @@ class PandasDataStore(Datastore):
     on_cpu: List[str]
     _features: Features
 
-    def train_dataset(self, round: Optional[int] = None, passive: Optional[bool] = False) -> Optional[Dataset]:
+    def train_dataset(
+        self, round: Optional[int] = None, passive: Optional[bool] = False, with_indices: Optional[List[int]] = None
+    ) -> Optional[Dataset]:
         if passive:
             return Dataset.from_pandas(self.data, preserve_index=False)
 
         mask = self._train_mask(round)
         if mask.sum() > 0:
+            if with_indices is not None:
+                mask = mask & self.data[SpecialKeys.ID].isin(with_indices)
             return Dataset.from_pandas(self.data.loc[mask], preserve_index=False)
 
     def validation_dataset(self, round: Optional[int] = None) -> Optional[Dataset]:
