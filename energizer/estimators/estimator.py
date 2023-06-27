@@ -254,9 +254,7 @@ class Estimator(HyperparametersMixin):
         self.backward(loss)  # instead of loss.backward()
 
         # update parameters
-        self.fabric.call("on_before_optimizer_step", self, model, optimizer)
         optimizer.step()
-        self.fabric.call("on_after_optimizer_step", self, model, optimizer)
 
         # update scheduler
         if scheduler is not None:

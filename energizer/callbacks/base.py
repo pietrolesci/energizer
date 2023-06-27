@@ -146,16 +146,6 @@ class Callback:
         return self.on_batch_end(RunningStage.POOL, estimator, model, output, batch, batch_idx)
 
     """
-    Step
-    """
-
-    def on_before_optimizer_step(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
-        ...
-
-    def on_after_optimizer_step(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
-        ...
-
-    """
     Active Learning
     """
 
