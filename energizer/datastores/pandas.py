@@ -333,6 +333,9 @@ class PandasDataStoreWithIndex(PandasDataStore):
         for i in ids:
             self.index.unmark_deleted(i)
 
+    def get_pool_embeddings(self, ids: List[int]) -> np.ndarray:
+        return np.stack(self.index.get_items(ids))
+
     def get_train_embeddings(self, ids: List[int]) -> np.ndarray:
         # check all the ids are training ids
         assert len(set(self.get_train_ids()).intersection(set(ids))) == len(ids)
