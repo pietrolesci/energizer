@@ -41,7 +41,7 @@ class Estimator(HyperparametersMixin):
         )
         self.model = model
         init_deterministic(deterministic)
-        self.save_hyperparameters(ignore=["model", "loggers", "callbacks"])
+        # self.save_hyperparameters(ignore=["model", "loggers", "callbacks"])
         self.setup_tracking()
 
     def setup_tracking(self) -> None:
