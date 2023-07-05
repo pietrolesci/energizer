@@ -38,7 +38,7 @@
 #         # paths are processed as strings
 #         if dir is not None:
 #             dir = os.fspath(dir)
-        
+
 #         project = project or os.environ.get("WANDB_PROJECT", "energizer_logs")
 
 #         # set wandb init arguments
@@ -51,7 +51,7 @@
 #             "anonymous": ("allow" if anonymous else None),
 #         }
 #         self._wandb_init.update(**kwargs)
-        
+
 #         # extract parameters
 #         self._project = self._wandb_init.get("project")
 #         self._dir = self._wandb_init.get("dir")
@@ -98,7 +98,7 @@
 #         """
 #         # don't create an experiment if we don't have one
 #         return self._experiment.id if self._experiment else self._id
-        
+
 #     @property
 #     @rank_zero_experiment
 #     def experiment(self) -> Union[Run, RunDisabled]:
