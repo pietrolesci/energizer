@@ -117,5 +117,6 @@ site/
 */lightning_logs/
 */*/data
 */results
-*/*.ipynb
 */*.faiss
+
+examples/*/

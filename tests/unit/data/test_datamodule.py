@@ -1,6 +1,6 @@
 import pytest
 
-from energizer.data import ActiveDataModule
+from energizer.datastores.datamodule import ActiveDataModule
 
 
 def test_len(dataloader):
