@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 import torch
-from lightning.fabric import Fabric
-from lightning.fabric.accelerators.accelerator import Accelerator
-from lightning.fabric.connector import _PRECISION_INPUT
-from lightning.fabric.loggers import Logger
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
+from lighting_fabric import Fabric
+from lighting_fabric.accelerators.accelerator import Accelerator
+from lighting_fabric.connector import _PRECISION_INPUT
+from lighting_fabric.loggers import Logger
+from lighting_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer

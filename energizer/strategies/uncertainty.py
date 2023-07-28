@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import torch
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from lighting_fabric.wrappers import _FabricDataLoader, _FabricModule
 
 from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys

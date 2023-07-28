@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "energizer"
 version = "0.1.0"
-description = "active learning via influence functions"
+description = "Custom training loops"
 authors = ["Pietro Lesci <pietrolesci@outlook.com>"]
 license = "Apache-2.0"
 readme = "README.md"
@@ -11,19 +11,21 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-lightning = "^2.0.0"
-transformers = "^4.28.1"
-datasets = "^2.12.0"
-pandas = "^2.0.1"
+lightning-fabric = "^2.0.6"
+lightning-utilities = "^0.9.0"
+transformers = "^4.31.0"
+datasets = "^2.14.1"
 sentence-transformers = "^2.2.2"
 torch-optimizer = "^0.3.0"
 srsly = "^2.4.5"
 hnswlib = {git = "https://github.com/nmslib/hnswlib.git"}
-tensorboard = "^2.12.0"
 torch-tb-profiler = "^0.4.1"
+tensorboard = "^2.12.0"
+wandb = "^0.15.4"
+pandas = "^2.0.3"
 tabulate = "^0.9.0"
 openpyxl = "^3.1.1"
-wandb = "^0.15.4"
+tqdm = "^4.65.0"
 
 [tool.poetry.group.dev]
 optional = true

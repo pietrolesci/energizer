@@ -1,7 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
-from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
+from lighting_fabric.wrappers import _FabricModule, _FabricOptimizer
 from torch.optim import Optimizer
 
 from energizer.datastores.base import Datastore

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 import srsly
-from lightning.fabric.wrappers import _FabricModule
+from lighting_fabric.wrappers import _FabricModule
 import shutil
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import RunningStage

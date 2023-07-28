@@ -6,7 +6,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
 import torch
-from lightning.fabric.utilities.seed import _collect_rng_states, _set_rng_states
+from lighting_fabric.utilities.seed import _collect_rng_states, _set_rng_states
 from lightning_utilities.core.apply_func import apply_to_collection
 from numpy import generic, ndarray
 from numpy.random import RandomState
