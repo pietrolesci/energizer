@@ -2,25 +2,28 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 import torch
-from lighting_fabric import Fabric
-from lighting_fabric.accelerators.accelerator import Accelerator
-from lighting_fabric.connector import _PRECISION_INPUT
-from lighting_fabric.loggers import Logger
-from lighting_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
-from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
+from lightning_fabric import Fabric
+from lightning_fabric.accelerators.accelerator import Accelerator
+from lightning_fabric.plugins.precision.precision import _PRECISION_INPUT
+from lightning_fabric.loggers.logger import Logger
+from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
-from energizer.enums import OutputKeys, RunningStage
-from energizer.estimators.progress_trackers import ProgressTracker
-from energizer.registries import OPTIMIZER_REGISTRY
-from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import init_deterministic, move_to_cpu
-from energizer.utilities.model_summary import summarize
+from src.enums import OutputKeys, RunningStage
+from src.progress_trackers import ProgressTracker
+from src.registries import OPTIMIZER_REGISTRY
+from src.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
+from src.utilities import init_deterministic, move_to_cpu
+from src.utilities.model_summary import summarize
 
 
-class Estimator(HyperparametersMixin):
+class Estimator:
+
+    _model: torch.nn.Module
+    _tracker: ProgressTracker
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -36,20 +39,20 @@ class Estimator(HyperparametersMixin):
             precision=precision,
             callbacks=callbacks,
             loggers=loggers,
-            devices=1,
-            num_nodes=1,
+            devices=1,  # only works with single-GPU
+            num_nodes=1,  # only works with single-node
         )
-        self.model = model
         init_deterministic(deterministic)
-        # self.save_hyperparameters(ignore=["model", "loggers", "callbacks"])
-        self.setup_tracking()
-
-    def setup_tracking(self) -> None:
-        self._progress_tracker = ProgressTracker()
+        self.init_tracker()
+        self.init_model(model)
 
     @property
-    def progress_tracker(self) -> ProgressTracker:
-        return self._progress_tracker
+    def model(self) -> torch.nn.Module:
+        return self._model
+
+    @property
+    def tracker(self) -> ProgressTracker:
+        return self._tracker
 
     @property
     def device(self) -> torch.device:
@@ -58,6 +61,12 @@ class Estimator(HyperparametersMixin):
     @property
     def model_summary(self) -> str:
         return summarize(self)
+
+    def init_tracker(self) -> None:
+        self._tracker = ProgressTracker()
+    
+    def init_model(self, model: torch.nn.Module) -> None:
+        self._model = model
 
     def fit(
         self,
@@ -76,13 +85,16 @@ class Estimator(HyperparametersMixin):
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
     ) -> List[FIT_OUTPUT]:
+        """Entry point for model training.
+        
+        Calls `fit -> run_fit -> run_epoch -> run_training_step`
+        """
 
         # self.fabric.launch()  # NOTE: do not support distributed yet
-
         assert max_epochs is not None or min_steps is not None, "`max_epochs` or `min_steps` must be passed."
 
         # start progress tracking
-        self.progress_tracker.setup(
+        self.tracker.setup(
             stage=RunningStage.TRAIN,
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
@@ -114,13 +126,13 @@ class Estimator(HyperparametersMixin):
         scheduler: Optional[_LRScheduler],
     ) -> List[FIT_OUTPUT]:
 
-        self.progress_tracker.start_fit()
+        self.tracker.start_fit()
 
         # call hook
         self.fabric.call("on_fit_start", estimator=self, model=model)
 
         output = []
-        while not self.progress_tracker.is_fit_done():
+        while not self.tracker.is_fit_done():
 
             out = self.run_epoch(
                 model=model,
@@ -133,12 +145,12 @@ class Estimator(HyperparametersMixin):
             output.append(out)
 
             # update progress
-            self.progress_tracker.increment_epoch()
+            self.tracker.increment_epoch()
 
         # call hook
         self.fabric.call("on_fit_end", estimator=self, model=model, output=output)
 
-        self.progress_tracker.end_fit()
+        self.tracker.end_fit()
 
         return output
 
@@ -153,7 +165,7 @@ class Estimator(HyperparametersMixin):
         """Runs a training epoch."""
 
         # configure progress tracking
-        self.progress_tracker.start(RunningStage.TRAIN)
+        self.tracker.start(RunningStage.TRAIN)
 
         # define metrics
         metrics = self.configure_metrics(RunningStage.TRAIN)
@@ -167,7 +179,7 @@ class Estimator(HyperparametersMixin):
 
         train_out, validation_out = [], []
         iterable = enumerate(train_loader)
-        while not self.progress_tracker.is_done():
+        while not self.tracker.is_done():
 
             batch_idx, batch = next(iterable)
 
@@ -201,13 +213,13 @@ class Estimator(HyperparametersMixin):
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
-            if self.progress_tracker.should_validate() and validation_loader is not None:
+            if self.tracker.should_validate() and validation_loader is not None:
                 out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
                 if out is not None:
                     validation_out.append(out)
 
             # update progress tracker
-            self.progress_tracker.increment()
+            self.tracker.increment()
 
         # method to possibly aggregate
         train_out = self.train_epoch_end(train_out, metrics)
@@ -222,12 +234,12 @@ class Estimator(HyperparametersMixin):
         )
 
         # validation loop
-        if self.progress_tracker.should_validate() and validation_loader is not None:
+        if self.tracker.should_validate() and validation_loader is not None:
             out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
             if out is not None:
                 validation_out.append(out)
 
-        self.progress_tracker.end()
+        self.tracker.end()
 
         return train_out, validation_out
 
@@ -244,14 +256,14 @@ class Estimator(HyperparametersMixin):
         """Runs over a single batch of data."""
 
         # zero_grad
-        optimizer.zero_grad()
+        optimizer.zero_grad()  # type: ignore
 
         # compute loss
         output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
         loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
 
         # compute gradients
-        self.backward(loss)  # instead of loss.backward()
+        self.fabric.backward(loss)  # instead of loss.backward()
 
         # update parameters
         optimizer.step()
@@ -260,13 +272,10 @@ class Estimator(HyperparametersMixin):
         if scheduler is not None:
             scheduler.step()
 
-        # update progress_tracker
-        self.progress_tracker.increment_step()
+        # update tracker
+        self.tracker.increment_step()
 
         return output
-
-    def backward(self, loss: torch.Tensor) -> None:
-        self.fabric.backward(loss)
 
     def test(
         self,
@@ -278,7 +287,7 @@ class Estimator(HyperparametersMixin):
         """This method is useful because validation can run in fit when model is already setup."""
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
-        self.progress_tracker.setup(
+        self.tracker.setup(
             stage=RunningStage.TEST,
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
@@ -297,7 +306,7 @@ class Estimator(HyperparametersMixin):
         """Runs over an entire evaluation dataloader."""
 
         # configure progress tracking
-        self.progress_tracker.start(stage)
+        self.tracker.start(stage)
 
         # configure metrics
         metrics = self.configure_metrics(stage)
@@ -314,7 +323,7 @@ class Estimator(HyperparametersMixin):
         iterable = enumerate(loader)
         with torch.inference_mode():
 
-            while not self.progress_tracker.is_done():
+            while not self.tracker.is_done():
 
                 batch_idx, batch = next(iterable)
 
@@ -344,7 +353,7 @@ class Estimator(HyperparametersMixin):
                     output.append(move_to_cpu(batch_out))
 
                 # update progress tracker
-                self.progress_tracker.increment()
+                self.tracker.increment()
 
         # method to possibly aggregate
         output = getattr(self, f"{stage}_epoch_end")(output, metrics)
@@ -355,7 +364,7 @@ class Estimator(HyperparametersMixin):
         # resets model training status
         model.train(is_fitting)
 
-        self.progress_tracker.end()
+        self.tracker.end()
 
         return output
 
@@ -430,7 +439,7 @@ class Estimator(HyperparametersMixin):
         # # collect scheduler kwargs
         # params = list(inspect.signature(scheduler_fn).parameters.keys())
         # scheduler_kwargs = scheduler_kwargs or {}
-        # num_train_steps = self.progress_tracker.train_tracker.max
+        # num_train_steps = self.tracker.train_tracker.max
         # num_warmup_steps = scheduler_kwargs.get("num_warmup_steps", None)
         # if num_warmup_steps is not None and isinstance(num_warmup_steps, float):
         #     num_warmup_steps *= num_train_steps
@@ -450,12 +459,12 @@ class Estimator(HyperparametersMixin):
 
     def log(self, name: str, value: Any, step: int) -> None:
         """Automatically moves to cpu and then logs value."""
-        if self.progress_tracker.should_log():
+        if self.tracker.should_log():
             self.fabric.log(name, move_to_cpu(value), step)
 
     def log_dict(self, value_dict: Mapping[str, Any], step: int) -> None:
         """Automatically moves to cpu and then logs mapping of values."""
-        if self.progress_tracker.should_log():
+        if self.tracker.should_log():
             self.fabric.log_dict(value_dict, step)
 
     def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:

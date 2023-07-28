@@ -3,7 +3,7 @@ from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 import srsly
-from lighting_fabric.wrappers import _FabricModule
+from lightning_fabric.wrappers import _FabricModule
 
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import Interval, RunningStage

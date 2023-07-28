@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from lighting_fabric.wrappers import _FabricModule
+from lightning_fabric.wrappers import _FabricModule
 
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage

@@ -4,10 +4,10 @@
 
 # import torch.nn as nn
 # import logging
-# from lighting_fabric.utilities.logger import _add_prefix, _convert_params, _sanitize_callable_params
-# from lighting_fabric.utilities.types import _PATH
-# from lighting_fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn
-# from lighting_fabric.loggers.logger import Logger, rank_zero_experiment
+# from lightning_fabric.utilities.logger import _add_prefix, _convert_params, _sanitize_callable_params
+# from lightning_fabric.utilities.types import _PATH
+# from lightning_fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn
+# from lightning_fabric.loggers.logger import Logger, rank_zero_experiment
 
 # import wandb
 # from wandb.sdk.lib import RunDisabled
