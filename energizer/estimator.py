@@ -266,7 +266,9 @@ class Estimator:
         self.fabric.backward(loss)  # instead of loss.backward()
 
         # update parameters
+        self.fabric.call("on_before_optimizer", estimator=estimator, model=model, optimizer=optimizer)
         optimizer.step()
+        self.fabric.call("on_after_optimizer", estimator=estimator, model=model, optimizer=optimizer)
 
         # update scheduler
         if scheduler is not None:

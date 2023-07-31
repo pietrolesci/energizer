@@ -5,8 +5,8 @@ from lightning_fabric.wrappers import _FabricModule
 
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
-from energizer.estimators.estimator import Estimator
-from energizer.estimators.progress_trackers import ActiveProgressTracker
+from energizer.estimator import Estimator
+from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.types import ROUND_OUTPUT
 
 

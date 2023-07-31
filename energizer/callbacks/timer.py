@@ -2,7 +2,7 @@ import time
 
 from energizer.callbacks.base import Callback
 from energizer.enums import RunningStage
-from energizer.estimators.active_estimator import ActiveEstimator
+from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.estimators.estimator import Estimator
 from typing import Union
 
@@ -82,53 +82,3 @@ class Timer(Callback):
 
     def on_test_batch_end(self, estimator: Estimator, batch_idx: int, *args, **kwargs) -> None:
         self.batch_end(estimator, RunningStage.TEST)
-
-    """
-    Active Learning
-    """
-
-    def on_active_fit_start(self, *args, **kwargs) -> None:
-        self.active_fit_start = time.perf_counter()
-
-    def on_active_fit_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.active_fit_end = time.perf_counter()
-        estimator.fabric.log("timer/active_fit_time", self.active_fit_end - self.active_fit_start, step=0)
-
-    def on_round_start(self, *args, **kwargs) -> None:
-        self.round_start = time.perf_counter()
-
-    def on_round_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.round_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/round_time", self.round_end - self.round_start, step=estimator.progress_tracker.global_round
-        )
-
-    def on_query_start(self, *args, **kwargs) -> None:
-        self.query_start = time.perf_counter()
-
-    def on_query_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.query_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/query_time", self.query_end - self.query_start, step=estimator.progress_tracker.global_round
-        )
-
-    def on_label_start(self, *args, **kwargs) -> None:
-        self.label_start = time.perf_counter()
-
-    def on_label_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.label_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/label_time", self.label_end - self.label_start, step=estimator.progress_tracker.global_round
-        )
-
-    def on_pool_epoch_start(self, *args, **kwargs) -> None:
-        self.epoch_start(RunningStage.POOL)
-
-    def on_pool_epoch_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.epoch_end(estimator, RunningStage.POOL)
-
-    def on_pool_batch_start(self, *args, **kwargs) -> None:
-        self.batch_start(RunningStage.POOL)
-
-    def on_pool_batch_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
-        self.batch_end(estimator, RunningStage.POOL)

@@ -6,7 +6,7 @@ from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule
 
 from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
-from energizer.estimators.active_estimator import ActiveEstimator
+from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.registries import SCORING_FUNCTIONS
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
