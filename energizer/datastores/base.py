@@ -1,7 +1,8 @@
+"""
+Here we define the classes that take care of loading the data.
+"""
+
 from abc import ABC, abstractmethod
-from collections import Counter
-from functools import partial
-from math import floor
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -10,18 +11,13 @@ import numpy as np
 import pandas as pd
 import srsly
 import torch
-from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets, load_from_disk
-
+from datasets import Dataset
 from numpy.random import RandomState
-from sklearn.utils import check_random_state
-from torch import Tensor
+from sklearn.utils import check_random_state  # type: ignore
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
-from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import Datastore
-from energizer.enums import InputKeys, RunningStage, SpecialKeys
+from energizer.enums import RunningStage, SpecialKeys
 from energizer.types import DATA_SOURCE, DATASET
-from energizer.utilities import _pad, ld_to_dl, sample, sequential_numbers
 
 
 class BaseDataStore(ABC):
@@ -77,7 +73,6 @@ class BaseDataStore(ABC):
     def prepare_for_loading(self, *args, **kwargs) -> None:
         ...
 
-
     """
     Status
     """
@@ -99,10 +94,10 @@ class Datastore(BaseDataStore):
     """Defines dataloading for training and evaluation."""
 
     _collate_fn: Optional[Callable]
-    _loading_hparams: Optional[Dict[str, Any]] = None
+    _loading_params: Dict[str, Any] = {}
     _rng: RandomState
 
-    def __init__(self, seed: int = 42) -> None:
+    def __init__(self, seed: Optional[int] = 42) -> None:
         super().__init__()
         self.seed = seed
         self.reset_rng(seed)
@@ -119,7 +114,7 @@ class Datastore(BaseDataStore):
         data_seed: int = 42,
         replacement: bool = False,
     ) -> None:
-        self._loading_hparams = dict(
+        self._loading_params = dict(
             batch_size=batch_size,
             eval_batch_size=eval_batch_size,
             num_workers=num_workers,
@@ -130,10 +125,14 @@ class Datastore(BaseDataStore):
             replacement=replacement,
             data_seed=data_seed,
         )
-        for k, v in self._loading_hparams.items():
-            setattr(self, k, v)
 
-    def reset_rng(self, seed: int) -> None:
+    @property
+    def loading_params(self) -> Dict[str, Any]:
+        if len(self._loading_params) > 0:
+            return self._loading_params
+        raise ValueError("You need to `prepare_for_loading`")
+
+    def reset_rng(self, seed: Optional[int]) -> None:
         self._rng = check_random_state(seed)
 
     def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
@@ -151,34 +150,50 @@ class Datastore(BaseDataStore):
         if dataset is None:
             return
 
-        batch_size = self.batch_size if stage == RunningStage.TRAIN else self.eval_batch_size
+        batch_size = (
+            self.loading_params["batch_size"] if stage == RunningStage.TRAIN else self.loading_params["eval_batch_size"]
+        )
         batch_size = min(batch_size, len(dataset))
 
         # sampler
         sampler = _get_sampler(
             dataset,
-            shuffle=self.shuffle if stage == RunningStage.TRAIN else False,
-            replacement=self.replacement,
-            seed=self.data_seed,
+            shuffle=self.loading_params["shuffle"] if stage == RunningStage.TRAIN else False,  # type: ignore
+            replacement=self.replacement,  # type: ignore
+            seed=self.data_seed,  # type: ignore
         )
 
         # put everything together
         return DataLoader(
             dataset=dataset,
-            batch_size=batch_size,
+            batch_size=self.loading_params["batch_size"],
             sampler=sampler,
             collate_fn=self.get_collate_fn(stage),
-            drop_last=self.drop_last,
+            drop_last=self.loading_params["drop_last"],
         )
 
-    def get_collate_fn(self, stage: Optional[str] = None) -> Optional[Callable]:
+    def get_collate_fn(self, stage: Optional[str] = None, show_batch: bool = False) -> Optional[Callable]:
         return None
 
     def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is not None:
-            loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage))
+            loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage, show_batch=True))
             return next(iter(loader))
+
+    def train_size(self, *args, **kwargs) -> Optional[int]:
+        return self._get_size(RunningStage.TRAIN, *args, **kwargs)
+
+    def validation_size(self, *args, **kwargs) -> Optional[int]:
+        return self._get_size(RunningStage.VALIDATION, *args, **kwargs)
+
+    def test_size(self, *args, **kwargs) -> Optional[int]:
+        return self._get_size(RunningStage.TEST, *args, **kwargs)
+
+    def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
+        dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
+        if dataset is not None:
+            return len(dataset)
 
 
 class PandasDataStore(Datastore):
@@ -187,19 +202,16 @@ class PandasDataStore(Datastore):
     _test_data: Optional[Dataset]
 
     def train_dataset(self) -> Optional[Dataset]:
-        if self._train_data:
+        if self._train_data is not None:
             return Dataset.from_pandas(self._train_data, preserve_index=False)
 
     def validation_dataset(self) -> Optional[Dataset]:
-        if self._validation_data:
+        if self._validation_data is not None:
             return self._validation_data
 
     def test_dataset(self) -> Optional[Dataset]:
         if self._test_data is not None:
             return self._test_data
-
-    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
-        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
 
 
 class PandasDataStoreWithIndex(PandasDataStore):
@@ -225,6 +237,7 @@ class PandasDataStoreWithIndex(PandasDataStore):
         self.index = index
 
         # consistency check: data in index must be the same or more
+        assert self._train_data is not None
         assert len(index.get_ids_list()) >= len(self._train_data[SpecialKeys.ID]), "Index is not compatible with data."
 
         # if dataset has been downsampled, mask the ids
@@ -242,6 +255,10 @@ class PandasDataStoreWithIndex(PandasDataStore):
 
     def get_embeddings(self, ids: List[int]) -> np.ndarray:
         return np.stack(self.index.get_items(ids))
+
+    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
+        assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."
+        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]
 
 
 """

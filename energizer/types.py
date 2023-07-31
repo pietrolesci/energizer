@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Tuple, Union
+from typing import Any, Dict, List, Mapping, Tuple, Union
 
 from torch import Tensor
 from torchmetrics import Metric

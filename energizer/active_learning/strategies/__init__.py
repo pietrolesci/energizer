@@ -1,4 +1,4 @@
-from energizer.strategies.random import RandomStrategy
-from energizer.strategies.uncertainty import UncertaintyBasedStrategy
+from energizer.active_learning.strategies.random import RandomStrategy
+from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
 
 __all__ = ["RandomStrategy", "UncertaintyBasedStrategy"]

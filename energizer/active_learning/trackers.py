@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Optional
 
 import numpy as np
 from tqdm.auto import tqdm
 
 from energizer.enums import RunningStage
+from energizer.trackers import ProgressTracker, StageTracker, Tracker
 
 
 @dataclass

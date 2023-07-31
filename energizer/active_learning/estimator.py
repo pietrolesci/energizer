@@ -3,8 +3,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from lightning_fabric.wrappers import _FabricModule
 
+from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
 from energizer.active_learning.trackers import ActiveProgressTracker
-from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
 from energizer.estimator import Estimator
 from energizer.types import ROUND_OUTPUT
@@ -24,7 +24,7 @@ class ActiveEstimator(Estimator):
 
     def active_fit(
         self,
-        datastore: Datastore,
+        datastore: ActivePandasDataStoreForSequenceClassification,
         query_size: int,
         validation_perc: Optional[float] = None,
         max_rounds: Optional[int] = None,
@@ -91,7 +91,7 @@ class ActiveEstimator(Estimator):
 
     def run_active_fit(
         self,
-        datastore: Datastore,
+        datastore: ActivePandasDataStoreForSequenceClassification,
         replay: bool,
         reinit_model: bool,
         model_cache_dir: Union[str, Path],
@@ -141,7 +141,7 @@ class ActiveEstimator(Estimator):
 
     def run_round(
         self,
-        datastore: Datastore,
+        datastore: ActivePandasDataStoreForSequenceClassification,
         replay: bool,
         max_epochs: Optional[int],
         min_steps: Optional[int],
@@ -218,7 +218,7 @@ class ActiveEstimator(Estimator):
     def run_annotation(
         self,
         model: _FabricModule,
-        datastore: Datastore,
+        datastore: ActivePandasDataStoreForSequenceClassification,
         query_size: int,
         validation_perc: Optional[float],
         validation_sampling: Optional[str],
@@ -248,18 +248,22 @@ class ActiveEstimator(Estimator):
 
         return n_labelled
 
-    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int) -> List[int]:
+    def run_query(
+        self, model: _FabricModule, datastore: ActivePandasDataStoreForSequenceClassification, query_size: int
+    ) -> List[int]:
         raise NotImplementedError
 
     def active_fit_end(self, output: List[ROUND_OUTPUT]) -> Any:
         return output
 
-    def round_epoch_end(self, output: ROUND_OUTPUT, datastore: Datastore) -> ROUND_OUTPUT:
+    def round_epoch_end(
+        self, output: ROUND_OUTPUT, datastore: ActivePandasDataStoreForSequenceClassification
+    ) -> ROUND_OUTPUT:
         return output
 
     def replay_active_fit(
         self,
-        datastore: Datastore,
+        datastore: ActivePandasDataStoreForSequenceClassification,
         reinit_model: bool = True,
         max_epochs: Optional[int] = 3,
         min_steps: Optional[int] = None,

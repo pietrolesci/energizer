@@ -4,10 +4,10 @@ import numpy as np
 import torch
 from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule
 
-from energizer.active_learning.active_estimator import ActiveEstimator
-from energizer.datastores.base import Datastore
+from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
+from energizer.active_learning.estimator import ActiveEstimator
+from energizer.active_learning.registries import SCORING_FUNCTIONS
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
-from energizer.registries import SCORING_FUNCTIONS
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
 
@@ -19,7 +19,9 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         super().__init__(*args, **kwargs)
         self.score_fn = score_fn if isinstance(score_fn, Callable) else self._scoring_fn_registry[score_fn]
 
-    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int) -> List[int]:
+    def run_query(
+        self, model: _FabricModule, datastore: ActivePandasDataStoreForSequenceClassification, query_size: int
+    ) -> List[int]:
         pool_loader = self.configure_dataloader(datastore.pool_loader())
         self.progress_tracker.pool_tracker.max = len(pool_loader)  # type: ignore
         return self.compute_most_uncertain(model, pool_loader, query_size)  # type: ignore

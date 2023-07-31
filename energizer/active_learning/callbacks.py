@@ -1,18 +1,14 @@
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, List
 
-import numpy as np
-from lightning_fabric.wrappers import _FabricModule, _FabricOptimizer
-from torch.optim import Optimizer
+from lightning_fabric.wrappers import _FabricModule
 
-from energizer.active_learning.active_estimator import ActiveEstimator
+from energizer.active_learning.estimator import ActiveEstimator
 from energizer.callbacks.base import Callback
-from energizer.callbacks.timer import Timer
+from energizer.callbacks.timer import Timer as _Timer
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
-from energizer.estimators.estimator import Estimator
-from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC, ROUND_OUTPUT
-from energizer.utilities import move_to_cpu
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC, ROUND_OUTPUT
 
 
 class ActiveLearningCallback(Callback):
@@ -65,7 +61,7 @@ class ActiveLearningCallback(Callback):
         ...
 
 
-class ActiveLearningTimer(Timer, ActiveLearningCallback):
+class Timer(_Timer, ActiveLearningCallback):
     def on_active_fit_start(self, *args, **kwargs) -> None:
         self.active_fit_start = time.perf_counter()
 

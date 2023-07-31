@@ -7,15 +7,16 @@ from lightning_fabric.accelerators.accelerator import Accelerator
 from lightning_fabric.loggers.logger import Logger
 from lightning_fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
-from src.enums import OutputKeys, RunningStage
-from src.progress_trackers import ProgressTracker
-from src.registries import OPTIMIZER_REGISTRY
-from src.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from src.utilities import init_deterministic, move_to_cpu
-from src.utilities.model_summary import summarize
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
+
+from energizer.enums import OutputKeys, RunningStage
+from energizer.registries import OPTIMIZER_REGISTRY
+from energizer.trackers import ProgressTracker
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
+from energizer.utilities import init_deterministic, move_to_cpu
+from energizer.utilities.model_summary import summarize
 
 
 class Estimator:
