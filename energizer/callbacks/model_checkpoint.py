@@ -1,10 +1,11 @@
 import os
+import shutil
 from pathlib import Path
 from typing import Dict, Optional, Union
 
 import srsly
 from lightning_fabric.wrappers import _FabricModule
-import shutil
+
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import RunningStage
 from energizer.estimators.estimator import Estimator

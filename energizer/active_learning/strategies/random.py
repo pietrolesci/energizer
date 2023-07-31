@@ -6,8 +6,8 @@ from h11 import Data
 # https://scikit-learn.org/stable/developers/develop.html#random-numbers
 from sklearn.utils.validation import check_random_state
 
-from energizer.datastores.base import Datastore
 from energizer.active_learning.active_estimator import ActiveEstimator
+from energizer.datastores.base import Datastore
 
 
 class RandomStrategy(ActiveEstimator):

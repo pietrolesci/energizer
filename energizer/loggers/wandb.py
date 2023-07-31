@@ -3,12 +3,11 @@ from argparse import Namespace
 from typing import Any, Dict, Mapping, Optional, Union
 
 import torch.nn as nn
-from lightning_fabric.utilities.logger import _convert_params, _sanitize_callable_params
-from lightning_fabric.utilities.types import _PATH
-from lightning_fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn  # type: ignore
-from lightning_fabric.loggers.logger import Logger, rank_zero_experiment
-
 import wandb
+from lightning_fabric.loggers.logger import Logger, rank_zero_experiment
+from lightning_fabric.utilities.logger import _convert_params, _sanitize_callable_params
+from lightning_fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn  # type: ignore
+from lightning_fabric.utilities.types import _PATH
 from wandb.sdk.lib import RunDisabled
 from wandb.wandb_run import Run
 
@@ -24,7 +23,6 @@ class WandbLogger(Logger):
         anonymous: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
-
         super().__init__()
 
         # set wandb init arguments
@@ -52,7 +50,7 @@ class WandbLogger(Logger):
         # cannot be pickled
         state["_experiment"] = None
         return state
-    
+
     @property
     def name(self) -> Optional[str]:
         return self._wandb_init.get("name")
@@ -60,7 +58,7 @@ class WandbLogger(Logger):
     @property
     def version(self) -> Optional[Union[int, str]]:
         return self._experiment.id if self._experiment else self._wandb_init.get("id")
-    
+
     @property
     def root_dir(self) -> Optional[str]:
         return self._wandb_init.get("dir")
@@ -96,7 +94,7 @@ class WandbLogger(Logger):
 
         assert isinstance(self._experiment, (Run, RunDisabled))
         return self._experiment
-    
+
     def watch(self, model: nn.Module, log: str = "gradients", log_freq: int = 100, log_graph: bool = True) -> None:
         self.experiment.watch(model, log=log, log_freq=log_freq, log_graph=log_graph)
 
@@ -147,4 +145,3 @@ class WandbLogger(Logger):
     #     """
 
     #     self.log_table(key, columns, data, dataframe, step)
-

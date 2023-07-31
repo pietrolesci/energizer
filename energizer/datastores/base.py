@@ -1,19 +1,38 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Union
+from collections import Counter
+from functools import partial
+from math import floor
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import hnswlib as hb
+import numpy as np
+import pandas as pd
+import srsly
 import torch
+from datasets import Dataset, DatasetDict, Features, Value, concatenate_datasets, load_from_disk
 
-# from lightning.pytorch.core.mixins.hparams_mixin import HyperparametersMixin
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
+from torch import Tensor
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
+from transformers import PreTrainedTokenizerBase
 
-from energizer.enums import RunningStage
-from energizer.types import DATASET
+from energizer.datastores.base import Datastore
+from energizer.enums import InputKeys, RunningStage, SpecialKeys
+from energizer.types import DATA_SOURCE, DATASET
+from energizer.utilities import _pad, ld_to_dl, sample, sequential_numbers
 
 
 class BaseDataStore(ABC):
     """General container for data."""
+
+    """
+    Data sources
+    """
+    _train_data: Optional[DATA_SOURCE]
+    _validation_data: Optional[DATA_SOURCE]
+    _test_data: Optional[DATA_SOURCE]
 
     def __init__(self) -> None:
         super().__init__()
@@ -23,19 +42,15 @@ class BaseDataStore(ABC):
     """
 
     @abstractmethod
-    def train_dataset(self, *args, **kwargs) -> DATASET:
+    def train_dataset(self, *args, **kwargs) -> Optional[DATASET]:
         ...
 
     @abstractmethod
-    def validation_dataset(self, *args, kwargs) -> DATASET:
+    def validation_dataset(self, *args, kwargs) -> Optional[DATASET]:
         ...
 
     @abstractmethod
-    def test_dataset(self, *args, kwargs) -> DATASET:
-        ...
-
-    @abstractmethod
-    def pool_dataset(self, *args, kwargs) -> DATASET:
+    def test_dataset(self, *args, kwargs) -> Optional[DATASET]:
         ...
 
     """
@@ -43,19 +58,15 @@ class BaseDataStore(ABC):
     """
 
     @abstractmethod
-    def train_loader(self, *args, **kwargs) -> DataLoader:
+    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
         ...
 
     @abstractmethod
-    def validation_loader(self, *args, kwargs) -> DataLoader:
+    def validation_loader(self, *args, kwargs) -> Optional[DataLoader]:
         ...
 
     @abstractmethod
-    def test_loader(self, *args, kwargs) -> DataLoader:
-        ...
-
-    @abstractmethod
-    def pool_loader(self, *args, kwargs) -> DataLoader:
+    def test_loader(self, *args, kwargs) -> Optional[DataLoader]:
         ...
 
     """
@@ -63,53 +74,32 @@ class BaseDataStore(ABC):
     """
 
     @abstractmethod
-    def label(self, *args, **kwargs) -> int:
+    def prepare_for_loading(self, *args, **kwargs) -> None:
         ...
 
-    @abstractmethod
-    def sample_from_pool(self, *args, **kwargs) -> List[int]:
-        ...
-
-    @abstractmethod
-    def prepare_for_loading(self, *args, **kwargs) -> List[int]:
-        ...
 
     """
     Status
     """
 
     @abstractmethod
-    def train_size(self, *args, **kwargs) -> int:
+    def train_size(self, *args, **kwargs) -> Optional[int]:
         ...
 
     @abstractmethod
-    def validation_size(self, *args, **kwargs) -> int:
+    def validation_size(self, *args, **kwargs) -> Optional[int]:
         ...
 
     @abstractmethod
-    def test_size(self, *args, **kwargs) -> int:
-        ...
-
-    @abstractmethod
-    def pool_size(self, *args, **kwargs) -> int:
-        ...
-
-    @abstractmethod
-    def labelled_size(self, *args, **kwargs) -> int:
-        ...
-
-    @abstractmethod
-    def query_size(self, *args, **kwargs) -> int:
-        ...
-
-    @abstractmethod
-    def total_rounds(self, *args, **kwargs) -> int:
+    def test_size(self, *args, **kwargs) -> Optional[int]:
         ...
 
 
 class Datastore(BaseDataStore):
     """Defines dataloading for training and evaluation."""
 
+    _collate_fn: Optional[Callable]
+    _loading_hparams: Optional[Dict[str, Any]] = None
     _rng: RandomState
 
     def __init__(self, seed: int = 42) -> None:
@@ -129,15 +119,19 @@ class Datastore(BaseDataStore):
         data_seed: int = 42,
         replacement: bool = False,
     ) -> None:
-        self.batch_size = batch_size
-        self.eval_batch_size = eval_batch_size
-        self.num_workers = num_workers
-        self.pin_memory = pin_memory
-        self.drop_last = drop_last
-        self.persistent_workers = persistent_workers
-        self.shuffle = shuffle
-        self.replacement = replacement
-        self.data_seed = data_seed
+        self._loading_hparams = dict(
+            batch_size=batch_size,
+            eval_batch_size=eval_batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            persistent_workers=persistent_workers,
+            shuffle=shuffle,
+            replacement=replacement,
+            data_seed=data_seed,
+        )
+        for k, v in self._loading_hparams.items():
+            setattr(self, k, v)
 
     def reset_rng(self, seed: int) -> None:
         self._rng = check_random_state(seed)
@@ -150,9 +144,6 @@ class Datastore(BaseDataStore):
 
     def test_loader(self, *args, **kwargs) -> Optional[DataLoader]:
         return self.get_loader(RunningStage.TEST, *args, **kwargs)
-
-    def pool_loader(self, *args, **kwargs) -> Optional[DataLoader]:
-        return self.get_loader(RunningStage.POOL, *args, **kwargs)
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
         # get dataset
@@ -184,15 +175,73 @@ class Datastore(BaseDataStore):
         return None
 
     def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
-        batch_size, eval_batch_size, shuffle = self.batch_size, self.eval_batch_size, self.shuffle
-
-        self.prepare_for_loading(batch_size=1, eval_batch_size=1, shuffle=False)
-        loader = getattr(self, f"{stage}_loader")(*args, **kwargs)
-
-        self.batch_size, self.eval_batch_size, self.shuffle = batch_size, eval_batch_size, shuffle
-
-        if loader is not None:
+        dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
+        if dataset is not None:
+            loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage))
             return next(iter(loader))
+
+
+class PandasDataStore(Datastore):
+    _train_data: Optional[pd.DataFrame]
+    _validation_data: Optional[Dataset]
+    _test_data: Optional[Dataset]
+
+    def train_dataset(self) -> Optional[Dataset]:
+        if self._train_data:
+            return Dataset.from_pandas(self._train_data, preserve_index=False)
+
+    def validation_dataset(self) -> Optional[Dataset]:
+        if self._validation_data:
+            return self._validation_data
+
+    def test_dataset(self) -> Optional[Dataset]:
+        if self._test_data is not None:
+            return self._test_data
+
+    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
+        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
+
+
+class PandasDataStoreWithIndex(PandasDataStore):
+    """DataModule that defines dataloading and indexing logic."""
+
+    index: hb.Index = None
+    embedding_name: str
+
+    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+        # retrieve one additional element if the query is in the set we are looking in
+        # because the query itself is returned as the most similar element and we need to remove it
+        query_size = query_size + 1 if query_in_set else query_size
+        indices, distances = self.index.knn_query(data=query, k=query_size)
+        if query_in_set:
+            # remove the first element retrieved if the query is in the set since it's the element itself
+            indices, distances = indices[:, 1:], distances[:, 1:]
+        return indices, distances
+
+    def load_index(self, index_path: Union[str, Path], metadata_path: Union[str, Path]) -> None:
+        meta: Dict = srsly.read_json(metadata_path)  # type: ignore
+        index = hb.Index(space=meta["metric"], dim=meta["dim"])
+        index.load_index(str(index_path))
+        self.index = index
+
+        # consistency check: data in index must be the same or more
+        assert len(index.get_ids_list()) >= len(self._train_data[SpecialKeys.ID]), "Index is not compatible with data."
+
+        # if dataset has been downsampled, mask the ids
+        if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):
+            missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))
+            self.mask_ids_from_index(list(missing_ids))
+
+    def mask_ids_from_index(self, ids: List[int]) -> None:
+        for i in ids:
+            self.index.mark_deleted(i)
+
+    def unmask_ids_from_index(self, ids: List[int]) -> None:
+        for i in ids:
+            self.index.unmark_deleted(i)
+
+    def get_embeddings(self, ids: List[int]) -> np.ndarray:
+        return np.stack(self.index.get_items(ids))
 
 
 """

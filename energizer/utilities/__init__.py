@@ -14,8 +14,10 @@ from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 
-# from torch.utils.data import BatchSampler, SequentialSampler
-# from energizer.enums import RunningStage
+
+def camel_to_snake(name: str):
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 
 
 def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:

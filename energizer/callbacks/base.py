@@ -71,7 +71,6 @@ class Callback:
     ) -> None:
         return self.on_epoch_end(RunningStage.TEST, estimator, model, output, metrics)
 
-
     """
     Batch
     """
@@ -129,13 +128,11 @@ class Callback:
     ) -> None:
         return self.on_batch_end(RunningStage.TEST, estimator, model, output, batch, batch_idx)
 
-
     def on_before_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
         ...
 
     def on_after_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
         ...
-
 
 
 class CallbackWithMonitor(Callback):

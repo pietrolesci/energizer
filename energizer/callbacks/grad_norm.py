@@ -1,7 +1,7 @@
 from typing import Union
 
-from lightning_fabric.wrappers import _FabricModule, _FabricOptimizer
 from lightning.pytorch.utilities.grads import grad_norm
+from lightning_fabric.wrappers import _FabricModule, _FabricOptimizer
 
 from energizer.callbacks import Callback
 from energizer.estimators.estimator import Estimator

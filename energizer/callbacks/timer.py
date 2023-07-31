@@ -1,10 +1,10 @@
 import time
+from typing import Union
 
+from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.callbacks.base import Callback
 from energizer.enums import RunningStage
-from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.estimators.estimator import Estimator
-from typing import Union
 
 
 class Timer(Callback):

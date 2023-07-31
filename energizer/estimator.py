@@ -4,23 +4,21 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 import torch
 from lightning_fabric import Fabric
 from lightning_fabric.accelerators.accelerator import Accelerator
-from lightning_fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning_fabric.loggers.logger import Logger
+from lightning_fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.optim.optimizer import Optimizer
-from torch.utils.data import DataLoader
-
 from src.enums import OutputKeys, RunningStage
 from src.progress_trackers import ProgressTracker
 from src.registries import OPTIMIZER_REGISTRY
 from src.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from src.utilities import init_deterministic, move_to_cpu
 from src.utilities.model_summary import summarize
+from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.optimizer import Optimizer
+from torch.utils.data import DataLoader
 
 
 class Estimator:
-
     _model: torch.nn.Module
     _tracker: ProgressTracker
 
@@ -64,7 +62,7 @@ class Estimator:
 
     def init_tracker(self) -> None:
         self._tracker = ProgressTracker()
-    
+
     def init_model(self, model: torch.nn.Module) -> None:
         self._model = model
 
@@ -86,7 +84,7 @@ class Estimator:
         limit_validation_batches: Optional[int] = None,
     ) -> List[FIT_OUTPUT]:
         """Entry point for model training.
-        
+
         Calls `fit -> run_fit -> run_epoch -> run_training_step`
         """
 
@@ -125,7 +123,6 @@ class Estimator:
         optimizer: _FabricOptimizer,
         scheduler: Optional[_LRScheduler],
     ) -> List[FIT_OUTPUT]:
-
         self.tracker.start_fit()
 
         # call hook
@@ -133,7 +130,6 @@ class Estimator:
 
         output = []
         while not self.tracker.is_fit_done():
-
             out = self.run_epoch(
                 model=model,
                 train_loader=train_loader,
@@ -180,7 +176,6 @@ class Estimator:
         train_out, validation_out = [], []
         iterable = enumerate(train_loader)
         while not self.tracker.is_done():
-
             batch_idx, batch = next(iterable)
 
             # put batch on correct device
@@ -324,9 +319,7 @@ class Estimator:
         output = []
         iterable = enumerate(loader)
         with torch.inference_mode():
-
             while not self.tracker.is_done():
-
                 batch_idx, batch = next(iterable)
 
                 # put batch on correct device

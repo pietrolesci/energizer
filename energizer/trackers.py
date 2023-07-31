@@ -111,7 +111,6 @@ class ProgressTracker:
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
     ) -> None:
-
         self.stop_training = False
         self.has_validation = num_validation_batches > 0
 

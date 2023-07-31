@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule
 
+from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.datastores.base import Datastore
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
-from energizer.active_learning.active_estimator import ActiveEstimator
 from energizer.registries import SCORING_FUNCTIONS
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
@@ -27,7 +27,6 @@ class UncertaintyBasedStrategy(ActiveEstimator):
     def compute_most_uncertain(
         self, model: _FabricModule, pool_loader: _FabricDataLoader, query_size: int
     ) -> List[int]:
-
         # calls the pool_step and pool_epoch_end that we override
         out: List[Dict] = self.run_evaluation(model, pool_loader, RunningStage.POOL)  # type: ignore
         _out = ld_to_dl(out)

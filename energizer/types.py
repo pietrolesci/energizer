@@ -5,6 +5,7 @@ from torchmetrics import Metric
 
 METRIC = Union[Metric, Any]
 DATASET = List[Mapping]
+DATA_SOURCE = Any
 
 BATCH_OUTPUT = Union[Tensor, Dict]
 

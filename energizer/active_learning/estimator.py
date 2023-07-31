@@ -3,10 +3,10 @@ from typing import Any, Dict, List, Optional, Union
 
 from lightning_fabric.wrappers import _FabricModule
 
+from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
 from energizer.estimator import Estimator
-from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.types import ROUND_OUTPUT
 
 
@@ -97,7 +97,6 @@ class ActiveEstimator(Estimator):
         model_cache_dir: Union[str, Path],
         **kwargs,
     ) -> Any:
-
         if reinit_model:
             self.save_state_dict(model_cache_dir)
 
@@ -106,7 +105,6 @@ class ActiveEstimator(Estimator):
 
         output = []
         while not self.progress_tracker.is_active_fit_done():
-
             if reinit_model:
                 self.load_state_dict(model_cache_dir)
 
@@ -161,7 +159,6 @@ class ActiveEstimator(Estimator):
         limit_test_batches: Optional[int],
         limit_pool_batches: Optional[int],
     ) -> ROUND_OUTPUT:
-
         num_round = self.progress_tracker.global_round if replay else None
         self.progress_tracker.setup_fit(
             max_epochs=max_epochs,
@@ -226,7 +223,6 @@ class ActiveEstimator(Estimator):
         validation_perc: Optional[float],
         validation_sampling: Optional[str],
     ) -> int:
-
         # query
         self.fabric.call("on_query_start", estimator=self, model=model, datastore=datastore)
 
@@ -281,7 +277,6 @@ class ActiveEstimator(Estimator):
         limit_pool_batches: Optional[int] = None,
         num_validation_per_epoch: Optional[int] = None,
     ) -> Any:
-
         assert not reinit_model or (
             reinit_model and model_cache_dir
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
