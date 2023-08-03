@@ -1,13 +1,12 @@
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Union
 
 import numpy as np
-from lightning_fabric.wrappers import _FabricModule, _FabricOptimizer
+from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
 from torch.optim import Optimizer
 
-from energizer.datastores.base import Datastore
 from energizer.enums import RunningStage
-from energizer.estimators.estimator import Estimator
-from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC, ROUND_OUTPUT
+from energizer.estimator import Estimator
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from energizer.utilities import move_to_cpu
 
 

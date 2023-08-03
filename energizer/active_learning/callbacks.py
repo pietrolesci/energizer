@@ -1,9 +1,9 @@
 import time
 from typing import Any, List
 
-from lightning_fabric.wrappers import _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 
-from energizer.active_learning.estimator import ActiveEstimator
+from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.callbacks.base import Callback
 from energizer.callbacks.timer import Timer as _Timer
 from energizer.datastores.base import Datastore
@@ -75,7 +75,7 @@ class Timer(_Timer, ActiveLearningCallback):
     def on_round_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.round_end = time.perf_counter()
         estimator.fabric.log(
-            "timer/round_time", self.round_end - self.round_start, step=estimator.progress_tracker.global_round
+            "timer/round_time", self.round_end - self.round_start, step=estimator.tracker.global_round
         )
 
     def on_query_start(self, *args, **kwargs) -> None:
@@ -84,7 +84,7 @@ class Timer(_Timer, ActiveLearningCallback):
     def on_query_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.query_end = time.perf_counter()
         estimator.fabric.log(
-            "timer/query_time", self.query_end - self.query_start, step=estimator.progress_tracker.global_round
+            "timer/query_time", self.query_end - self.query_start, step=estimator.tracker.global_round
         )
 
     def on_label_start(self, *args, **kwargs) -> None:
@@ -93,7 +93,7 @@ class Timer(_Timer, ActiveLearningCallback):
     def on_label_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.label_end = time.perf_counter()
         estimator.fabric.log(
-            "timer/label_time", self.label_end - self.label_start, step=estimator.progress_tracker.global_round
+            "timer/label_time", self.label_end - self.label_start, step=estimator.tracker.global_round
         )
 
     def on_pool_epoch_start(self, *args, **kwargs) -> None:

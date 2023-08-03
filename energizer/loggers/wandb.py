@@ -4,10 +4,10 @@ from typing import Any, Dict, Mapping, Optional, Union
 
 import torch.nn as nn
 import wandb
-from lightning_fabric.loggers.logger import Logger, rank_zero_experiment
-from lightning_fabric.utilities.logger import _convert_params, _sanitize_callable_params
-from lightning_fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn  # type: ignore
-from lightning_fabric.utilities.types import _PATH
+from lightning.fabric.loggers.logger import Logger, rank_zero_experiment
+from lightning.fabric.utilities.logger import _convert_params, _sanitize_callable_params
+from lightning.fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn  # type: ignore
+from lightning.fabric.utilities.types import _PATH
 from wandb.sdk.lib import RunDisabled
 from wandb.wandb_run import Run
 

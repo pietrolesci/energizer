@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from lightning_fabric.wrappers import _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 
 from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
 from energizer.active_learning.trackers import ActiveProgressTracker
@@ -12,11 +12,11 @@ from energizer.types import ROUND_OUTPUT
 
 class ActiveEstimator(Estimator):
     def setup_tracking(self) -> None:
-        self._progress_tracker = ActiveProgressTracker()
+        self._tracker = ActiveProgressTracker()
 
     @property
-    def progress_tracker(self) -> ActiveProgressTracker:
-        return self._progress_tracker
+    def tracker(self) -> ActiveProgressTracker:
+        return self._tracker
 
     """
     Active learning loop
@@ -55,7 +55,7 @@ class ActiveEstimator(Estimator):
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
-        self.progress_tracker.setup_active(
+        self.tracker.setup_active(
             max_rounds=max_rounds,
             max_budget=int(min(datastore.pool_size(), max_budget or float("Inf"))),
             initial_budget=datastore.labelled_size(),
@@ -104,7 +104,7 @@ class ActiveEstimator(Estimator):
         self.fabric.call("on_active_fit_start", estimator=self, datastore=datastore)
 
         output = []
-        while not self.progress_tracker.is_active_fit_done():
+        while not self.tracker.is_active_fit_done():
             if reinit_model:
                 self.load_state_dict(model_cache_dir)
 
@@ -120,22 +120,22 @@ class ActiveEstimator(Estimator):
             output.append(out)
 
             # update progress
-            self.progress_tracker.increment_round()
+            self.tracker.increment_round()
 
             # check
-            if not self.progress_tracker.is_last_round:
-                # print(self.progress_tracker.round_tracker)
-                total_budget = datastore.labelled_size(self.progress_tracker.global_round)
+            if not self.tracker.is_last_round:
+                # print(self.tracker.round_tracker)
+                total_budget = datastore.labelled_size(self.tracker.global_round)
                 assert (
-                    self.progress_tracker.budget_tracker.current == total_budget
-                ), f"{self.progress_tracker.budget_tracker.current} == {total_budget}"
+                    self.tracker.budget_tracker.current == total_budget
+                ), f"{self.tracker.budget_tracker.current} == {total_budget}"
 
         output = self.active_fit_end(output)
 
         # call hook
         self.fabric.call("on_active_fit_end", estimator=self, datastore=datastore, output=output)
 
-        self.progress_tracker.end_active_fit()
+        self.tracker.end_active_fit()
 
         return output
 
@@ -159,8 +159,8 @@ class ActiveEstimator(Estimator):
         limit_test_batches: Optional[int],
         limit_pool_batches: Optional[int],
     ) -> ROUND_OUTPUT:
-        num_round = self.progress_tracker.global_round if replay else None
-        self.progress_tracker.setup_fit(
+        num_round = self.tracker.global_round if replay else None
+        self.tracker.setup_fit(
             max_epochs=max_epochs,
             min_steps=min_steps,
             num_train_batches=len(datastore.train_loader(round=num_round) or []),
@@ -169,11 +169,11 @@ class ActiveEstimator(Estimator):
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
         )
-        self.progress_tracker.setup_eval(
+        self.tracker.setup_eval(
             RunningStage.TEST, num_batches=len(datastore.test_loader() or []), limit_batches=limit_test_batches
         )
         if not replay:
-            self.progress_tracker.setup_eval(
+            self.tracker.setup_eval(
                 RunningStage.POOL,
                 num_batches=len(datastore.pool_loader(round=num_round) or []),
                 limit_batches=limit_pool_batches,
@@ -203,7 +203,7 @@ class ActiveEstimator(Estimator):
         n_labelled = None
         if (
             not replay  # do not annotate in replay
-            and not self.progress_tracker.is_last_round  # last round is used only to test
+            and not self.tracker.is_last_round  # last round is used only to test
             and datastore.pool_size(num_round) > query_size  # enough instances
         ):
             n_labelled = self.run_annotation(model, datastore, query_size, validation_perc, validation_sampling)
@@ -211,7 +211,7 @@ class ActiveEstimator(Estimator):
             n_labelled = datastore.query_size(num_round)
 
         if n_labelled:
-            self.progress_tracker.increment_budget(n_labelled)
+            self.tracker.increment_budget(n_labelled)
 
         return output
 
@@ -229,7 +229,7 @@ class ActiveEstimator(Estimator):
         indices = self.run_query(model, datastore=datastore, query_size=query_size)
 
         # prevent to query more than available budget
-        remaining_budget = min(query_size, self.progress_tracker.budget_tracker.get_remaining_budget())
+        remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
         indices = indices[:remaining_budget]
 
         self.fabric.call("on_query_end", estimator=self, model=model, datastore=datastore, indices=indices)
@@ -239,7 +239,7 @@ class ActiveEstimator(Estimator):
 
         n_labelled = datastore.label(
             indices=indices,
-            round=self.progress_tracker.global_round + 1,  # because the data will be used in the following round
+            round=self.tracker.global_round + 1,  # because the data will be used in the following round
             validation_perc=validation_perc,
             validation_sampling=validation_sampling,
         )
@@ -286,7 +286,7 @@ class ActiveEstimator(Estimator):
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
-        self.progress_tracker.setup_active(
+        self.tracker.setup_active(
             max_rounds=datastore.total_rounds(),
             max_budget=datastore.labelled_size(),
             initial_budget=datastore.labelled_size(0),

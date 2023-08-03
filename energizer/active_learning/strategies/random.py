@@ -4,7 +4,7 @@ from typing import List
 from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
-from energizer.active_learning.estimator import ActiveEstimator
+from energizer.active_learning.strategies.base import ActiveEstimator
 
 
 class RandomStrategy(ActiveEstimator):

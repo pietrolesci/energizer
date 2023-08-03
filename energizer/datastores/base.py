@@ -158,9 +158,9 @@ class Datastore(BaseDataStore):
         # sampler
         sampler = _get_sampler(
             dataset,
-            shuffle=self.loading_params["shuffle"] if stage == RunningStage.TRAIN else False,  # type: ignore
-            replacement=self.replacement,  # type: ignore
-            seed=self.data_seed,  # type: ignore
+            shuffle=self.loading_params["shuffle"] if stage == RunningStage.TRAIN else False,
+            replacement=self.loading_params["replacement"],
+            seed=self.loading_params["data_seed"],
         )
 
         # put everything together

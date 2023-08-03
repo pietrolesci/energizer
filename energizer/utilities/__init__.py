@@ -6,16 +6,17 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
 import torch
-from lightning_fabric.utilities.seed import _collect_rng_states, _set_rng_states
+from lightning.fabric.utilities.seed import _collect_rng_states, _set_rng_states
 from lightning_utilities.core.apply_func import apply_to_collection
 from numpy import generic, ndarray
 from numpy.random import RandomState
 from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
+import re
 
 
-def camel_to_snake(name: str):
+def camel_to_snake(name: str) -> str:
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 

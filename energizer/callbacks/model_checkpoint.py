@@ -4,11 +4,11 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 import srsly
-from lightning_fabric.wrappers import _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import RunningStage
-from energizer.estimators.estimator import Estimator
+from energizer.estimator import Estimator
 from energizer.types import EPOCH_OUTPUT, METRIC
 from energizer.utilities import make_dict_json_serializable
 
@@ -66,10 +66,10 @@ class ModelCheckpoint(CallbackWithMonitor):
             if self.verbose:
                 logs = {
                     "selected": self.best_model_path,
-                    "step": estimator.progress_tracker.safe_global_epoch,
+                    "step": estimator.tracker.safe_global_epoch,
                 }
-                if hasattr(estimator.progress_tracker, "global_round"):
-                    logs["round"] = getattr(estimator.progress_tracker, "global_round")
+                if hasattr(estimator.tracker, "global_round"):
+                    logs["round"] = getattr(estimator.tracker, "global_round")
 
                 srsly.write_jsonl(
                     self.dirpath / "checkpoint_logs.jsonl",
@@ -98,11 +98,11 @@ class ModelCheckpoint(CallbackWithMonitor):
             if self.verbose:
                 logs = {
                     "stage": stage,
-                    "step": estimator.progress_tracker.safe_global_epoch,
+                    "step": estimator.tracker.safe_global_epoch,
                     **self._best_k_models,
                 }
-                if hasattr(estimator.progress_tracker, "global_round"):
-                    logs["round"] = getattr(estimator.progress_tracker, "global_round", None)
+                if hasattr(estimator.tracker, "global_round"):
+                    logs["round"] = getattr(estimator.tracker, "global_round", None)
                 srsly.write_jsonl(
                     self.dirpath / "checkpoint_logs.jsonl",
                     [make_dict_json_serializable(logs)],
@@ -132,7 +132,7 @@ class ModelCheckpoint(CallbackWithMonitor):
     def _get_name(self, estimator: Estimator, stage: Union[str, RunningStage], current: Optional[float] = None) -> str:
         # build filename
         step = "step" if stage == RunningStage.VALIDATION else "epoch"
-        name = f"{stage}_{step}={estimator.progress_tracker.safe_global_epoch}"
+        name = f"{stage}_{step}={estimator.tracker.safe_global_epoch}"
         if current is not None:
             name += f"_{self.monitor}={current}"
         name += ".pt"
