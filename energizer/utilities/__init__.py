@@ -69,7 +69,6 @@ def set_deterministic(deterministic: bool) -> None:
     # NOTE: taken from the lightning Trainer
     torch.use_deterministic_algorithms(deterministic)
     if deterministic:
-        
         # fixing non-deterministic part of horovod
         # https://github.com/Lightning-AI/lightning/pull/1572/files#r420279383
         os.environ["HOROVOD_FUSION_THRESHOLD"] = "0"

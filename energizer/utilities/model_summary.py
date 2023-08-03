@@ -135,11 +135,11 @@ def summarize(estimator, max_depth: int = 1) -> str:
     total_parameters = model_summary.total_parameters
     trainable_parameters = model_summary.trainable_parameters
     model_size = model_summary.model_size
-    
+
     summary = _format_summary_table(total_parameters, trainable_parameters, model_size, *summary_data)
     if estimator.fabric.device.type == "cuda":
         s = "{:<{}}"
         summary += f"\n" + s.format(f"{torch.cuda.max_memory_allocated() / 1e9:.02f} GB", 10)
         summary += "CUDA Memory used"
-    
+
     return summary

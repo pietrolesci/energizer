@@ -74,27 +74,21 @@ class Timer(_Timer, ActiveLearningCallback):
 
     def on_round_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.round_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/round_time", self.round_end - self.round_start, step=estimator.tracker.global_round
-        )
+        estimator.fabric.log("timer/round_time", self.round_end - self.round_start, step=estimator.tracker.global_round)
 
     def on_query_start(self, *args, **kwargs) -> None:
         self.query_start = time.perf_counter()
 
     def on_query_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.query_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/query_time", self.query_end - self.query_start, step=estimator.tracker.global_round
-        )
+        estimator.fabric.log("timer/query_time", self.query_end - self.query_start, step=estimator.tracker.global_round)
 
     def on_label_start(self, *args, **kwargs) -> None:
         self.label_start = time.perf_counter()
 
     def on_label_end(self, estimator: ActiveEstimator, *args, **kwargs) -> None:
         self.label_end = time.perf_counter()
-        estimator.fabric.log(
-            "timer/label_time", self.label_end - self.label_start, step=estimator.tracker.global_round
-        )
+        estimator.fabric.log("timer/label_time", self.label_end - self.label_start, step=estimator.tracker.global_round)
 
     def on_pool_epoch_start(self, *args, **kwargs) -> None:
         self.epoch_start(RunningStage.POOL)

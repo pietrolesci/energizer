@@ -27,7 +27,8 @@ class Args:
     def to_dict(self) -> Dict[str, Any]:
         out = copy.deepcopy(self.__dict__)
         return out
-    
+
+
 @dataclass
 class OptimizerArgs(Args):
     set_to_none: bool = False
@@ -37,10 +38,10 @@ class OptimizerArgs(Args):
     max_norm: Optional[Union[float, int]] = None
     norm_type: Union[float, int] = 2.0
 
+
 @dataclass
 class SchedulerArgs(Args):
     num_warmup_steps: Optional[int] = None
-
 
 
 class Estimator:
@@ -68,12 +69,12 @@ class Estimator:
         )
         # sets deterministic convolutions too
         set_deterministic(deterministic)
-        
+
         # equivalent to `torch.backends.cudnn.allow_tf32 = True`
         # convolutions are not changed, to do that you need
         # `torch.backends.cudnn.allow_tf32 = True`
         torch.set_float32_matmul_precision(tf32_mode)
-        
+
         self.init_tracker()
         self.init_model(model)
 
@@ -298,7 +299,6 @@ class Estimator:
         print(self.tracker.is_accumulating, self.tracker.global_batch)
 
         with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
-            
             # compute loss
             output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
             loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
@@ -308,11 +308,10 @@ class Estimator:
 
         # print("Accumulating?", self.tracker.is_accumulating)
         if not self.tracker.is_accumulating:
-
             # clip gradients (in configure_optimizer we set the attribute `_gradient_clipping_kwargs`)
             if optimizer._gradient_clipping_kwargs.get("clip_val") or optimizer._gradient_clipping_kwargs.get("max_norm"):  # type: ignore
                 self.fabric.clip_gradients(model, optimizer, **optimizer._gradient_clipping_kwargs)  # type: ignore
-            
+
             # update parameters
             self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
             optimizer.step()
@@ -324,7 +323,7 @@ class Estimator:
             # update scheduler
             if scheduler is not None:
                 scheduler.step()
-            
+
             # update tracker
             self.tracker.increment_step()
 
@@ -490,7 +489,6 @@ class Estimator:
 
         return _optimizer
 
-
     def configure_scheduler(
         self,
         scheduler: Optional[str],
@@ -507,14 +505,14 @@ class Estimator:
         scheduler_kwargs = scheduler_kwargs or {}
 
         num_train_steps = self.tracker.step_tracker.max
-        
+
         num_warmup_steps = scheduler_kwargs.get("num_warmup_steps")
         if num_warmup_steps is not None and 0.0 < num_warmup_steps < 1.0:
             num_warmup_steps = int(np.ceil(num_warmup_steps * num_train_steps))
 
         scheduler_kwargs["num_training_steps"] = num_train_steps
         scheduler_kwargs["num_warmup_steps"] = num_warmup_steps
-        
+
         return scheduler_fn(optimizer, **scheduler_kwargs)
 
     def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:

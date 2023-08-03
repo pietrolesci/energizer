@@ -18,7 +18,7 @@ class Tracker:
 
     def max_reached(self) -> bool:
         return self.max is not None and self.current >= self.max
-    
+
     def remaining(self) -> int:
         if self.max is None:
             raise ValueError("This tracker does not have a max.")
@@ -59,6 +59,7 @@ class EpochTracker(Tracker):
             dynamic_ncols=True,
             leave=True,
         )
+
 
 @dataclass
 class StepTracker(Tracker):
@@ -130,21 +131,22 @@ class ProgressTracker:
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
     ) -> None:
-        
         # checks
         assert max_epochs or max_steps, "`max_epochs` or `max_steps` must be specified."
-        
+
         num_accumulation_steps = gradient_accumulation_steps or 1
-        assert num_accumulation_steps > 0, f"`gradient_accumulation_steps > 0` or None, not {gradient_accumulation_steps}."
-            
-        # limit batches  
+        assert (
+            num_accumulation_steps > 0
+        ), f"`gradient_accumulation_steps > 0` or None, not {gradient_accumulation_steps}."
+
+        # limit batches
         max_train_batches = int(min(num_train_batches, limit_train_batches or float("Inf")))
         max_validation_batches = int(min(num_validation_batches, limit_validation_batches or float("Inf")))
         if max_train_batches < 1:
             self.has_validation = False
             self.stop_training = True
             return
-                
+
         # define the number of training steps
         max_train_steps = float("Inf")
         if max_epochs is not None:
@@ -174,7 +176,7 @@ class ProgressTracker:
             every_n = int(every_n)
             assert interval in list(Interval)
             assert every_n > 0
-            
+
             self.has_validation = True
             self.validate_every_n = every_n
             self.validation_interval = interval
@@ -182,7 +184,7 @@ class ProgressTracker:
             self.has_validation = False
 
         self.validation_tracker.max = max_validation_batches
-                                
+
     def setup_eval(self, stage: Union[str, RunningStage], num_batches: int, limit_batches: Optional[int]) -> None:
         getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
 
@@ -205,7 +207,7 @@ class ProgressTracker:
         if self.current_stage == RunningStage.VALIDATION:
             return self.train_tracker.total
         return self.global_epoch
-    
+
     @property
     def is_fitting(self) -> bool:
         return self.current_stage in (RunningStage.TRAIN, RunningStage.VALIDATION)
@@ -213,16 +215,17 @@ class ProgressTracker:
     @property
     def is_accumulating(self) -> bool:
         return (self.global_batch + 1) % self.gradient_accumulation_steps != 0
-    
+
     @property
     def is_done(self) -> bool:
         """Whether a stage is done."""
         return (
-            self.get_stage_tracker().max_reached() 
-            or self.current_stage == RunningStage.TRAIN and self.stop_training
+            self.get_stage_tracker().max_reached()
+            or self.current_stage == RunningStage.TRAIN
+            and self.stop_training
             # or (self.epoch_tracker.remaining() <= 1 and self.gradient_accumulation_steps > self.train_tracker.remaining())
         )
-    
+
     @property
     def is_fit_done(self) -> bool:
         return self.epoch_tracker.max_reached() or self.stop_training
@@ -230,32 +233,30 @@ class ProgressTracker:
     @property
     def should_log(self) -> bool:
         return (self.global_batch + 1) % self.log_interval == 0
-    
+
     @property
     def should_validate(self) -> bool:
         if not self.has_validation:
             return False
-        
-        def _check(iter: int)-> bool:
+
+        def _check(iter: int) -> bool:
             return (iter + 1) % self.validate_every_n == 0  # type: ignore
-        
+
         should_validate = False
         if self.validation_interval == Interval.EPOCH:
             should_validate = _check(self.global_epoch) and self.is_done
 
         elif self.validation_interval == Interval.BATCH:
-            should_validate = _check(self.global_batch) and not self.is_done # type: ignore
-        
-        elif self.validation_interval == Interval.STEP:        
+            should_validate = _check(self.global_batch) and not self.is_done  # type: ignore
+
+        elif self.validation_interval == Interval.STEP:
             should_validate = _check(self.global_step) and not self.is_done and not self.is_accumulating
-        
+
         else:
             raise NotImplementedError
 
         return should_validate
-        
 
-                
     """Methods"""
 
     def start_fit(self) -> None:
@@ -274,7 +275,7 @@ class ProgressTracker:
         #     tracker.max = int(np.floor(tracker.max / self.gradient_accumulation_steps)) * self.gradient_accumulation_steps   # type: ignore
 
         tracker.reset()
-        
+
         if tracker.progress_bar is not None:
             tracker.progress_bar.set_postfix_str("")
 
@@ -319,7 +320,7 @@ class ProgressTracker:
 
     def get_stage_tracker(self) -> StageTracker:
         return getattr(self, f"{self.current_stage}_tracker")
-    
+
     def make_progress_bars(self, stage: Union[str, RunningStage]) -> None:
         if not self.enable_progress_bar:
             return
