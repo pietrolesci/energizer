@@ -44,7 +44,7 @@ class SchedulerArgs(Args):
 
 
 class Estimator:
-    _model: torch.nn.Module
+    _model: Union[torch.nn.Module, Callable]
     _tracker: ProgressTracker
 
     def __init__(
@@ -78,7 +78,7 @@ class Estimator:
         self.init_model(model)
 
     @property
-    def model(self) -> torch.nn.Module:
+    def model(self) -> Union[torch.nn.Module, Callable]:
         return self._model
 
     @property
@@ -98,6 +98,9 @@ class Estimator:
 
     def init_model(self, model: Any) -> None:
         self._model = model
+
+    def compile(self, **kwargs) -> None:
+        self._model = torch.compile(self._model, **kwargs)
 
     def fit(
         self,
