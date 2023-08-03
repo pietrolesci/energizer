@@ -247,7 +247,7 @@ class ProgressTracker:
             should_validate = _check(self.global_batch) and not self.is_done # type: ignore
         
         elif self.validation_interval == Interval.STEP:        
-            should_validate = _check(self.global_step) and not self.is_done and ((self.global_batch * self.gradient_accumulation_steps) % (self.global_step + 1) == 0)# type: ignore
+            should_validate = _check(self.global_step) and not self.is_done and not self.is_accumulating
         
         else:
             raise NotImplementedError
