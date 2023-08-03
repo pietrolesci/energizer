@@ -7,11 +7,11 @@ from lightning.pytorch.utilities.model_summary.model_summary import (
     _is_lazy_weight_tensor,
     get_human_readable_count,
 )
-from torch import nn
+import torch
 
 
 class LayerSummary:
-    def __init__(self, module: nn.Module) -> None:
+    def __init__(self, module: torch.nn.Module) -> None:
         super().__init__()
         self._module = module
 
@@ -43,8 +43,8 @@ class Summary:
         self._precision_megabytes = (precision / 8.0) * 1e-6
 
     @property
-    def named_modules(self) -> List[Tuple[str, nn.Module]]:
-        mods: List[Tuple[str, nn.Module]]
+    def named_modules(self) -> List[Tuple[str, torch.nn.Module]]:
+        mods: List[Tuple[str, torch.nn.Module]]
         if self._max_depth == 0:
             mods = []
         elif self._max_depth == 1:
@@ -65,11 +65,11 @@ class Summary:
 
     @property
     def in_sizes(self) -> List:
-        return [layer.in_size for layer in self._layer_summary.values()]
+        return [layer.in_size for layer in self._layer_summary.values()]  # type: ignore
 
     @property
     def out_sizes(self) -> List:
-        return [layer.out_size for layer in self._layer_summary.values()]
+        return [layer.out_size for layer in self._layer_summary.values()]  # type: ignore
 
     @property
     def param_nums(self) -> List[int]:
@@ -135,4 +135,11 @@ def summarize(estimator, max_depth: int = 1) -> str:
     total_parameters = model_summary.total_parameters
     trainable_parameters = model_summary.trainable_parameters
     model_size = model_summary.model_size
-    return _format_summary_table(total_parameters, trainable_parameters, model_size, *summary_data)
+    
+    summary = _format_summary_table(total_parameters, trainable_parameters, model_size, *summary_data)
+    if estimator.fabric.device.type == "cuda":
+        s = "{:<{}}"
+        summary += f"\n" + s.format(f"{torch.cuda.max_memory_allocated() / 1e9:.02f} GB", 10)
+        summary += "CUDA Memory used"
+    
+    return summary

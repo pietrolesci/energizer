@@ -65,10 +65,11 @@ def local_seed(seed: int) -> Generator[None, None, None]:
     _set_rng_states(states)
 
 
-def init_deterministic(deterministic: bool) -> None:
+def set_deterministic(deterministic: bool) -> None:
     # NOTE: taken from the lightning Trainer
     torch.use_deterministic_algorithms(deterministic)
     if deterministic:
+        
         # fixing non-deterministic part of horovod
         # https://github.com/Lightning-AI/lightning/pull/1572/files#r420279383
         os.environ["HOROVOD_FUSION_THRESHOLD"] = "0"
@@ -76,8 +77,12 @@ def init_deterministic(deterministic: bool) -> None:
         # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
+        # Enable CUDNN deterministic mode
+        torch.backends.cudnn.deterministic = True  # type: ignore
+        torch.backends.cudnn.benchmark = False  # type: ignore
 
-def _pad(inputs: List[int], padding_value: float, max_length: int) -> Tensor:
+
+def _pad(inputs: List[Tensor], padding_value: float, max_length: int) -> Tensor:
     # truncate -> convert to tensor -> pad
     return pad_sequence(
         [torch.tensor(t[:max_length]) for t in inputs],

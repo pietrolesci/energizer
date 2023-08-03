@@ -12,11 +12,34 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from energizer.enums import OutputKeys, RunningStage
-from energizer.registries import OPTIMIZER_REGISTRY
+from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import init_deterministic, move_to_cpu
+from energizer.utilities import set_deterministic, move_to_cpu
 from energizer.utilities.model_summary import summarize
+from dataclasses import dataclass
+import copy
+import numpy as np
+
+
+@dataclass
+class Args:
+    def to_dict(self) -> Dict[str, Any]:
+        out = copy.deepcopy(self.__dict__)
+        return out
+    
+@dataclass
+class OptimizerArgs(Args):
+    set_to_none: bool = False
+    no_decay: Optional[List[str]] = None
+    weight_decay: Optional[float] = None
+    clip_val: Optional[Union[float, int]] = None
+    max_norm: Optional[Union[float, int]] = None
+    norm_type: Union[float, int] = 2.0
+
+@dataclass
+class SchedulerArgs(Args):
+    num_warmup_steps: Optional[int] = None
 
 
 
@@ -26,12 +49,13 @@ class Estimator:
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: Any,
         accelerator: Union[str, Accelerator] = "cpu",
         precision: _PRECISION_INPUT = 32,
         callbacks: Optional[Union[List[Any], Any]] = None,
         loggers: Optional[Union[Logger, List[Logger]]] = None,
         deterministic: bool = True,
+        tf32_mode: str = "highest",
     ) -> None:
         super().__init__()
         self.fabric = Fabric(
@@ -42,7 +66,14 @@ class Estimator:
             devices=1,  # only works with single-GPU
             num_nodes=1,  # only works with single-node
         )
-        init_deterministic(deterministic)
+        # sets deterministic convolutions too
+        set_deterministic(deterministic)
+        
+        # equivalent to `torch.backends.cudnn.allow_tf32 = True`
+        # convolutions are not changed, to do that you need
+        # `torch.backends.cudnn.allow_tf32 = True`
+        torch.set_float32_matmul_precision(tf32_mode)
+        
         self.init_tracker()
         self.init_model(model)
 
@@ -65,7 +96,7 @@ class Estimator:
     def init_tracker(self) -> None:
         self._tracker = ProgressTracker()
 
-    def init_model(self, model: torch.nn.Module) -> None:
+    def init_model(self, model: Any) -> None:
         self._model = model
 
     def fit(
@@ -136,7 +167,7 @@ class Estimator:
         self.fabric.call("on_fit_start", estimator=self, model=model)
 
         output = []
-        while not self.tracker.is_fit_done():
+        while not self.tracker.is_fit_done:
             out = self.run_epoch(
                 model=model,
                 train_loader=train_loader,
@@ -182,7 +213,7 @@ class Estimator:
 
         train_out, validation_out = [], []
         iterable = enumerate(train_loader)
-        while not self.tracker.is_done():
+        while not self.tracker.is_done:
             batch_idx, batch = next(iterable)
 
             # put batch on correct device
@@ -215,7 +246,7 @@ class Estimator:
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
-            if self.tracker.should_validate():
+            if self.tracker.should_validate:
                 out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
                 if out is not None:
                     validation_out.append(out)
@@ -235,8 +266,8 @@ class Estimator:
             metrics=metrics,
         )
 
-        # validation loop
-        if self.tracker.should_validate():
+        # # validation loop
+        if self.tracker.should_validate:
             out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
             if out is not None:
                 validation_out.append(out)
@@ -267,13 +298,16 @@ class Estimator:
             self.fabric.backward(loss / self.tracker.gradient_accumulation_steps)  # instead of loss.backward()
 
         if not self.tracker.is_accumulating:
+            # clip gradients (in configure_optimizer we set the attribute `_gradient_clipping_kwargs`)
+            self.fabric.clip_gradients(model, optimizer, **optimizer._gradient_clipping_kwargs)  # type: ignore
+            
             # update parameters
             self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
             optimizer.step()
             self.fabric.call("on_after_optimizer", estimator=self, model=model, optimizer=optimizer)
 
-            # zero_grad
-            optimizer.zero_grad()  # type: ignore
+            # zero_grad (in configure_optimizer we set the attribute `_set_to_none_flag`)
+            optimizer.zero_grad(set_to_none=optimizer._set_to_none_flag)  # type: ignore
 
             # update scheduler
             if scheduler is not None:
@@ -281,28 +315,6 @@ class Estimator:
             
             # update tracker
             self.tracker.increment_step()
-
-        # # zero_grad
-        # optimizer.zero_grad()  # type: ignore
-
-        # # compute loss
-        # output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
-        # loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
-
-        # # compute gradients
-        # self.fabric.backward(loss)  # instead of loss.backward()
-
-        # # update parameters
-        # self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
-        # optimizer.step()
-        # self.fabric.call("on_after_optimizer", estimator=self, model=model, optimizer=optimizer)
-
-        # # update scheduler
-        # if scheduler is not None:
-        #     scheduler.step()
-
-        # # update tracker
-        # self.tracker.increment_step()
 
         return output
 
@@ -351,7 +363,7 @@ class Estimator:
         output = []
         iterable = enumerate(loader)
         with torch.inference_mode():
-            while not self.tracker.is_done():
+            while not self.tracker.is_done:
                 batch_idx, batch = next(iterable)
 
                 # put batch on correct device
@@ -449,7 +461,21 @@ class Estimator:
             params = filter(lambda p: p.requires_grad, self.model.parameters())
 
         # instantiate optimizer
-        return optimizer_fn(params, lr=learning_rate, **optimizer_kwargs)
+        _optimizer = optimizer_fn(params, lr=learning_rate, **optimizer_kwargs)
+
+        # attach an attribute that will tell the optimizer to set_to_none
+        setattr(_optimizer, "_set_to_none_flag", optimizer_kwargs.get("set_to_none", False))
+
+        # attach gradient clipping kwargs
+        gradient_clipping_kwargs = dict(
+            clip_val=optimizer_kwargs.get("clip_val"),
+            max_norm=optimizer_kwargs.get("max_norm"),
+            norm_type=optimizer_kwargs.get("norm_type", 2.0),
+        )
+        setattr(_optimizer, "_gradient_clipping_kwargs", gradient_clipping_kwargs)
+
+        return _optimizer
+
 
     def configure_scheduler(
         self,
@@ -458,26 +484,24 @@ class Estimator:
         scheduler_kwargs: Optional[Dict] = None,
     ) -> Optional[_LRScheduler]:
         ...
-        # if scheduler is None:
-        #     return
+        if scheduler is None:
+            return
 
-        # scheduler_fn = SCHEDULER_REGISTRY[scheduler]
+        scheduler_fn = SCHEDULER_REGISTRY[scheduler]
 
-        # # collect scheduler kwargs
-        # params = list(inspect.signature(scheduler_fn).parameters.keys())
-        # scheduler_kwargs = scheduler_kwargs or {}
-        # num_train_steps = self.tracker.train_tracker.max
-        # num_warmup_steps = scheduler_kwargs.get("num_warmup_steps", None)
-        # if num_warmup_steps is not None and isinstance(num_warmup_steps, float):
-        #     num_warmup_steps *= num_train_steps
-        # if "num_train_steps" in params:
-        #     scheduler_kwargs["num_train_steps"] = num_train_steps
-        # if "num_warmup_steps" in params:
-        #     scheduler_kwargs["num_warmup_steps"] = num_warmup_steps
+        # collect scheduler kwargs
+        scheduler_kwargs = scheduler_kwargs or {}
 
-        # scheduler = scheduler_fn(optimizer, **scheduler_kwargs)
+        num_train_steps = self.tracker.step_tracker.max
+        
+        num_warmup_steps = scheduler_kwargs.get("num_warmup_steps")
+        if num_warmup_steps is not None and 0.0 < num_warmup_steps < 1.0:
+            num_warmup_steps = int(np.ceil(num_warmup_steps * num_train_steps))
 
-        # return scheduler
+        scheduler_kwargs["num_training_steps"] = num_train_steps
+        scheduler_kwargs["num_warmup_steps"] = num_warmup_steps
+        
+        return scheduler_fn(optimizer, **scheduler_kwargs)
 
     def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:
         if loader is None:
@@ -486,12 +510,12 @@ class Estimator:
 
     def log(self, name: str, value: Any, step: int) -> None:
         """Automatically moves to cpu and then logs value."""
-        if self.tracker.should_log():
+        if self.tracker.should_log:
             self.fabric.log(name, move_to_cpu(value), step)
 
     def log_dict(self, value_dict: Mapping[str, Any], step: int) -> None:
         """Automatically moves to cpu and then logs mapping of values."""
-        if self.tracker.should_log():
+        if self.tracker.should_log:
             self.fabric.log_dict(value_dict, step)
 
     def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
