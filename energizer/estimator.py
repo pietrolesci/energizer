@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 import torch
-from lightning_fabric import Fabric
-from lightning_fabric.accelerators.accelerator import Accelerator
-from lightning_fabric.loggers.logger import Logger
-from lightning_fabric.plugins.precision.precision import _PRECISION_INPUT
-from lightning_fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
+from lightning.fabric import Fabric
+from lightning.fabric.accelerators.accelerator import Accelerator
+from lightning.fabric.loggers.logger import Logger
+from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
@@ -17,6 +17,7 @@ from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from energizer.utilities import init_deterministic, move_to_cpu
 from energizer.utilities.model_summary import summarize
+
 
 
 class Estimator:
@@ -72,7 +73,11 @@ class Estimator:
         train_loader: DataLoader,
         validation_loader: Optional[DataLoader] = None,
         max_epochs: Optional[int] = 3,
+        min_epochs: Optional[int] = None,
+        max_steps: Optional[int] = None,
         min_steps: Optional[int] = None,
+        validation_freq: Optional[str] = "1:epoch",
+        gradient_accumulation_steps: Optional[int] = None,
         learning_rate: float = 0.001,
         optimizer: str = "adamw",
         optimizer_kwargs: Optional[Dict] = None,
@@ -80,7 +85,6 @@ class Estimator:
         scheduler_kwargs: Optional[Dict] = None,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
-        num_validation_per_epoch: int = 1,
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
     ) -> List[FIT_OUTPUT]:
@@ -90,7 +94,6 @@ class Estimator:
         """
 
         # self.fabric.launch()  # NOTE: do not support distributed yet
-        assert max_epochs is not None or min_steps is not None, "`max_epochs` or `min_steps` must be passed."
 
         # start progress tracking
         self.tracker.setup(
@@ -98,10 +101,13 @@ class Estimator:
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
             max_epochs=max_epochs,
+            min_epochs=min_epochs,
+            max_steps=max_steps,
             min_steps=min_steps,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             num_train_batches=len(train_loader),
             num_validation_batches=len(validation_loader or []),
-            num_validation_per_epoch=num_validation_per_epoch,
+            validation_freq=validation_freq,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
         )
@@ -209,8 +215,8 @@ class Estimator:
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
-            if self.tracker.should_validate() and validation_loader is not None:
-                out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
+            if self.tracker.should_validate():
+                out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
                 if out is not None:
                     validation_out.append(out)
 
@@ -230,8 +236,8 @@ class Estimator:
         )
 
         # validation loop
-        if self.tracker.should_validate() and validation_loader is not None:
-            out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)
+        if self.tracker.should_validate():
+            out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
             if out is not None:
                 validation_out.append(out)
 
@@ -251,27 +257,52 @@ class Estimator:
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
 
-        # zero_grad
-        optimizer.zero_grad()  # type: ignore
+        with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
+            
+            # compute loss
+            output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
+            loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
 
-        # compute loss
-        output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
-        loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
+            # compute gradients
+            self.fabric.backward(loss / self.tracker.gradient_accumulation_steps)  # instead of loss.backward()
 
-        # compute gradients
-        self.fabric.backward(loss)  # instead of loss.backward()
+        if not self.tracker.is_accumulating:
+            # update parameters
+            self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
+            optimizer.step()
+            self.fabric.call("on_after_optimizer", estimator=self, model=model, optimizer=optimizer)
 
-        # update parameters
-        self.fabric.call("on_before_optimizer", estimator=estimator, model=model, optimizer=optimizer)
-        optimizer.step()
-        self.fabric.call("on_after_optimizer", estimator=estimator, model=model, optimizer=optimizer)
+            # zero_grad
+            optimizer.zero_grad()  # type: ignore
 
-        # update scheduler
-        if scheduler is not None:
-            scheduler.step()
+            # update scheduler
+            if scheduler is not None:
+                scheduler.step()
+            
+            # update tracker
+            self.tracker.increment_step()
 
-        # update tracker
-        self.tracker.increment_step()
+        # # zero_grad
+        # optimizer.zero_grad()  # type: ignore
+
+        # # compute loss
+        # output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
+        # loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
+
+        # # compute gradients
+        # self.fabric.backward(loss)  # instead of loss.backward()
+
+        # # update parameters
+        # self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
+        # optimizer.step()
+        # self.fabric.call("on_after_optimizer", estimator=self, model=model, optimizer=optimizer)
+
+        # # update scheduler
+        # if scheduler is not None:
+        #     scheduler.step()
+
+        # # update tracker
+        # self.tracker.increment_step()
 
         return output
 

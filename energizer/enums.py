@@ -40,6 +40,7 @@ class RunningStage(StrEnum):
 
 class Interval(StrEnum):
     BATCH: str = "batch"
+    STEP: str = "step"
     EPOCH: str = "epoch"
     ROUND: str = "round"
 
