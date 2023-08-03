@@ -5,8 +5,8 @@ import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 
 from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
-from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.active_learning.registries import SCORING_FUNCTIONS
+from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl

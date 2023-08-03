@@ -2,12 +2,12 @@ from collections import OrderedDict
 from typing import Dict, List, Tuple, cast
 
 import numpy as np
+import torch
 from lightning.pytorch.utilities.model_summary.model_summary import (
     _format_summary_table,
     _is_lazy_weight_tensor,
     get_human_readable_count,
 )
-import torch
 
 
 class LayerSummary:

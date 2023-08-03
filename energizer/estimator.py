@@ -1,6 +1,9 @@
+import copy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
+import numpy as np
 import torch
 from lightning.fabric import Fabric
 from lightning.fabric.accelerators.accelerator import Accelerator
@@ -15,11 +18,8 @@ from energizer.enums import OutputKeys, RunningStage
 from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import set_deterministic, move_to_cpu
+from energizer.utilities import move_to_cpu, set_deterministic
 from energizer.utilities.model_summary import summarize
-from dataclasses import dataclass
-import copy
-import numpy as np
 
 
 @dataclass

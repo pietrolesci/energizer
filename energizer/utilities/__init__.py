@@ -2,6 +2,7 @@
 import contextlib
 import os
 import random
+import re
 from typing import Any, Dict, Generator, List, Optional, Union
 
 import numpy as np
@@ -13,7 +14,6 @@ from numpy.random import RandomState
 from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
-import re
 
 
 def camel_to_snake(name: str) -> str:
