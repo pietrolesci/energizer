@@ -100,6 +100,7 @@ class Estimator:
         self._model = model
 
     def compile(self, **kwargs) -> None:
+        # model becomes a Callable
         self._model = torch.compile(self._model, **kwargs)
 
     def fit(
@@ -151,7 +152,7 @@ class Estimator:
         _validation_loader = self.configure_dataloader(validation_loader)
         _optimizer = self.configure_optimizer(optimizer, learning_rate, optimizer_kwargs)
         _scheduler = self.configure_scheduler(scheduler, _optimizer, scheduler_kwargs)
-        model, _optimizer = self.fabric.setup(self.model, _optimizer)
+        model, _optimizer = self.fabric.setup(self.model, _optimizer)  # type: ignore
 
         # run epochs
         return self.run_fit(model, _train_loader, _validation_loader, _optimizer, _scheduler)  # type: ignore
@@ -232,6 +233,8 @@ class Estimator:
                 batch_idx=batch_idx,
             )
 
+            # print("=======")
+
             # run model on batch
             batch_out = self.run_training_step(model, batch, batch_idx, optimizer, scheduler, loss_fn, metrics)
 
@@ -249,6 +252,7 @@ class Estimator:
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
+            # print("IN ->", self.tracker.should_validate, "Step:", self.tracker.global_step, "Batch:", self.tracker.global_batch)
             if self.tracker.should_validate:
                 out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
                 if out is not None:
@@ -269,7 +273,8 @@ class Estimator:
             metrics=metrics,
         )
 
-        # # validation loop
+        # validation loop
+        # print("OUT ->", self.tracker.should_validate)
         if self.tracker.should_validate:
             out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
             if out is not None:
@@ -290,6 +295,7 @@ class Estimator:
         metrics: Optional[METRIC],
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
+        print(self.tracker.is_accumulating, self.tracker.global_batch)
 
         with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
             
@@ -300,9 +306,12 @@ class Estimator:
             # compute gradients
             self.fabric.backward(loss / self.tracker.gradient_accumulation_steps)  # instead of loss.backward()
 
+        # print("Accumulating?", self.tracker.is_accumulating)
         if not self.tracker.is_accumulating:
+
             # clip gradients (in configure_optimizer we set the attribute `_gradient_clipping_kwargs`)
-            self.fabric.clip_gradients(model, optimizer, **optimizer._gradient_clipping_kwargs)  # type: ignore
+            if optimizer._gradient_clipping_kwargs.get("clip_val") or optimizer._gradient_clipping_kwargs.get("max_norm"):  # type: ignore
+                self.fabric.clip_gradients(model, optimizer, **optimizer._gradient_clipping_kwargs)  # type: ignore
             
             # update parameters
             self.fabric.call("on_before_optimizer", estimator=self, model=model, optimizer=optimizer)
@@ -318,6 +327,8 @@ class Estimator:
             
             # update tracker
             self.tracker.increment_step()
+
+            print("UPDATED")
 
         return output
 
@@ -341,7 +352,7 @@ class Estimator:
 
         # configuration
         loader = self.configure_dataloader(test_loader)
-        model = self.fabric.setup(self.model)
+        model = self.fabric.setup(self.model)  # type: ignore
         return self.run_evaluation(model, loader, RunningStage.TEST)  # type: ignore
 
     def run_evaluation(
