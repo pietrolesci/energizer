@@ -47,6 +47,7 @@ class SchedulerArgs(Args):
 class Estimator:
     _model: Union[torch.nn.Module, Callable]
     _tracker: ProgressTracker
+    _is_compiled: bool = False
 
     def __init__(
         self,
@@ -75,8 +76,8 @@ class Estimator:
         # `torch.backends.cudnn.allow_tf32 = True`
         torch.set_float32_matmul_precision(tf32_mode)
 
-        self.init_tracker()
         self.init_model(model)
+        self.init_tracker()
 
     @property
     def model(self) -> Union[torch.nn.Module, Callable]:
@@ -93,6 +94,10 @@ class Estimator:
     @property
     def model_summary(self) -> str:
         return summarize(self)
+    
+    @property
+    def is_compiled(self) -> bool:
+        return self._is_compiled
 
     def init_tracker(self) -> None:
         self._tracker = ProgressTracker()
@@ -103,6 +108,7 @@ class Estimator:
     def compile(self, **kwargs) -> None:
         # model becomes a Callable
         self._model = torch.compile(self._model, **kwargs)
+        self._is_compiled = True
 
     def fit(
         self,
@@ -296,7 +302,7 @@ class Estimator:
         metrics: Optional[METRIC],
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
-        print(self.tracker.is_accumulating, self.tracker.global_batch)
+        # print(self.tracker.is_accumulating, self.tracker.global_batch)
 
         with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
             # compute loss
@@ -327,7 +333,7 @@ class Estimator:
             # update tracker
             self.tracker.increment_step()
 
-            print("UPDATED")
+            # print("UPDATED")
 
         return output
 
@@ -375,7 +381,8 @@ class Estimator:
 
         output = []
         iterable = enumerate(loader)
-        with torch.inference_mode():
+        ctx = torch.no_grad() if self.is_compiled else torch.inference_mode()
+        with ctx:  # to fix compilation which does not work with torch.compile
             while not self.tracker.is_done:
                 batch_idx, batch = next(iterable)
 
