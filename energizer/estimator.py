@@ -58,6 +58,7 @@ class Estimator:
         loggers: Optional[Union[Logger, List[Logger]]] = None,
         deterministic: bool = True,
         tf32_mode: str = "highest",
+        **kwargs,
     ) -> None:
         super().__init__()
         self.fabric = Fabric(
@@ -76,7 +77,7 @@ class Estimator:
         # `torch.backends.cudnn.allow_tf32 = True`
         torch.set_float32_matmul_precision(tf32_mode)
 
-        self.init_model(model)
+        self.init_model(model, **kwargs)
         self.init_tracker()
 
     @property
@@ -94,7 +95,7 @@ class Estimator:
     @property
     def model_summary(self) -> str:
         return summarize(self)
-    
+
     @property
     def is_compiled(self) -> bool:
         return self._is_compiled
@@ -102,7 +103,7 @@ class Estimator:
     def init_tracker(self) -> None:
         self._tracker = ProgressTracker()
 
-    def init_model(self, model: Any) -> None:
+    def init_model(self, model: Any, **kwargs) -> None:
         self._model = model
 
     def compile(self, **kwargs) -> None:
