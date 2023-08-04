@@ -93,6 +93,18 @@ class Estimator:
         return self.fabric.device
 
     @property
+    def precision(self) -> str:
+        return self.fabric._precision.precision
+
+    # @property
+    # def prediction_dtype(self) -> torch.dtype:
+    #     dtype = self.precision
+    #     if "-" in dtype:
+    #         dtype = dtype.split("-")[0]
+    #         dtype = f"bfloat{dtype[2:]}" if dtype.startswith("b") else f"float{dtype}"
+    #     return getattr(torch, dtype)
+
+    @property
     def model_summary(self) -> str:
         return summarize(self)
 
