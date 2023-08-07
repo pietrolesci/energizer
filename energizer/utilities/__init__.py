@@ -3,7 +3,7 @@ import contextlib
 import os
 import random
 import re
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union, Literal
 
 import numpy as np
 import torch
@@ -65,9 +65,15 @@ def local_seed(seed: int) -> Generator[None, None, None]:
     _set_rng_states(states)
 
 
-def set_deterministic(deterministic: bool) -> None:
+def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
+    kwargs = {}
+    if isinstance(deterministic, str):
+        assert deterministic == "warn_only", "deterministic can be a bool or `warn_only`"
+        deterministic, kwargs = True, {"warn_only": True}
+
     # NOTE: taken from the lightning Trainer
-    torch.use_deterministic_algorithms(deterministic)
+    torch.use_deterministic_algorithms(deterministic, **kwargs)
+    
     if deterministic:
         # fixing non-deterministic part of horovod
         # https://github.com/Lightning-AI/lightning/pull/1572/files#r420279383

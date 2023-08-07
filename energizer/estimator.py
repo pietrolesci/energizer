@@ -1,7 +1,7 @@
 import copy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Union
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Union
 
 import numpy as np
 import torch
@@ -56,7 +56,7 @@ class Estimator:
         precision: _PRECISION_INPUT = 32,
         callbacks: Optional[Union[List[Any], Any]] = None,
         loggers: Optional[Union[Logger, List[Logger]]] = None,
-        deterministic: bool = True,
+        deterministic: Union[bool, Literal["warn_only"]] = "warn_only",
         tf32_mode: str = "highest",
         **kwargs,
     ) -> None:
@@ -69,13 +69,9 @@ class Estimator:
             devices=1,  # only works with single-GPU
             num_nodes=1,  # only works with single-node
         )
-        # sets deterministic convolutions too
-        set_deterministic(deterministic)
 
-        # equivalent to `torch.backends.cudnn.allow_tf32 = True`
-        # convolutions are not changed, to do that you need
-        # `torch.backends.cudnn.allow_tf32 = True`
-        torch.set_float32_matmul_precision(tf32_mode)
+        self.set_deterministic(deterministic)
+        self.set_torch_matmul_precision(tf32_mode)
 
         self.init_model(model, **kwargs)
         self.init_tracker()
@@ -122,6 +118,22 @@ class Estimator:
         # model becomes a Callable
         self._model = torch.compile(self._model, **kwargs)
         self._is_compiled = True
+
+    def set_torch_matmul_precision(self, tf32_mode: str = "highest") -> None:
+        # equivalent to `torch.backends.cudnn.allow_tf32 = True`
+        # convolutions are not changed, to do that you need
+        # `torch.backends.cudnn.allow_tf32 = True`
+        torch.set_float32_matmul_precision(tf32_mode)
+
+    def set_deterministic(self, deterministic: Union[bool, Literal["warn_only"]]) -> None:
+        # sets deterministic convolutions too
+        set_deterministic(deterministic)
+
+    def eval(self) -> None:
+        self.model.eval()
+    
+    def train(self, mode: bool = True) -> None:
+        self.model.train(mode)
 
     def fit(
         self,
