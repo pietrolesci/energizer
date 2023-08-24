@@ -16,6 +16,10 @@ from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 
 
+def parse_locals(vars) -> Dict:
+    return {k: v for k, v in vars.items() if k not in ("self", "__class__")}
+
+
 def camel_to_snake(name: str) -> str:
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
@@ -73,7 +77,7 @@ def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
 
     # NOTE: taken from the lightning Trainer
     torch.use_deterministic_algorithms(deterministic, **kwargs)
-    
+
     if deterministic:
         # fixing non-deterministic part of horovod
         # https://github.com/Lightning-AI/lightning/pull/1572/files#r420279383

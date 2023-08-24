@@ -13,7 +13,7 @@ from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import _pad, ld_to_dl, sequential_numbers
 
 
-class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
+class SequenceClassificationMixin:
     _tokenizer: PreTrainedTokenizerBase
     _labels: List[str]
     _label_distribution: Dict[str, int]
@@ -127,6 +127,15 @@ class PandasDataStoreForSequenceClassification(PandasDataStoreWithIndex):
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )
+
+
+class PandasDataStoreForSequenceClassification(SequenceClassificationMixin, PandasDataStoreWithIndex):
+    ...
+
+
+"""
+Utilities
+"""
 
 
 def collate_fn(

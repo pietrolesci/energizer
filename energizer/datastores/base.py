@@ -214,8 +214,7 @@ class PandasDataStore(Datastore):
             return self._test_data
 
 
-class PandasDataStoreWithIndex(PandasDataStore):
-    """DataModule that defines dataloading and indexing logic."""
+class IndexMixin:
 
     index: hb.Index = None
     embedding_name: str
@@ -237,12 +236,12 @@ class PandasDataStoreWithIndex(PandasDataStore):
         self.index = index
 
         # consistency check: data in index must be the same or more
-        assert self._train_data is not None
-        assert len(index.get_ids_list()) >= len(self._train_data[SpecialKeys.ID]), "Index is not compatible with data."
+        assert self._train_data is not None  # type: ignore
+        assert len(index.get_ids_list()) >= len(self._train_data[SpecialKeys.ID]), "Index is not compatible with data."  # type: ignore
 
         # if dataset has been downsampled, mask the ids
-        if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):
-            missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))
+        if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):  # type: ignore
+            missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))  # type: ignore
             self.mask_ids_from_index(list(missing_ids))
 
     def mask_ids_from_index(self, ids: List[int]) -> None:
@@ -257,8 +256,12 @@ class PandasDataStoreWithIndex(PandasDataStore):
         return np.stack(self.index.get_items(ids))
 
     def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
-        assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."
-        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]
+        assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
+        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
+
+
+class PandasDataStoreWithIndex(IndexMixin, PandasDataStore):
+    """DataModule that defines dataloading and indexing logic."""
 
 
 """
