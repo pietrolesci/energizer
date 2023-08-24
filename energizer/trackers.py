@@ -125,7 +125,7 @@ class ProgressTracker:
         max_steps: Optional[int],
         min_steps: Optional[int],
         gradient_accumulation_steps: Optional[int],
-        validation_freq: str,
+        validation_freq: Optional[str],
         num_train_batches: int,
         num_validation_batches: int,
         limit_train_batches: Optional[int] = None,

@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 
 from energizer.enums import RunningStage
 from energizer.trackers import ProgressTracker, StageTracker, Tracker
+from energizer.active_learning.datastores.base import ActiveDataStore
 
 
 @dataclass
@@ -48,55 +49,51 @@ class ActiveProgressTracker(ProgressTracker):
         super().__post_init__()
         self.round_tracker = RoundTracker(current=0, max=None)
         self.pool_tracker = StageTracker(stage=RunningStage.POOL, current=0, max=None)
+        self.budget_tracker = BudgetTracker(current=0, max=None, query_size=-1)
 
         self.run_on_pool = False
         self.has_test = False
 
-    def setup_active(
+    def setup(
         self,
         max_rounds: Optional[int],
-        max_budget: int,
+        max_budget: Optional[int],
         query_size: int,
-        initial_budget: int,
         run_on_pool: bool,
-        has_test: bool,
-        has_validation: bool,
+        datastore: ActiveDataStore,
+        validation_perc: Optional[float],
         log_interval: int,
         enable_progress_bar: bool,
     ) -> None:
         """Create progress bars."""
 
-        assert max_budget > initial_budget, ValueError("`max_budget` must be bigger than `initial_budget`.")
-
         self.log_interval = log_interval
         self.enable_progress_bar = enable_progress_bar
-
-        self.has_validation = has_validation
         self.run_on_pool = run_on_pool
-        self.has_test = has_test
+
+        # rounds
+        max_budget = int(min(datastore.pool_size(), max_budget or float("Inf")))
+        initial_budget = datastore.labelled_size()
+
+        assert (
+            max_budget is not None or max_rounds is not None
+        ), "At least one of `max_rounds` or `max_budget` must be not None."
+        assert max_budget > initial_budget, ValueError("`max_budget` must be bigger than `initial_budget`.")
 
         max_rounds_per_budget = int(np.ceil((max_budget - initial_budget) / query_size))
         if max_rounds is None or max_rounds > max_rounds_per_budget:
             max_rounds = max_rounds_per_budget
 
+        self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore
+        self.has_validation = (datastore.validation_size() is not None and datastore.validation_size() > 0) or validation_perc is not None  # type: ignore
+
         self.round_tracker.reset()
         self.round_tracker.max = max_rounds + 1  # type: ignore
-        self.budget_tracker = BudgetTracker(
-            max=max_budget,
-            current=initial_budget,
-            query_size=query_size,
-        )
+        self.budget_tracker.max = max_budget
+        self.budget_tracker.current = initial_budget
+        self.budget_tracker.query_size = query_size
 
-        if self.enable_progress_bar:
-            self.round_tracker.make_progress_bar()
-            self.epoch_tracker.make_progress_bar()
-            self.train_tracker.make_progress_bar()
-            if self.has_validation:
-                self.validation_tracker.make_progress_bar()
-            if self.has_test:
-                self.test_tracker.make_progress_bar()
-            if self.run_on_pool:
-                self.pool_tracker.make_progress_bar()
+        self.make_progress_bars()
 
     """Properties"""
 
@@ -120,10 +117,11 @@ class ActiveProgressTracker(ProgressTracker):
             else super().safe_global_epoch
         )
 
-    """Super outer loops"""
-
+    @property
     def is_active_fit_done(self) -> bool:
         return self.round_tracker.max_reached()
+
+    """Super outer loops"""
 
     def end_active_fit(self) -> None:
         self.round_tracker.close_progress_bar()
@@ -157,3 +155,15 @@ class ActiveProgressTracker(ProgressTracker):
         self.get_stage_tracker().terminate_progress_bar()
         if self.current_stage == RunningStage.VALIDATION:
             self.current_stage = RunningStage.TRAIN  # reattach training
+
+    def make_progress_bars(self) -> None:
+        if self.enable_progress_bar:
+            self.round_tracker.make_progress_bar()
+            self.epoch_tracker.make_progress_bar()
+            self.train_tracker.make_progress_bar()
+            if self.has_validation:
+                self.validation_tracker.make_progress_bar()
+            if self.has_test:
+                self.test_tracker.make_progress_bar()
+            if self.run_on_pool:
+                self.pool_tracker.make_progress_bar()

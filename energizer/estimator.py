@@ -1,7 +1,7 @@
 import copy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Union, Dict
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Union, Dict, Tuple
 import numpy as np
 import torch
 from lightning.fabric import Fabric
@@ -17,7 +17,7 @@ from energizer.enums import OutputKeys, RunningStage
 from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import move_to_cpu, set_deterministic
+from energizer.utilities import move_to_cpu, set_deterministic, parse_locals
 from energizer.utilities.model_summary import summarize
 
 
@@ -114,7 +114,7 @@ class Estimator:
     @property
     def is_compiled(self) -> bool:
         return self._is_compiled
-    
+
     @property
     def optimization_args(self) -> OptimizationArgs:
         return self._optimization_args
@@ -142,7 +142,7 @@ class Estimator:
 
     def set_eval_mode(self) -> None:
         self.model.eval()
-    
+
     def set_train_mode(self, mode: bool = True) -> None:
         self.model.train(mode)
 
@@ -174,59 +174,20 @@ class Estimator:
 
         Calls `fit -> run_fit -> run_epoch -> run_training_step`
         """
-
         # self.fabric.launch()  # NOTE: do not support distributed yet
-
-        # start progress tracking
-        self.tracker.setup(
-            stage=RunningStage.TRAIN,
-            log_interval=log_interval,
-            enable_progress_bar=enable_progress_bar,
-            max_epochs=max_epochs,
-            min_epochs=min_epochs,
-            max_steps=max_steps,
-            min_steps=min_steps,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            num_train_batches=len(train_loader),
-            num_validation_batches=len(validation_loader or []),
-            validation_freq=validation_freq,
-            limit_train_batches=limit_train_batches,
-            limit_validation_batches=limit_validation_batches,
-        )
-
-        # configuration
-        _train_loader = self.configure_dataloader(train_loader)
-        _validation_loader = self.configure_dataloader(validation_loader)        
-        
-        self.configure_optimization_args(learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs)
-        _optimizer = self.configure_optimizer()
-        _scheduler = self.configure_scheduler(_optimizer)
-        model, _optimizer = self.fabric.setup(self.model, _optimizer)  # type: ignore
-
-        # run epochs
+        model, _train_loader, _validation_loader, _optimizer, _scheduler = self._setup_fit(**parse_locals(locals()))
         return self.run_fit(model, _train_loader, _validation_loader, _optimizer, _scheduler)  # type: ignore
 
     def test(
         self,
-        test_loader: DataLoader,
+        loader: DataLoader,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
         limit_batches: Optional[int] = None,
     ) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
         # self.fabric.launch()  # NOTE: do not support distributed yet
-
-        self.tracker.setup(
-            stage=RunningStage.TEST,
-            log_interval=log_interval,
-            enable_progress_bar=enable_progress_bar,
-            num_batches=len(test_loader),
-            limit_batches=limit_batches,
-        )
-
-        # configuration
-        _eval_loader = self.configure_dataloader(test_loader)
-        model = self.fabric.setup(self.model)  # type: ignore
+        model, _eval_loader = self._setup_eval(stage=RunningStage.TEST, **parse_locals(locals()))
         return self.run_evaluation(model, _eval_loader, RunningStage.TEST)  # type: ignore
 
     """
@@ -243,7 +204,6 @@ class Estimator:
     ) -> List[FIT_OUTPUT]:
         self.tracker.start_fit()
 
-        
         self.callback("on_fit_start", model=model)
 
         output = []
@@ -256,7 +216,7 @@ class Estimator:
                 scheduler=scheduler,
             )
             output.append(out)
-            
+
             self.tracker.increment_epoch()
 
         self.callback("on_fit_end", model=model, output=output)
@@ -285,7 +245,6 @@ class Estimator:
         # train mode
         model.train()
 
-    
         self.callback("on_train_epoch_start", model=model, optimizer=optimizer)
 
         train_out, validation_out = [], []
@@ -296,7 +255,6 @@ class Estimator:
             # put batch on correct device
             batch = self.transfer_to_device(batch)
 
-            
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
             # print("=======")
@@ -304,7 +262,6 @@ class Estimator:
             # run model on batch
             batch_out = self.run_training_step(model, batch, batch_idx, optimizer, scheduler, loss_fn, metrics)
 
-            
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
             # record output
@@ -323,7 +280,6 @@ class Estimator:
         # method to possibly aggregate
         train_out = self.train_epoch_end(train_out, metrics)
 
-        
         self.callback("on_train_epoch_end", model=model, output=train_out, metrics=metrics)
 
         # validation loop
@@ -360,11 +316,11 @@ class Estimator:
 
         # print("Accumulating?", self.tracker.is_accumulating)
         if not self.tracker.is_accumulating:
-            
+
             # clip gradients
-            if self.optimization_args.clip_val or self.optimization_args.max_norm:            
+            if self.optimization_args.clip_val or self.optimization_args.max_norm:
                 self.fabric.clip_gradients(
-                    model, 
+                    model,
                     optimizer,
                     clip_val=self.optimization_args.clip_val,
                     max_norm=self.optimization_args.max_norm,
@@ -405,7 +361,6 @@ class Estimator:
         is_fitting = model.training
         model.eval()
 
-        
         self.callback(f"on_{stage}_epoch_start", model=model)
 
         output = []
@@ -418,13 +373,11 @@ class Estimator:
                 # put batch on correct device
                 batch = self.transfer_to_device(batch)
 
-                
                 self.callback(f"on_{stage}_batch_start", model=model, batch=batch, batch_idx=batch_idx)
 
                 # run model on batch
                 batch_out = self.evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)
 
-                
                 self.callback(f"on_{stage}_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
                 # record output
@@ -437,7 +390,6 @@ class Estimator:
         # method to possibly aggregate
         output = getattr(self, f"{stage}_epoch_end")(output, metrics)
 
-        
         self.callback(f"on_{stage}_epoch_end", model=model, output=output, metrics=metrics)
 
         # resets model training status
@@ -505,7 +457,7 @@ class Estimator:
         self, stage: Union[str, RunningStage], output: List[BATCH_OUTPUT], metrics: Optional[METRIC]
     ) -> EPOCH_OUTPUT:
         return output
- 
+
     def train_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TRAIN, output, metrics)
 
@@ -515,30 +467,33 @@ class Estimator:
     def test_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TEST, output, metrics)
 
-
     """
     Configuration
     """
 
     def configure_optimization_args(
-            self, 
-            learning_rate: Optional[float] = None,
-            optimizer: Optional[str] = None, 
-            optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]] = None, 
-            scheduler: Optional[str] = None,
-            scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
-        ) -> None:
+        self,
+        learning_rate: Optional[float] = None,
+        optimizer: Optional[str] = None,
+        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]] = None,
+        scheduler: Optional[str] = None,
+        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
+    ) -> None:
 
         # parse optimizer args
         opt_kwargs = optimizer_kwargs or {}  # if None
         opt_kwargs = opt_kwargs.to_dict() if isinstance(opt_kwargs, OptimizationArgs) else opt_kwargs
-        
-        assert optimizer is not None or opt_kwargs.get("name") is not None, "optimizer or optimizer_kwargs['name'] must be set."
+
+        assert (
+            optimizer is not None or opt_kwargs.get("name") is not None
+        ), "optimizer or optimizer_kwargs['name'] must be set."
         opt_kwargs["name"] = optimizer or opt_kwargs.get("name")
-        
-        assert learning_rate is not None or opt_kwargs.get("lr") is not None, "learning_rate or optimizer_kwargs['lr'] must be set."
+
+        assert (
+            learning_rate is not None or opt_kwargs.get("lr") is not None
+        ), "learning_rate or optimizer_kwargs['lr'] must be set."
         opt_kwargs["lr"] = learning_rate or opt_kwargs.get("lr")
-        
+
         # parse scheduler args
         sch_kwargs = scheduler_kwargs or {}  # if None
         sch_kwargs = sch_kwargs.to_dict() if isinstance(sch_kwargs, SchedulerArgs) else sch_kwargs
@@ -548,17 +503,19 @@ class Estimator:
         num_train_steps = self.tracker.step_tracker.max
         num_warmup_steps = sch_kwargs.get("num_warmup_steps")
         if num_warmup_steps is not None:
-            num_warmup_steps = num_warmup_steps if num_warmup_steps >= 1.0 else int(np.ceil(num_warmup_steps * num_train_steps))
+            num_warmup_steps = (
+                num_warmup_steps if num_warmup_steps >= 1.0 else int(np.ceil(num_warmup_steps * num_train_steps))
+            )
         sch_kwargs["num_training_steps"] = num_train_steps
         sch_kwargs["num_warmup_steps"] = num_warmup_steps
 
         optimization_args = {"scheduler_kwargs": SchedulerArgs(**sch_kwargs), **opt_kwargs}
         self._optimization_args = OptimizationArgs(**optimization_args)
-    
+
     def configure_optimizer(self) -> Optimizer:
         opt_kw = self.optimization_args
         assert opt_kw is not None
-        
+
         # weight decay
         if opt_kw.no_decay is not None and (opt_kw.weight_decay is not None and opt_kw.weight_decay > 0.0):
             params = [
@@ -589,8 +546,8 @@ class Estimator:
         sch_kw = self.optimization_args.scheduler_kwargs
         if sch_kw.name is not None:
             return SCHEDULER_REGISTRY[sch_kw.name](
-                optimizer, 
-                num_training_steps=sch_kw.num_training_steps, 
+                optimizer,
+                num_training_steps=sch_kw.num_training_steps,
                 num_warmup_steps=sch_kw.num_warmup_steps,
                 **sch_kw.init_kwargs,
             )
@@ -635,3 +592,48 @@ class Estimator:
     def callback(self, hook: str, *args, **kwargs) -> Optional[Any]:
         # passes self as first argument
         return self.fabric.call(hook, *args, **kwargs)
+
+    def _setup_fit(
+        self,
+        train_loader: DataLoader,
+        validation_loader: Optional[DataLoader],
+        learning_rate: Optional[float],
+        optimizer: Optional[str],
+        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]],
+        scheduler: Optional[str],
+        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]],
+        **kwargs,
+    ) -> Tuple[_FabricModule, _FabricDataLoader, Optional[_FabricDataLoader], _FabricOptimizer, Optional[_LRScheduler]]:
+
+        # start progress tracking
+        self.tracker.setup(
+            stage=RunningStage.TRAIN,
+            num_train_batches=len(train_loader),
+            num_validation_batches=len(validation_loader or []),
+            **kwargs,
+        )
+
+        # configuration
+        _train_loader = self.configure_dataloader(train_loader)
+        _validation_loader = self.configure_dataloader(validation_loader)
+
+        self.configure_optimization_args(learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs)
+        _optimizer = self.configure_optimizer()
+        _scheduler = self.configure_scheduler(_optimizer)
+        model, _optimizer = self.fabric.setup(self.model, _optimizer)  # type: ignore
+
+        return model, _train_loader, _validation_loader, _optimizer, _scheduler  # type: ignore
+
+    def _setup_eval(
+        self, stage: RunningStage, loader: Optional[DataLoader], setup_model: bool = True, **kwargs
+    ) -> Union[Tuple[_FabricModule, _FabricDataLoader], _FabricDataLoader]:
+        # start progress tracking
+        self.tracker.setup(stage=stage, num_batches=len(loader or []), **kwargs)
+
+        # configuration
+        _eval_loader = self.configure_dataloader(loader)
+
+        if setup_model:
+            model = self.fabric.setup(self.model)  # type: ignore
+            return model, _eval_loader  # type: ignore
+        return _eval_loader  # type: ignore
