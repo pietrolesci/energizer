@@ -11,6 +11,10 @@ from energizer.active_learning.datastores.base import ActiveDataStore
 
 @dataclass
 class RoundTracker(Tracker):
+    def reset(self) -> None:
+        self.total = 0
+        return super().reset()
+
     def make_progress_bar(self) -> None:
         self.progress_bar = tqdm(
             total=self.max,
@@ -31,10 +35,25 @@ class RoundTracker(Tracker):
 class BudgetTracker(Tracker):
     query_size: int
 
+    def reset(self) -> None:
+        self.total = 0
+        return super().reset()
+
+    def make_progress_bar(self) -> None:
+        self.progress_bar = tqdm(
+            total=self.max,
+            desc="Labelled",
+            dynamic_ncols=True,
+            leave=True,
+            colour="#32a852",
+        )
+
     def increment(self, n_labelled: Optional[int] = None) -> None:
         n_labelled = n_labelled or self.query_size
         self.current += n_labelled
         self.total += n_labelled
+        if self.progress_bar is not None and self.current > 0:
+            self.progress_bar.update(n_labelled)
 
     def max_reached(self) -> bool:
         return self.max is not None and self.max < (self.query_size + self.total)
@@ -72,26 +91,28 @@ class ActiveProgressTracker(ProgressTracker):
         self.run_on_pool = run_on_pool
 
         # rounds
-        max_budget = int(min(datastore.pool_size(), max_budget or float("Inf")))
-        initial_budget = datastore.labelled_size()
+        max_budget = int(min(datastore.pool_size(self.global_round), max_budget or float("Inf")))
+        initial_budget = datastore.labelled_size(self.global_round)
 
         assert (
             max_budget is not None or max_rounds is not None
         ), "At least one of `max_rounds` or `max_budget` must be not None."
-        assert max_budget > initial_budget, ValueError("`max_budget` must be bigger than `initial_budget`.")
+        assert max_budget > initial_budget, ValueError(f"`{max_budget=}` must be bigger than `{initial_budget=}`.")
 
-        max_rounds_per_budget = int(np.ceil((max_budget - initial_budget) / query_size))
-        if max_rounds is None or max_rounds > max_rounds_per_budget:
-            max_rounds = max_rounds_per_budget
+        max_rounds = min(int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf"))  # type: ignore
+        max_budget = min(query_size * max_rounds, max_budget)  # type: ignore
 
         self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore
         self.has_validation = (datastore.validation_size() is not None and datastore.validation_size() > 0) or validation_perc is not None  # type: ignore
 
         self.round_tracker.reset()
+        self.budget_tracker.reset()
+
         self.round_tracker.max = max_rounds + 1  # type: ignore
+        self.budget_tracker.query_size = query_size
         self.budget_tracker.max = max_budget
         self.budget_tracker.current = initial_budget
-        self.budget_tracker.query_size = query_size
+        self.budget_tracker.total = initial_budget
 
         self.make_progress_bars_active()
 
@@ -125,6 +146,7 @@ class ActiveProgressTracker(ProgressTracker):
 
     def end_active_fit(self) -> None:
         self.round_tracker.close_progress_bar()
+        self.budget_tracker.close_progress_bar()
         self.step_tracker.close_progress_bar()
         self.epoch_tracker.close_progress_bar()
         self.train_tracker.close_progress_bar()
@@ -161,6 +183,7 @@ class ActiveProgressTracker(ProgressTracker):
     def make_progress_bars_active(self) -> None:
         if self.enable_progress_bar:
             self.round_tracker.make_progress_bar()
+            self.budget_tracker.make_progress_bar()
             self.step_tracker.make_progress_bar()
             self.epoch_tracker.make_progress_bar()
             self.train_tracker.make_progress_bar()

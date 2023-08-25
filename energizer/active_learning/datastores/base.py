@@ -51,6 +51,9 @@ class ActiveLearningMixin:
     def pool_loader(self, *args, **kwargs) -> Optional[DataLoader]:
         return self.get_loader(RunningStage.POOL, *args, **kwargs)  # type: ignore
 
+    def reset(self) -> None:
+        raise NotImplementedError
+
 
 class ActiveDataStore(ActiveLearningMixin, Datastore):
     ...

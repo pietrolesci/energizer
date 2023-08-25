@@ -128,10 +128,9 @@ class ActiveEstimator(Estimator):
 
             # check
             if not self.tracker.is_last_round:
-                total_budget = datastore.labelled_size(self.tracker.global_round)
-                assert (
-                    self.tracker.budget_tracker.current == total_budget
-                ), f"{self.tracker.budget_tracker.current} == {total_budget}"
+                datastore_budget = datastore.labelled_size(self.tracker.global_round)
+                tracker_budget = self.tracker.budget_tracker.current
+                assert datastore_budget == tracker_budget, f"{datastore_budget=} and {tracker_budget=}"
 
         output = self.active_fit_end(output)
 

@@ -47,3 +47,11 @@ class ActivePandasDataStoreForSequenceClassification(SequenceClassificationMixin
             obj._train_data[k.value] = v  # type: ignore
 
         return obj
+
+    def reset(self) -> None:
+        for k, v in [
+            (SpecialKeys.IS_LABELLED, False),
+            (SpecialKeys.IS_VALIDATION, False),
+            (SpecialKeys.LABELLING_ROUND, -100),
+        ]:
+            self._train_data[k.value] = v  # type: ignore
