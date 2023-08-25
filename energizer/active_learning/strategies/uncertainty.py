@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 
-from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
+from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.registries import SCORING_FUNCTIONS
 from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
@@ -20,17 +20,19 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         self.score_fn = score_fn if isinstance(score_fn, Callable) else self._scoring_fn_registry[score_fn]
 
     def run_query(
-        self, model: _FabricModule, datastore: ActivePandasDataStoreForSequenceClassification, query_size: int
+        self,
+        model: _FabricModule,
+        loader: _FabricDataLoader,
+        query_size: int,
+        datastore: ActiveDataStore,
     ) -> List[int]:
-        pool_loader = self.configure_dataloader(datastore.pool_loader())
-        self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
-        return self.compute_most_uncertain(model, pool_loader, query_size)  # type: ignore
+        # pool_loader = self.configure_dataloader(datastore.pool_loader())
+        # self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
+        return self.compute_most_uncertain(model, loader, query_size)
 
-    def compute_most_uncertain(
-        self, model: _FabricModule, pool_loader: _FabricDataLoader, query_size: int
-    ) -> List[int]:
+    def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> List[int]:
         # calls the pool_step and pool_epoch_end that we override
-        out: List[Dict] = self.run_evaluation(model, pool_loader, RunningStage.POOL)  # type: ignore
+        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
         _out = ld_to_dl(out)
         scores = np.concatenate(_out[OutputKeys.SCORES])
         ids = np.concatenate(_out[SpecialKeys.ID])
