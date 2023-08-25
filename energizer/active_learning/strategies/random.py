@@ -5,6 +5,7 @@ from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.active_learning.datastores.base import ActiveDataStore
+from lightning.fabric.wrappers import _FabricModule, _FabricDataLoader
 
 
 class RandomStrategy(ActiveEstimator):
@@ -13,5 +14,7 @@ class RandomStrategy(ActiveEstimator):
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility
 
-    def run_query(self, *_, datastore: ActiveDataStore, query_size: int) -> List[int]:
+    def run_query(
+        self, model: _FabricModule, loader: _FabricDataLoader, query_size: int, datastore: ActiveDataStore
+    ) -> List[int]:
         return datastore.sample_from_pool(size=query_size, mode="uniform", random_state=self.rng)

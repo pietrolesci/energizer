@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
-from lightning.fabric.wrappers import _FabricModule, _FabricDataLoader
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.trackers import ActiveProgressTracker
@@ -9,6 +8,8 @@ from energizer.enums import RunningStage
 from energizer.estimator import Estimator
 from energizer.types import ROUND_OUTPUT
 from energizer.estimator import OptimizationArgs, SchedulerArgs
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
+from torch.optim.lr_scheduler import _LRScheduler
 
 
 class ActiveEstimator(Estimator):
@@ -29,9 +30,9 @@ class ActiveEstimator(Estimator):
         self,
         datastore: ActiveDataStore,
         query_size: int,
-        validation_perc: Optional[float] = None,
         max_rounds: Optional[int] = None,
         max_budget: Optional[int] = None,
+        validation_perc: Optional[float] = None,
         validation_sampling: Optional[str] = None,
         reinit_model: bool = True,
         model_cache_dir: Union[str, Path] = ".model_cache",
@@ -59,52 +60,49 @@ class ActiveEstimator(Estimator):
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
         # configure progress tracking
-        self.tracker.setup(
+        self.tracker.setup_active(
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
             max_rounds=max_rounds,
             max_budget=max_budget,
             query_size=query_size,
-            run_on_pool=getattr(self, "pool_step", None) is not None,
             datastore=datastore,
+            run_on_pool=getattr(self, "pool_step", None) is not None,
             validation_perc=validation_perc,
         )
 
-        fit_kwargs = dict(
-            max_epochs=max_epochs,
-            min_epochs=min_epochs,
-            max_steps=max_steps,
-            min_steps=min_steps,
-            validation_freq=validation_freq,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            learning_rate=learning_rate,
-            optimizer=optimizer,
-            optimizer_kwargs=optimizer_kwargs,
-            scheduler=scheduler,
-            scheduler_kwargs=scheduler_kwargs,
-            log_interval=log_interval,
-            enable_progress_bar=enable_progress_bar,
-            limit_train_batches=limit_train_batches,
-            limit_validation_batches=limit_validation_batches,
-        )
-
         return self.run_active_fit(
-            datastore=datastore,
-            replay=False,
-            reinit_model=reinit_model,
-            model_cache_dir=model_cache_dir,
+            datastore,
+            reinit_model,
+            model_cache_dir,
             query_size=query_size,
+            replay=False,
             validation_sampling=validation_sampling,
             validation_perc=validation_perc,
             limit_test_batches=limit_test_batches,
             limit_pool_batches=limit_pool_batches,
-            fit_kwargs=fit_kwargs,
+            fit_loop_kwargs=dict(
+                max_epochs=max_epochs,
+                min_epochs=min_epochs,
+                max_steps=max_steps,
+                min_steps=min_steps,
+                validation_freq=validation_freq,
+                gradient_accumulation_steps=gradient_accumulation_steps,
+                limit_train_batches=limit_train_batches,
+                limit_validation_batches=limit_validation_batches,
+            ),
+            fit_opt_kwargs=dict(
+                learning_rate=learning_rate,
+                optimizer=optimizer,
+                optimizer_kwargs=optimizer_kwargs,
+                scheduler=scheduler,
+                scheduler_kwargs=scheduler_kwargs,
+            ),
         )
 
     def run_active_fit(
         self,
         datastore: ActiveDataStore,
-        replay: bool,
         reinit_model: bool,
         model_cache_dir: Union[str, Path],
         **kwargs,
@@ -120,9 +118,7 @@ class ActiveEstimator(Estimator):
                 self.load_state_dict(model_cache_dir)
 
             self.callback("on_round_start", datastore=datastore)
-
-            out = self.run_round(datastore=datastore, replay=replay, **kwargs)
-
+            out = self.run_round(datastore, **kwargs)
             self.callback("on_round_end", datastore=datastore, output=out)
 
             output.append(out)
@@ -148,49 +144,33 @@ class ActiveEstimator(Estimator):
     def run_round(
         self,
         datastore: ActiveDataStore,
-        replay: bool,
-        fit_kwargs: Dict,
         query_size: int,
+        replay: bool,
         validation_perc: Optional[float],
         validation_sampling: Optional[str],
         limit_test_batches: Optional[int],
         limit_pool_batches: Optional[int],
+        fit_loop_kwargs: Dict,
+        fit_opt_kwargs: Dict,
     ) -> ROUND_OUTPUT:
 
-        # start progress tracking
-        num_round = self.tracker.global_round if replay else None
-
-        # configuration
-        model, train_loader, validation_loader, _optimizer, _scheduler = self._setup_fit(
-            train_loader=datastore.train_loader(round=num_round),  # type: ignore
-            validation_loader=datastore.validation_loader(round=num_round),
-            **fit_kwargs,
+        model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader = self._setup_round(
+            datastore,
+            replay,
+            fit_loop_kwargs,
+            fit_opt_kwargs,
+            limit_test_batches,
+            limit_pool_batches,
         )
-
-        test_loader = self._setup_eval(
-            stage=RunningStage.TEST,
-            loader=datastore.test_loader(),
-            limit_batches=limit_test_batches,
-            setup_model=False,
-        )
-
-        pool_loader = None
-        if not replay:
-            pool_loader = self._setup_eval(
-                stage=RunningStage.POOL,
-                loader=datastore.pool_loader(round=num_round),
-                limit_batches=limit_pool_batches,
-                setup_model=False,
-            )  # type: ignore
 
         output = {}
 
         # fit
-        if len(train_loader or []) > 0:
-            output["fit"] = self.run_fit(model, train_loader, validation_loader, _optimizer, _scheduler)  # type: ignore
+        if train_loader is not None:
+            output[RunningStage.TRAIN] = self.run_fit(model, optimizer, scheduler, train_loader, validation_loader)  # type: ignore
 
         # test
-        if len(test_loader or []) > 0:  # type: ignore
+        if test_loader is not None:
             output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)  # type: ignore
 
         # query and label
@@ -202,7 +182,7 @@ class ActiveEstimator(Estimator):
         ):
             n_labelled = self.run_annotation(model, pool_loader, datastore, query_size, validation_perc, validation_sampling)  # type: ignore
         elif replay:
-            n_labelled = datastore.query_size(num_round)
+            n_labelled = datastore.query_size(self.tracker.global_round)
 
         if n_labelled:
             self.tracker.increment_budget(n_labelled)
@@ -223,7 +203,7 @@ class ActiveEstimator(Estimator):
         # query
         self.callback("on_query_start", model=model, datastore=datastore)
 
-        indices = self.run_query(model, loader=loader, datastore=datastore, query_size=query_size)
+        indices = self.run_query(model, loader, query_size, datastore)
 
         # prevent to query more than available budget
         remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
@@ -246,7 +226,11 @@ class ActiveEstimator(Estimator):
         return n_labelled
 
     def run_query(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, query_size: int
+        self,
+        model: _FabricModule,
+        loader: _FabricDataLoader,
+        query_size: int,
+        datastore: ActiveDataStore,
     ) -> List[int]:
         raise NotImplementedError
 
@@ -255,3 +239,54 @@ class ActiveEstimator(Estimator):
 
     def round_end(self, output: ROUND_OUTPUT, datastore: ActiveDataStore) -> ROUND_OUTPUT:
         return output
+
+    def _setup_round(
+        self,
+        datastore: ActiveDataStore,
+        replay: bool,
+        fit_loop_kwargs: Dict,
+        fit_opt_kwargs: Dict,
+        limit_test_batches: Optional[int],
+        limit_pool_batches: Optional[int],
+    ) -> Tuple[
+        _FabricModule,
+        _FabricOptimizer,
+        Optional[_LRScheduler],
+        Optional[_FabricDataLoader],
+        Optional[_FabricDataLoader],
+        Optional[_FabricDataLoader],
+        Optional[_FabricDataLoader],
+    ]:
+        # start progress tracking
+
+        num_round = self.tracker.global_round if replay else None
+
+        # configuration fit
+        train_loader = datastore.train_loader(round=num_round)
+        validation_loader = datastore.validation_loader(round=num_round)
+        self.tracker.setup_fit(
+            num_train_batches=len(train_loader or []),
+            num_validation_batches=len(validation_loader or []),
+            **fit_loop_kwargs,
+        )
+        model, optimizer, scheduler, train_loader, validation_loader = self._setup_fit(
+            train_loader,
+            validation_loader,
+            **fit_opt_kwargs,
+        )
+
+        # configuration test
+        test_loader = datastore.test_loader()
+        self.tracker.setup_eval(RunningStage.TEST, num_batches=len(test_loader or []), limit_batches=limit_test_batches)
+        test_loader = self.configure_dataloader(test_loader)
+
+        # configuration pool
+        pool_loader = None
+        if not replay:
+            pool_loader = datastore.pool_loader(round=num_round)
+            self.tracker.setup_eval(
+                RunningStage.POOL, num_batches=len(pool_loader or []), limit_batches=limit_pool_batches
+            )
+            pool_loader = self.configure_dataloader(pool_loader)
+
+        return model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader

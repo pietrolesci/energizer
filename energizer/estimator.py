@@ -17,7 +17,7 @@ from energizer.enums import OutputKeys, RunningStage
 from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import move_to_cpu, set_deterministic, parse_locals
+from energizer.utilities import move_to_cpu, set_deterministic
 from energizer.utilities.model_summary import summarize
 
 
@@ -175,8 +175,34 @@ class Estimator:
         Calls `fit -> run_fit -> run_epoch -> run_training_step`
         """
         # self.fabric.launch()  # NOTE: do not support distributed yet
-        model, _train_loader, _validation_loader, _optimizer, _scheduler = self._setup_fit(**parse_locals(locals()))
-        return self.run_fit(model, _train_loader, _validation_loader, _optimizer, _scheduler)  # type: ignore
+
+        # start progress tracking
+        self.tracker.setup(
+            stage=RunningStage.TRAIN,
+            num_train_batches=len(train_loader or []),
+            num_validation_batches=len(validation_loader or []),
+            max_epochs=max_epochs,
+            min_epochs=min_epochs,
+            max_steps=max_steps,
+            min_steps=min_steps,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            validation_freq=validation_freq,
+            log_interval=log_interval,
+            enable_progress_bar=enable_progress_bar,
+            limit_train_batches=limit_train_batches,
+            limit_validation_batches=limit_validation_batches,
+        )
+
+        model, _optimizer, _scheduler, _train_loader, _validation_loader = self._setup_fit(
+            train_loader,
+            validation_loader,
+            learning_rate,
+            optimizer,
+            optimizer_kwargs,
+            scheduler,
+            scheduler_kwargs,
+        )
+        return self.run_fit(model, _optimizer, _scheduler, _train_loader, _validation_loader)  # type: ignore
 
     def test(
         self,
@@ -187,7 +213,20 @@ class Estimator:
     ) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
         # self.fabric.launch()  # NOTE: do not support distributed yet
-        model, _eval_loader = self._setup_eval(stage=RunningStage.TEST, **parse_locals(locals()))
+
+        # start progress tracking
+        self.tracker.setup(
+            stage=RunningStage.TEST,
+            num_batches=len(loader or []),
+            log_interval=log_interval,
+            enable_progress_bar=enable_progress_bar,
+            limit_batches=limit_batches,
+        )
+
+        # configuration
+        _eval_loader = self.configure_dataloader(loader)
+        model = self.fabric.setup(self.model)  # type: ignore
+
         return self.run_evaluation(model, _eval_loader, RunningStage.TEST)  # type: ignore
 
     """
@@ -197,24 +236,19 @@ class Estimator:
     def run_fit(
         self,
         model: _FabricModule,
-        train_loader: _FabricDataLoader,
-        validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
         scheduler: Optional[_LRScheduler],
+        train_loader: _FabricDataLoader,
+        validation_loader: Optional[_FabricDataLoader],
     ) -> List[FIT_OUTPUT]:
+
         self.tracker.start_fit()
 
         self.callback("on_fit_start", model=model)
 
         output = []
         while not self.tracker.is_fit_done:
-            out = self.run_epoch(
-                model=model,
-                train_loader=train_loader,
-                validation_loader=validation_loader,
-                optimizer=optimizer,
-                scheduler=scheduler,
-            )
+            out = self.run_epoch(model, optimizer, scheduler, train_loader, validation_loader)
             output.append(out)
 
             self.tracker.increment_epoch()
@@ -228,10 +262,10 @@ class Estimator:
     def run_epoch(
         self,
         model: _FabricModule,
-        train_loader: _FabricDataLoader,
-        validation_loader: Optional[_FabricDataLoader],
         optimizer: _FabricOptimizer,
         scheduler: Optional[_LRScheduler],
+        train_loader: _FabricDataLoader,
+        validation_loader: Optional[_FabricDataLoader],
     ) -> FIT_OUTPUT:
         """Runs a training epoch."""
 
@@ -260,7 +294,7 @@ class Estimator:
             # print("=======")
 
             # run model on batch
-            batch_out = self.run_training_step(model, batch, batch_idx, optimizer, scheduler, loss_fn, metrics)
+            batch_out = self.run_training_step(model, optimizer, scheduler, batch, batch_idx, loss_fn, metrics)
 
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
@@ -296,10 +330,10 @@ class Estimator:
     def run_training_step(
         self,
         model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
         optimizer: _FabricOptimizer,
         scheduler: Optional[_LRScheduler],
+        batch: Any,
+        batch_idx: int,
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
     ) -> BATCH_OUTPUT:
@@ -595,23 +629,14 @@ class Estimator:
 
     def _setup_fit(
         self,
-        train_loader: DataLoader,
+        train_loader: Optional[DataLoader],
         validation_loader: Optional[DataLoader],
         learning_rate: Optional[float],
         optimizer: Optional[str],
         optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]],
         scheduler: Optional[str],
         scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]],
-        **kwargs,
-    ) -> Tuple[_FabricModule, _FabricDataLoader, Optional[_FabricDataLoader], _FabricOptimizer, Optional[_LRScheduler]]:
-
-        # start progress tracking
-        self.tracker.setup(
-            stage=RunningStage.TRAIN,
-            num_train_batches=len(train_loader),
-            num_validation_batches=len(validation_loader or []),
-            **kwargs,
-        )
+    ) -> Tuple[_FabricModule, _FabricOptimizer, Optional[_LRScheduler], _FabricDataLoader, Optional[_FabricDataLoader]]:
 
         # configuration
         _train_loader = self.configure_dataloader(train_loader)
@@ -622,18 +647,4 @@ class Estimator:
         _scheduler = self.configure_scheduler(_optimizer)
         model, _optimizer = self.fabric.setup(self.model, _optimizer)  # type: ignore
 
-        return model, _train_loader, _validation_loader, _optimizer, _scheduler  # type: ignore
-
-    def _setup_eval(
-        self, stage: RunningStage, loader: Optional[DataLoader], setup_model: bool = True, **kwargs
-    ) -> Union[Tuple[_FabricModule, _FabricDataLoader], _FabricDataLoader]:
-        # start progress tracking
-        self.tracker.setup(stage=stage, num_batches=len(loader or []), **kwargs)
-
-        # configuration
-        _eval_loader = self.configure_dataloader(loader)
-
-        if setup_model:
-            model = self.fabric.setup(self.model)  # type: ignore
-            return model, _eval_loader  # type: ignore
-        return _eval_loader  # type: ignore
+        return model, _optimizer, _scheduler, _train_loader, _validation_loader  # type: ignore

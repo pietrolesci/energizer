@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -11,7 +11,7 @@ from energizer.active_learning.datastores.base import ActiveDataStore
 
 @dataclass
 class RoundTracker(Tracker):
-    def make_progress_bar(self) -> Optional[tqdm]:
+    def make_progress_bar(self) -> None:
         self.progress_bar = tqdm(
             total=self.max,
             desc="Completed rounds",
@@ -54,16 +54,16 @@ class ActiveProgressTracker(ProgressTracker):
         self.run_on_pool = False
         self.has_test = False
 
-    def setup(
+    def setup_active(
         self,
         max_rounds: Optional[int],
         max_budget: Optional[int],
         query_size: int,
-        run_on_pool: bool,
         datastore: ActiveDataStore,
         validation_perc: Optional[float],
         log_interval: int,
         enable_progress_bar: bool,
+        run_on_pool: bool,
     ) -> None:
         """Create progress bars."""
 
@@ -93,7 +93,7 @@ class ActiveProgressTracker(ProgressTracker):
         self.budget_tracker.current = initial_budget
         self.budget_tracker.query_size = query_size
 
-        self.make_progress_bars()
+        self.make_progress_bars_active()
 
     """Properties"""
 
@@ -125,6 +125,7 @@ class ActiveProgressTracker(ProgressTracker):
 
     def end_active_fit(self) -> None:
         self.round_tracker.close_progress_bar()
+        self.step_tracker.close_progress_bar()
         self.epoch_tracker.close_progress_bar()
         self.train_tracker.close_progress_bar()
         self.validation_tracker.close_progress_bar()
@@ -141,10 +142,11 @@ class ActiveProgressTracker(ProgressTracker):
 
     def start_fit(self) -> None:
         super().start_fit()
-        if self.enable_progress_bar:
+        if self.enable_progress_bar and self.epoch_tracker.progress_bar is not None:
             self.epoch_tracker.progress_bar.set_postfix_str("")
 
     def end_fit(self) -> None:
+        self.step_tracker.terminate_progress_bar()
         self.epoch_tracker.terminate_progress_bar()
         self.train_tracker.terminate_progress_bar()
         self.validation_tracker.terminate_progress_bar()
@@ -156,9 +158,10 @@ class ActiveProgressTracker(ProgressTracker):
         if self.current_stage == RunningStage.VALIDATION:
             self.current_stage = RunningStage.TRAIN  # reattach training
 
-    def make_progress_bars(self) -> None:
+    def make_progress_bars_active(self) -> None:
         if self.enable_progress_bar:
             self.round_tracker.make_progress_bar()
+            self.step_tracker.make_progress_bar()
             self.epoch_tracker.make_progress_bar()
             self.train_tracker.make_progress_bar()
             if self.has_validation:
