@@ -13,11 +13,10 @@ from energizer.utilities import ld_to_dl
 
 
 class UncertaintyBasedStrategy(ActiveEstimator):
-    _scoring_fn_registry = SCORING_FUNCTIONS
 
     def __init__(self, *args, score_fn: Union[str, Callable], **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.score_fn = score_fn if isinstance(score_fn, Callable) else self._scoring_fn_registry[score_fn]
+        self.score_fn = score_fn if isinstance(score_fn, Callable) else SCORING_FUNCTIONS[score_fn]
 
     def run_query(
         self,
