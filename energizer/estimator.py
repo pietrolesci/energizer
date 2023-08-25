@@ -536,7 +536,7 @@ class Estimator:
 
         num_train_steps = self.tracker.step_tracker.max
         num_warmup_steps = sch_kwargs.get("num_warmup_steps")
-        if num_warmup_steps is not None:
+        if num_warmup_steps is not None and num_train_steps is not None:
             num_warmup_steps = (
                 num_warmup_steps if num_warmup_steps >= 1.0 else int(np.ceil(num_warmup_steps * num_train_steps))
             )
