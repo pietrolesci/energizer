@@ -64,7 +64,7 @@ class Estimator:
         callbacks: Optional[Union[List[Any], Any]] = None,
         loggers: Optional[Union[Logger, List[Logger]]] = None,
         deterministic: Union[bool, Literal["warn_only"]] = "warn_only",
-        tf32_mode: str = "highest",
+        tf32_mode: Literal["highest", "high", "medium"] = "highest",
         **kwargs,
     ) -> None:
         super().__init__()
@@ -130,7 +130,7 @@ class Estimator:
         self._model = torch.compile(self._model, **kwargs)
         self._is_compiled = True
 
-    def set_torch_matmul_precision(self, tf32_mode: str = "highest") -> None:
+    def set_torch_matmul_precision(self, tf32_mode: Literal["highest", "high", "medium"] = "highest") -> None:
         # equivalent to `torch.backends.cudnn.allow_tf32 = True`
         # convolutions are not changed, to do that you need
         # `torch.backends.cudnn.allow_tf32 = True`

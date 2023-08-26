@@ -13,6 +13,7 @@ from energizer.utilities import ld_to_dl
 
 
 class UncertaintyBasedStrategy(ActiveEstimator):
+    score_fn: Callable
 
     def __init__(self, *args, score_fn: Union[str, Callable], **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -22,11 +23,9 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         self,
         model: _FabricModule,
         loader: _FabricDataLoader,
-        query_size: int,
         datastore: ActiveDataStore,
+        query_size: int,
     ) -> List[int]:
-        # pool_loader = self.configure_dataloader(datastore.pool_loader())
-        # self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
         return self.compute_most_uncertain(model, loader, query_size)
 
     def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> List[int]:
@@ -50,11 +49,11 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         stage: Union[str, RunningStage],
     ) -> Union[List[Dict], BATCH_OUTPUT]:
         if stage != RunningStage.POOL:
-            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)
+            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
 
         # keep IDs here in case user messes up in the function definition
         ids = batch[InputKeys.ON_CPU][SpecialKeys.ID]
-        pool_out = self.pool_step(model, batch, batch_idx, metrics)
+        pool_out = self.pool_step(model, batch, batch_idx, loss_fn, metrics)
 
         if isinstance(pool_out, torch.Tensor):
             pool_out = {OutputKeys.SCORES: pool_out}
@@ -73,6 +72,7 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
+        loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> BATCH_OUTPUT:
         raise NotImplementedError

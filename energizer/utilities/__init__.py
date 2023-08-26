@@ -3,7 +3,7 @@ import contextlib
 import os
 import random
 import re
-from typing import Any, Dict, Generator, List, Optional, Union, Literal
+from typing import Any, Dict, Generator, List, Union, Literal
 
 import numpy as np
 import torch
@@ -104,19 +104,20 @@ def sample(
     indices: List[int],
     size: int,
     random_state: RandomState,
-    labels: Optional[List[int]] = None,
-    sampling: Optional[str] = None,
+    mode: Literal["uniform", "stratified"] = "uniform",
+    **kwargs,
 ) -> List[int]:
     """Makes sure to seed everything consistently."""
 
-    if sampling is None or sampling == "uniform":
+    if mode == "uniform":
         sample = random_state.choice(indices, size=size, replace=False).tolist()
 
-    elif sampling == "stratified" and labels is not None:
+    elif mode == "stratified":
+        assert "labels" in kwargs, ValueError("Must pass `labels` for stratified sampling.")
         sample = resample(
             indices,
             replace=False,
-            stratify=labels,
+            stratify=kwargs.get("labels"),
             n_samples=size,
             random_state=random_state,
         )

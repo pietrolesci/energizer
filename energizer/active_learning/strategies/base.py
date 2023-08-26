@@ -202,7 +202,7 @@ class ActiveEstimator(Estimator):
         # query
         self.callback("on_query_start", model=model, datastore=datastore)
 
-        indices = self.run_query(model, loader, query_size, datastore)
+        indices = self.run_query(model, loader, datastore, query_size)
 
         # prevent to query more than available budget
         remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
@@ -228,8 +228,8 @@ class ActiveEstimator(Estimator):
         self,
         model: _FabricModule,
         loader: _FabricDataLoader,
-        query_size: int,
         datastore: ActiveDataStore,
+        query_size: int,
     ) -> List[int]:
         raise NotImplementedError
 
