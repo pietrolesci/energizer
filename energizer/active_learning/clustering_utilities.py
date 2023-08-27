@@ -1,10 +1,11 @@
+from typing import List
+
 import numpy as np
 from numpy.random import RandomState
-from typing import List
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
 from scipy.spatial.distance import cdist
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
 
 
 def _similarity(centers: np.ndarray, X: np.ndarray, normalized: bool) -> np.ndarray:
@@ -76,14 +77,23 @@ def kmeans(
 
 
 def kmeans_pp_sampling(X: np.ndarray, k: int) -> List[int]:
-    """kmeans++ algorithm used for sampling as an alternative to the determinantal point process."""
+    """kmeans++ seeding algorithm.
+
+    k-means++ seeding selects centroids by iteratively sampling points in proportion to their squared
+    distances from the nearest centroid that has already been chosen, which, like a k-DPP, tends to
+    select a diverse batch of high-magnitude samples.
+
+    Note: DPP is the determinantal point process.
+
+    Source: https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/cluster.py#L14
+    """
 
     # randomly choose first center
     centers_ids = [np.random.choice(X.shape[0])]
 
     # greedily choose centers
     for _ in range(k - 1):
-        dist = cdist(X, X[centers_ids, :]).min(axis=1) ** 2
+        dist = cdist(X, X[centers_ids, :], metric="euclidean").min(axis=1) ** 2
         prob = dist / dist.sum()
         new_center_id = np.random.choice(X.shape[0], p=prob)
         centers_ids.append(new_center_id)

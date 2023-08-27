@@ -4,11 +4,9 @@ from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import Self
 
-from energizer.enums import SpecialKeys
-
-
 from energizer.active_learning.datastores.base import ActivePandasDataStoreWithIndex
 from energizer.datastores.classification import SequenceClassificationMixin, _from_datasets
+from energizer.enums import SpecialKeys
 
 
 class ActivePandasDataStoreForSequenceClassification(SequenceClassificationMixin, ActivePandasDataStoreWithIndex):

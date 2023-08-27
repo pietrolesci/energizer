@@ -1,9 +1,9 @@
 from typing import Any, Callable, Dict, List, Optional, Union
-from lightning.fabric.wrappers import _FabricModule
 
 import numpy as np
 import torch
 from datasets import DatasetDict, load_dataset
+from lightning.fabric.wrappers import _FabricModule
 from torchmetrics import MetricCollection
 from torchmetrics.classification import Accuracy, F1Score, Precision, Recall
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -13,7 +13,6 @@ from energizer.active_learning.datastores.classification import ActivePandasData
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
-
 
 MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2"
 SEED = 42

@@ -1,9 +1,9 @@
 from typing import Any, Dict, List
-from lightning.fabric.wrappers import _FabricModule
 
 import numpy as np
 import torch
 from datasets import DatasetDict, load_dataset
+from lightning.fabric.wrappers import _FabricModule
 from torchmetrics import MetricCollection
 from torchmetrics.classification import Accuracy, F1Score, Precision, Recall
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -13,7 +13,6 @@ from energizer.active_learning.datastores.classification import ActivePandasData
 from energizer.active_learning.strategies.diversity import BADGE
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
-
 
 MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2"
 SEED = 42
@@ -110,10 +109,10 @@ if __name__ == "__main__":
     )
 
     # active learning loop
-    entropy = BADGEForSequenceClassification(model, accelerator="gpu", seed=SEED)
-    print(entropy.model_summary)
+    badge = BADGEForSequenceClassification(model, accelerator="gpu", seed=SEED)
+    print(badge.model_summary)
 
-    results = entropy.active_fit(
+    results = badge.active_fit(
         datastore=datastore,  # type: ignore
         max_rounds=5,
         query_size=15,

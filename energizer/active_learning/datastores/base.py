@@ -1,15 +1,16 @@
-from energizer.datastores.base import Datastore
-from typing import Optional, List, Union, Literal
-from torch.utils.data import DataLoader
-from energizer.enums import RunningStage, SpecialKeys, InputKeys
-from numpy.random import RandomState
-from energizer.datastores.base import PandasDataStore, IndexMixin
-from datasets import Dataset
-from pathlib import Path
-import pandas as pd
 from math import floor
-from energizer.utilities import sample
+from pathlib import Path
+from typing import List, Literal, Optional, Union
+
 import numpy as np
+import pandas as pd
+from datasets import Dataset
+from numpy.random import RandomState
+from torch.utils.data import DataLoader
+
+from energizer.datastores.base import Datastore, IndexMixin, PandasDataStore
+from energizer.enums import InputKeys, RunningStage, SpecialKeys
+from energizer.utilities import sample
 
 
 class ActiveLearningMixin:
@@ -30,7 +31,7 @@ class ActiveLearningMixin:
         indices: List[int],
         round: int,
         validation_perc: Optional[float] = None,
-        validation_sampling: Literal["uniform", "stratified"] = "uniform",
+        validation_sampling: Optional[Literal["uniform", "stratified"]] = "uniform",
     ) -> int:
         raise NotImplementedError
 

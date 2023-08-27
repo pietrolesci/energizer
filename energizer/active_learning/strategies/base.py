@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Literal
 
+import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
@@ -8,8 +9,7 @@ from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import RunningStage
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
-from energizer.types import ROUND_OUTPUT, BATCH_OUTPUT, METRIC
-import torch
+from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
 
 
 class ActiveEstimator(Estimator):
@@ -197,7 +197,7 @@ class ActiveEstimator(Estimator):
         datastore: ActiveDataStore,
         query_size: int,
         validation_perc: Optional[float],
-        validation_sampling: Optional[str],
+        validation_sampling: Optional[Literal["uniform", "stratified"]],
     ) -> int:
         # query
         self.callback("on_query_start", model=model, datastore=datastore)

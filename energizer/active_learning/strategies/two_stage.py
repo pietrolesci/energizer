@@ -1,12 +1,13 @@
+from typing import Any, List, Optional
+
 import numpy as np
-from sklearn.utils import check_random_state
+import pandas as pd
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from numpy.random import RandomState
-from typing import List, Optional, Any
+from sklearn.utils import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDataStore, ActiveDataStoreWithIndex
-from lightning.fabric.wrappers import _FabricModule, _FabricDataLoader
 from energizer.active_learning.strategies.base import ActiveEstimator
-import pandas as pd
 from energizer.enums import SpecialKeys
 
 

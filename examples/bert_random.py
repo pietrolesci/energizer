@@ -13,7 +13,6 @@ from energizer.active_learning.strategies.random import RandomStrategy
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
 
-
 MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2"
 SEED = 42
 

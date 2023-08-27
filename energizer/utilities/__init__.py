@@ -3,7 +3,7 @@ import contextlib
 import os
 import random
 import re
-from typing import Any, Dict, Generator, List, Union, Literal
+from typing import Any, Dict, Generator, List, Literal, Union
 
 import numpy as np
 import torch

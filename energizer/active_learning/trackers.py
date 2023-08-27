@@ -4,9 +4,9 @@ from typing import Optional, Union
 import numpy as np
 from tqdm.auto import tqdm
 
+from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.enums import RunningStage
 from energizer.trackers import ProgressTracker, StageTracker, Tracker
-from energizer.active_learning.datastores.base import ActiveDataStore
 
 
 @dataclass

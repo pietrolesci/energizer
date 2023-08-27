@@ -1,12 +1,13 @@
 from typing import List
+
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from numpy.random import RandomState
 
 # https://scikit-learn.org/stable/developers/develop.html#random-numbers
 from sklearn.utils.validation import check_random_state
 
-from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.active_learning.datastores.base import ActiveDataStore
-from lightning.fabric.wrappers import _FabricModule, _FabricDataLoader
+from energizer.active_learning.strategies.base import ActiveEstimator
 
 
 class RandomStrategy(ActiveEstimator):
