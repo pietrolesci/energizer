@@ -4,6 +4,7 @@ from typing import List
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
+from scipy.spatial.distance import cdist
 
 
 def _similarity(centers: np.ndarray, X: np.ndarray, normalized: bool) -> np.ndarray:
@@ -72,3 +73,19 @@ def kmeans(
     centers = cluster_learner.cluster_centers_
 
     return _get_nearest_to_centers(centers, X, normalize, num_clusters)
+
+
+def kmeans_pp_sampling(X: np.ndarray, k: int) -> List[int]:
+    """kmeans++ algorithm used for sampling as an alternative to the determinantal point process."""
+
+    # randomly choose first center
+    centers_ids = [np.random.choice(X.shape[0])]
+
+    # greedily choose centers
+    for _ in range(k - 1):
+        dist = cdist(X, X[centers_ids, :]).min(axis=1) ** 2
+        prob = dist / dist.sum()
+        new_center_id = np.random.choice(X.shape[0], p=prob)
+        centers_ids.append(new_center_id)
+
+    return centers_ids

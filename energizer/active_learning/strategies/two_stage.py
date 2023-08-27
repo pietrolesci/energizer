@@ -74,7 +74,7 @@ class BaseSubsetStrategy:
 
 
 class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
-    def __init__(self, *args, num_neighbours: int, seed: int, max_search_size: Optional[int] = None, **kwargs) -> None:
+    def __init__(self, *args, num_neighbours: int, max_search_size: Optional[int] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.num_neighbours = num_neighbours
         self.max_search_size = max_search_size
@@ -134,21 +134,8 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
         raise NotImplementedError
 
 
-class SEALS(BaseSubsetWithSearchStrategy):
-    """Colemann et al. (2020) `Similarity Search for Efficient Active Learning and Search of Rare Concepts`.
-
-    Improves the computational efficiency of active learning by presenting a reduced subset
-    of the unlabeled pool to a base strategy. The pool subset is composed of the most similar
-    instances
-    FIXME
-
-    This method is to be applied in conjunction with a base query strategy. SEALS selects a
-    subset of the unlabeled pool by selecting the `k` nearest neighbours of the current labeled
-    pool.
-
-    If the size of the unlabeled pool falls below the given `k`, this implementation will
-    not select a subset anymore and will just delegate to the base strategy instead.
-    """
+class SEALSStrategy(BaseSubsetWithSearchStrategy):
+    """Colemann et al. (2020) `Similarity Search for Efficient Active Learning and Search of Rare Concepts`."""
 
     to_search: List[int] = []
     subpool_ids: List[int] = []

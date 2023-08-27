@@ -70,3 +70,4 @@ class OutputKeys(StrEnum):
     BATCH_SIZE: str = "batch_size"
     METRICS: str = "metrics"
     SCORES: str = "scores"
+    GRAD: str = "gradients"

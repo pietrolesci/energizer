@@ -1,17 +1,15 @@
-from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
+from typing import Callable, Dict, List, Optional, Union
+
 import numpy as np
-from sklearn.utils import check_random_state
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from numpy.random import RandomState
-from typing import List, Dict, Optional, Callable
+from sklearn.utils import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDataStore, ActiveDataStoreWithIndex
-from lightning.fabric.wrappers import _FabricModule, _FabricDataLoader
-from energizer.active_learning.strategies.diversity import DiversitySamplingMixin
-
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
-
-
-from energizer.active_learning.strategies.two_stage import BaseSubsetStrategy
+from energizer.active_learning.strategies.diversity import DiversitySamplingMixin
+from energizer.active_learning.strategies.two_stage import BaseSubsetStrategy, SEALSStrategy
+from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
 
 
 class RandomSubset(BaseSubsetStrategy):
@@ -55,7 +53,7 @@ class Tyrogue(DiversitySamplingMixin, BaseSubsetStrategy):
     def __init__(
         self,
         *args,
-        score_fn: str,
+        score_fn: Union[str, Callable],
         subpool_size: int,
         seed: int = 42,
         r_factor: int,
@@ -107,3 +105,26 @@ class Tyrogue(DiversitySamplingMixin, BaseSubsetStrategy):
     def select_from_embeddings(self, embeddings: np.ndarray, **kwargs) -> List[int]:
         num_clusters: int = kwargs["num_clusters"]
         return self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)
+
+
+class SEALS(SEALSStrategy):
+    """Published instantiation of the SEALS strategy with uncertainty sampling."""
+
+    def __init__(
+        self,
+        *args,
+        score_fn: Union[str, Callable],
+        subpool_size: int,
+        seed: int = 42,
+        num_neighbours: int,
+        max_search_size: Optional[int] = None,
+        **kwargs,
+    ) -> None:
+        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, **kwargs)
+        super().__init__(
+            base_strategy=base_strategy,
+            subpool_size=subpool_size,
+            seed=seed,
+            num_neighbours=num_neighbours,
+            max_search_size=max_search_size,
+        )

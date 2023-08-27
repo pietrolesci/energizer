@@ -1,15 +1,15 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
+from torch.optim.lr_scheduler import _LRScheduler
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import RunningStage
-from energizer.estimator import Estimator
-from energizer.types import ROUND_OUTPUT
-from energizer.estimator import OptimizationArgs, SchedulerArgs
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
-from torch.optim.lr_scheduler import _LRScheduler
+from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
+from energizer.types import ROUND_OUTPUT, BATCH_OUTPUT, METRIC
+import torch
 
 
 class ActiveEstimator(Estimator):
@@ -289,3 +289,18 @@ class ActiveEstimator(Estimator):
             pool_loader = self.configure_dataloader(pool_loader)
 
         return model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader
+
+
+class PoolBasedStrategyMixin:
+    def pool_step(
+        self,
+        model: _FabricModule,
+        batch: Any,
+        batch_idx: int,
+        loss_fn: Optional[Union[torch.nn.Module, Callable]],
+        metrics: Optional[METRIC] = None,
+    ) -> BATCH_OUTPUT:
+        raise NotImplementedError
+
+    def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
+        return output

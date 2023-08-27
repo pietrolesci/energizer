@@ -6,13 +6,13 @@ from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.registries import SCORING_FUNCTIONS
-from energizer.active_learning.strategies.base import ActiveEstimator
+from energizer.active_learning.strategies.base import ActiveEstimator, PoolBasedStrategyMixin
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
 
 
-class UncertaintyBasedStrategy(ActiveEstimator):
+class UncertaintyBasedStrategy(PoolBasedStrategyMixin, ActiveEstimator):
     score_fn: Callable
 
     def __init__(self, *args, score_fn: Union[str, Callable], **kwargs) -> None:
@@ -47,7 +47,7 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
         stage: Union[str, RunningStage],
-    ) -> Union[List[Dict], BATCH_OUTPUT]:
+    ) -> Union[Dict, BATCH_OUTPUT]:
         if stage != RunningStage.POOL:
             return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
 
@@ -66,16 +66,3 @@ class UncertaintyBasedStrategy(ActiveEstimator):
         pool_out[SpecialKeys.ID] = ids  # type: ignore
 
         return pool_out  # enforce that we always return a dict here
-
-    def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
-    ) -> BATCH_OUTPUT:
-        raise NotImplementedError
-
-    def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
-        return output

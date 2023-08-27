@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List
 from lightning.fabric.wrappers import _FabricModule
 
 import numpy as np
@@ -10,7 +10,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from energizer import seed_everything
 from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
-from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
+from energizer.active_learning.strategies.diversity import BADGE
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
 
@@ -19,7 +19,16 @@ MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2"
 SEED = 42
 
 
-class UncertaintyStrategyForSequenceClassification(UncertaintyBasedStrategy):
+class BADGEForSequenceClassification(BADGE):
+    def get_penultimate_layer_out(self, model: _FabricModule, batch: Any) -> torch.Tensor:
+        inp = {k: v for k, v in batch.items() if k in (InputKeys.INPUT_IDS, InputKeys.ATT_MASK)}
+        return model.bert(**inp).pooler_output
+
+    def get_logits_from_penultimate_layer_out(
+        self, model: _FabricModule, penultimate_layer_out: torch.Tensor
+    ) -> torch.Tensor:
+        return model.classifier(penultimate_layer_out)
+
     def step(
         self,
         stage: RunningStage,
@@ -33,26 +42,12 @@ class UncertaintyStrategyForSequenceClassification(UncertaintyBasedStrategy):
         _ = batch.pop(InputKeys.ON_CPU, None)
         out = model(**batch)
 
-        if stage == RunningStage.POOL:
-            return self.score_fn(out.logits)
-
         out_metrics = metrics(out.logits, batch[InputKeys.TARGET])
         if stage == RunningStage.TRAIN:
             logs = {OutputKeys.LOSS: out.loss, **out_metrics}
             self.log_dict({f"{stage}/{k}": v for k, v in logs.items()}, step=self.tracker.global_batch)
 
         return out.loss
-
-    def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: MetricCollection,
-    ) -> torch.Tensor:
-        # simply redirect to step
-        return self.step(RunningStage.POOL, model, batch, batch_idx, loss_fn, metrics)
 
     def epoch_end(self, stage: RunningStage, output: List[np.ndarray], metrics: MetricCollection) -> float:
         # aggregate and log
@@ -115,7 +110,7 @@ if __name__ == "__main__":
     )
 
     # active learning loop
-    entropy = UncertaintyStrategyForSequenceClassification(model, score_fn="entropy", accelerator="gpu", seed=SEED)
+    entropy = BADGEForSequenceClassification(model, accelerator="gpu", seed=SEED)
     print(entropy.model_summary)
 
     results = entropy.active_fit(
