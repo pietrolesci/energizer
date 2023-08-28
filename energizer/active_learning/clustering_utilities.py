@@ -58,7 +58,7 @@ def _silhouette_k_select(X: np.ndarray, max_k: int, rng: RandomState) -> int:
     return k_options[np.argmax(silhouette_avg_n_clusters).item()]
 
 
-def kmeans(
+def _kmeans(
     X: np.ndarray, num_clusters: int, rng: RandomState, use_silhouette: bool = False, normalize: bool = True
 ) -> List[int]:
 
@@ -76,7 +76,15 @@ def kmeans(
     return _get_nearest_to_centers(centers, X, normalize, num_clusters)
 
 
-def kmeans_pp_sampling(X: np.ndarray, k: int) -> List[int]:
+def kmeans_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
+    return _kmeans(X, num_clusters, rng, False, normalize)
+
+
+def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
+    return _kmeans(X, num_clusters, rng, True, normalize)
+
+
+def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
     """kmeans++ seeding algorithm.
 
     k-means++ seeding selects centroids by iteratively sampling points in proportion to their squared
@@ -88,14 +96,17 @@ def kmeans_pp_sampling(X: np.ndarray, k: int) -> List[int]:
     Source: https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/cluster.py#L14
     """
 
+    if normalize:
+        X = StandardScaler().fit_transform(X)
+
     # randomly choose first center
-    centers_ids = [np.random.choice(X.shape[0])]
+    centers_ids = [rng.choice(X.shape[0])]
 
     # greedily choose centers
-    for _ in range(k - 1):
+    for _ in range(num_clusters - 1):
         dist = cdist(X, X[centers_ids, :], metric="euclidean").min(axis=1) ** 2
         prob = dist / dist.sum()
-        new_center_id = np.random.choice(X.shape[0], p=prob)
+        new_center_id = rng.choice(X.shape[0], p=prob)
         centers_ids.append(new_center_id)
 
     return centers_ids

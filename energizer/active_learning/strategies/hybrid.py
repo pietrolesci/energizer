@@ -8,11 +8,11 @@ from sklearn.utils import check_random_state
 from energizer.active_learning.datastores.base import ActiveDataStore, ActiveDataStoreWithIndex
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
 from energizer.active_learning.strategies.diversity import DiversitySamplingMixin
-from energizer.active_learning.strategies.two_stage import BaseSubsetStrategy, SEALSStrategy
+from energizer.active_learning.strategies.two_stage import BaseSubsetStrategy, SEALSStrategy, RandomSubsetStrategy
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
 
 
-class RandomSubset(BaseSubsetStrategy):
+class RandomSubset(RandomSubsetStrategy):
     """Ertekin et al. (2007) `Learning on the border: Active learning in imbalanced data classification`.
 
     Two stages:

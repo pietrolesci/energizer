@@ -41,6 +41,19 @@ class BaseSubsetStrategy:
     def base_strategy(self) -> ActiveEstimator:
         return self._base_strategy
 
+    def run_query(
+        self,
+        model: _FabricModule,
+        loader: _FabricDataLoader,
+        datastore: ActiveDataStore,
+        query_size: int,
+    ) -> List[int]:
+        if len(loader) > self.subpool_size:
+            subpool_ids = self.select_pool_subset(model, loader, datastore, query_size=query_size)
+            loader = self._get_subpool_loader_by_ids(datastore, loader, subpool_ids)
+
+        return self.base_strategy.run_query(model, loader, datastore, query_size)
+
     def select_pool_subset(
         self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, **kwargs
     ) -> List[int]:
@@ -55,23 +68,18 @@ class BaseSubsetStrategy:
         self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
         return pool_loader  # type: ignore
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        loader: _FabricDataLoader,
-        datastore: ActiveDataStore,
-        query_size: int,
-    ) -> List[int]:
-        if len(loader) > self.subpool_size:
-            subpool_ids = self.select_pool_subset(model, loader, datastore, query_size=query_size)
-            loader = self._get_subpool_loader_by_ids(datastore, loader, subpool_ids)
-
-        return self.base_strategy.run_query(model, loader, datastore, query_size)
-
     def __getattr__(self, attr: str) -> Any:
         if attr not in self.__dict__:
             return getattr(self.base_strategy, attr)
         return getattr(self, attr)
+
+
+class RandomSubsetStrategy(BaseSubsetStrategy):
+    def select_pool_subset(
+        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, **kwargs
+    ) -> List[int]:
+        subpool_size = min(datastore.pool_size(), self.subpool_size)
+        return datastore.sample_from_pool(size=subpool_size, random_state=self.rng)
 
 
 class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
@@ -86,7 +94,7 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
         query_size: int = kwargs["query_size"]
 
         # SELECT QUERIES
-        search_query_ids = self.select_search_query(model, loader, datastore)
+        search_query_ids = self.select_search_query(model, loader, datastore, query_size=query_size)
 
         if len(search_query_ids) == 0:
             # if cold-starting there is no training embedding, fall-back to random sampling
@@ -161,3 +169,6 @@ class SEALSStrategy(BaseSubsetWithSearchStrategy):
     ) -> List[int]:
         self.subpool_ids += candidate_df[SpecialKeys.ID].unique().tolist()
         return list(set(self.subpool_ids))
+
+    def get_query_embeddings(self, datastore: ActiveDataStoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
+        return datastore.get_train_embeddings(search_query_ids)
