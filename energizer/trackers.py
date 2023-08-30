@@ -205,7 +205,7 @@ class ProgressTracker:
     @property
     def safe_global_epoch(self) -> int:
         if self.current_stage == RunningStage.VALIDATION:
-            return self.train_tracker.total
+            return self.step_tracker.total
         return self.global_epoch
 
     @property

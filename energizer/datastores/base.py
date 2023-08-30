@@ -213,6 +213,10 @@ class PandasDataStore(Datastore):
         if self._test_data is not None:
             return self._test_data
 
+    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
+        assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
+        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
+
 
 class IndexMixin:
 
@@ -254,10 +258,6 @@ class IndexMixin:
 
     def get_embeddings(self, ids: List[int]) -> np.ndarray:
         return np.stack(self.index.get_items(ids))
-
-    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
-        assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
-        return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
 
 
 class PandasDataStoreWithIndex(IndexMixin, PandasDataStore):

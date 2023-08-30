@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -47,6 +47,8 @@ class BudgetTracker(Tracker):
             leave=True,
             colour="#32a852",
         )
+        if self.current > 0:
+            self.progress_bar.update(self.current)
 
     def increment(self, n_labelled: Optional[int] = None) -> None:
         n_labelled = n_labelled or self.query_size
@@ -100,7 +102,7 @@ class ActiveProgressTracker(ProgressTracker):
         assert max_budget > initial_budget, ValueError(f"`{max_budget=}` must be bigger than `{initial_budget=}`.")
 
         max_rounds = min(int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf"))  # type: ignore
-        max_budget = min(query_size * max_rounds, max_budget)  # type: ignore
+        max_budget = (query_size * max_rounds) + initial_budget
 
         self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore
         self.has_validation = (datastore.validation_size() is not None and datastore.validation_size() > 0) or validation_perc is not None  # type: ignore
@@ -111,8 +113,8 @@ class ActiveProgressTracker(ProgressTracker):
         self.round_tracker.max = max_rounds + 1  # type: ignore
         self.budget_tracker.query_size = query_size
         self.budget_tracker.max = max_budget
-        self.budget_tracker.current = initial_budget
-        self.budget_tracker.total = initial_budget
+        if initial_budget > 0:
+            self.budget_tracker.increment(initial_budget)
 
         self.make_progress_bars_active()
 

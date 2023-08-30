@@ -100,6 +100,16 @@ class Estimator:
     def precision(self) -> str:
         return self.fabric._precision.precision
 
+    @property
+    def loggers(self) -> List[Logger]:
+        """Returns all loggers passed to Fabric."""
+        return self.fabric.loggers
+
+    @property
+    def logger(self) -> Logger:
+        """Returns the first logger in the list passed to Fabric, which is considered the main logger."""
+        return self.fabric.logger
+
     # @property
     # def prediction_dtype(self) -> torch.dtype:
     #     dtype = self.precision
@@ -626,7 +636,7 @@ class Estimator:
 
     def callback(self, hook: str, *args, **kwargs) -> Optional[Any]:
         # passes self as first argument
-        return self.fabric.call(hook, *args, **kwargs)
+        return self.fabric.call(hook, self, *args, **kwargs)
 
     def _setup_fit(
         self,

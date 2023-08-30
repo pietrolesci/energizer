@@ -132,6 +132,8 @@ class ActiveEstimator(Estimator):
                 tracker_budget = self.tracker.budget_tracker.current
                 assert datastore_budget == tracker_budget, f"{datastore_budget=} and {tracker_budget=}"
 
+            # print(f"END -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
+
         output = self.active_fit_end(output)
 
         self.callback("on_active_fit_end", datastore=datastore, output=output)
@@ -170,6 +172,7 @@ class ActiveEstimator(Estimator):
 
         # test
         if test_loader is not None:
+            # print(f"TEST -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
             output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)  # type: ignore
 
         # query and label
