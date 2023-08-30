@@ -1,6 +1,7 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
+from numpy.random import RandomState
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 
@@ -11,13 +12,22 @@ from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
 
+from sklearn.utils.validation import check_random_state
+
 
 class UncertaintyBasedStrategy(PoolBasedStrategyMixin, ActiveEstimator):
-    score_fn: Callable
+    rng: RandomState
+    _score_fn: Callable
 
-    def __init__(self, *args, score_fn: Union[str, Callable], **kwargs) -> None:
+    def __init__(self, *args, score_fn: Union[str, Callable], seed: int = 42, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.score_fn = score_fn if isinstance(score_fn, Callable) else SCORING_FUNCTIONS[score_fn]
+        self.seed = seed
+        self.rng = check_random_state(seed)  # reproducibility
+        self._score_fn = score_fn if isinstance(score_fn, Callable) else SCORING_FUNCTIONS[score_fn]
+
+    @property
+    def score_fn(self) -> Callable:
+        return self._score_fn
 
     def run_query(
         self,

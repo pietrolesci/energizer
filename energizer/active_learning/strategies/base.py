@@ -208,8 +208,9 @@ class ActiveEstimator(Estimator):
         indices = self.run_query(model, loader, datastore, query_size)
 
         # prevent to query more than available budget
-        remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
-        indices = indices[:remaining_budget]
+        if self.tracker.global_budget + len(indices) >= self.tracker.budget_tracker.max:
+            remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
+            indices = indices[:remaining_budget]
 
         self.callback("on_query_end", model=model, datastore=datastore, indices=indices)
 

@@ -1,5 +1,4 @@
 import os
-import shutil
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -25,7 +24,7 @@ class ModelCheckpoint(CallbackWithMonitor):
         save_last: Optional[bool] = None,
         save_top_k: int = 1,
         verbose: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         self.dirpath = Path(dirpath)
         self.monitor = monitor
@@ -53,13 +52,14 @@ class ModelCheckpoint(CallbackWithMonitor):
         # prepare directory
         if self.dirpath.exists():
             # during active learning we do not want to keep checkpoints from previous iterations
-            # for i in self.dirpath.glob("*.pt"):
-            #     os.remove(i.absolute())
-            shutil.rmtree(str(self.dirpath))
+            for ckpt_path in self.dirpath.glob("*.pt"):
+                ckpt_path.unlink()
+                # shutil.rmtree(str(i))
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self._best_k_models = {}
 
     def on_fit_end(self, estimator: Estimator, *args, **kwargs) -> None:
+        # load best model
         if self.monitor is not None:
             estimator.load_state_dict(self.dirpath, self.best_model_path)
 
@@ -90,15 +90,14 @@ class ModelCheckpoint(CallbackWithMonitor):
 
         if self._check_should_save(stage, current):
             # checkpoint
-            name = self._get_name(estimator, stage, current)
+            name = self._get_name(estimator, current)
             estimator.save_state_dict(self.dirpath, name)
             self._update_best_models(name, current)
 
             # log
             if self.verbose:
                 logs = {
-                    "stage": stage,
-                    "step": estimator.tracker.safe_global_epoch,
+                    "step": estimator.tracker.global_step,
                     **self._best_k_models,
                 }
                 if hasattr(estimator.tracker, "global_round"):
@@ -129,12 +128,11 @@ class ModelCheckpoint(CallbackWithMonitor):
 
         return should_save
 
-    def _get_name(self, estimator: Estimator, stage: Union[str, RunningStage], current: Optional[float] = None) -> str:
+    def _get_name(self, estimator: Estimator, current: Optional[float] = None) -> str:
         # build filename
-        step = "step" if stage == RunningStage.VALIDATION else "epoch"
-        name = f"{stage}_{step}={estimator.tracker.safe_global_epoch}"
+        name = f"step{estimator.tracker.global_step}"
         if current is not None:
-            name += f"_{self.monitor}={current}"
+            name += f"_{self.monitor.replace('/', '__')}={current:.6f}"
         name += ".pt"
 
         return name

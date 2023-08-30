@@ -23,7 +23,7 @@ class RandomSubset(RandomSubsetStrategy):
     """
 
     def __init__(self, *args, score_fn: str, subpool_size: int, seed: int = 42, **kwargs) -> None:
-        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, **kwargs)
+        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, seed=seed, **kwargs)
         super().__init__(base_strategy, subpool_size, seed)
 
     def select_pool_subset(
@@ -67,7 +67,7 @@ class Tyrogue(DiversitySamplingMixin, BaseSubsetStrategy):
             subpool_size (int): Size of the first random subset. The subpool size is determined by `r_factor * query_size`.
             seed (int): Random seed for the subset selection.
         """
-        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, **kwargs)
+        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, seed=seed, **kwargs)
         super().__init__(base_strategy, subpool_size, seed)
 
         self._r_factor = r_factor
@@ -120,7 +120,7 @@ class SEALS(SEALSStrategy):
         max_search_size: Optional[int] = None,
         **kwargs,
     ) -> None:
-        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, **kwargs)
+        base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, seed=seed, **kwargs)
         super().__init__(
             base_strategy=base_strategy,
             subpool_size=subpool_size,

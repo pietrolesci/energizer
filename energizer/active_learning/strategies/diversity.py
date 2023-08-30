@@ -12,6 +12,9 @@ from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import METRIC
 from energizer.utilities import ld_to_dl, move_to_cpu
 
+from numpy.random import RandomState
+from sklearn.utils.validation import check_random_state
+
 
 class DiversitySamplingMixin:
     def get_embeddings(
@@ -28,6 +31,13 @@ class DiversitySamplingMixin:
 
 
 class DiversityBasedStrategy(DiversitySamplingMixin, ActiveEstimator):
+    rng: RandomState
+
+    def __init__(self, *args, seed: int = 42, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.seed = seed
+        self.rng = check_random_state(seed)  # reproducibility
+
     def run_query(
         self,
         model: _FabricModule,
@@ -106,7 +116,7 @@ class BADGE(PoolBasedStrategyMixin, DiversityBasedStrategy):
         # NOTE: the first argument is a tuple here!
         grads, uids = grads_and_ids
         query_size = kwargs["query_size"]
-        center_ids = kmeans_pp_sampling(grads, query_size)
+        center_ids = kmeans_pp_sampling(grads, query_size, rng=self.rng)
         return uids[center_ids].tolist()
 
     def get_penultimate_layer_out(self, model: _FabricModule, batch: Any) -> torch.Tensor:

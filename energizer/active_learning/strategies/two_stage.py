@@ -11,7 +11,7 @@ from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.enums import SpecialKeys
 
 
-class BaseSubsetStrategy:
+class BaseSubsetStrategy(ActiveEstimator):
     """These strategies are applied in conjunction with a base query strategy. If the size of the pool
     falls below the given `k`, this implementation will not select a subset anymore and will just delegate
     to the base strategy instead.
@@ -48,9 +48,9 @@ class BaseSubsetStrategy:
         datastore: ActiveDataStore,
         query_size: int,
     ) -> List[int]:
-        if len(loader) > self.subpool_size:
+        if datastore.pool_size() > self.subpool_size:
             subpool_ids = self.select_pool_subset(model, loader, datastore, query_size=query_size)
-            loader = self._get_subpool_loader_by_ids(datastore, loader, subpool_ids)
+            loader = self._get_subpool_loader_by_ids(datastore, subpool_ids)
 
         return self.base_strategy.run_query(model, loader, datastore, query_size)
 
@@ -59,11 +59,7 @@ class BaseSubsetStrategy:
     ) -> List[int]:
         raise NotImplementedError
 
-    def _get_subpool_loader_by_ids(
-        self, datastore: ActiveDataStore, loader: _FabricDataLoader, subpool_ids: List[int]
-    ) -> _FabricDataLoader:
-        if len(subpool_ids) == len(loader):
-            return loader
+    def _get_subpool_loader_by_ids(self, datastore: ActiveDataStore, subpool_ids: List[int]) -> _FabricDataLoader:
         pool_loader = self.configure_dataloader(datastore.pool_loader(with_indices=subpool_ids))  # type: ignore
         self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
         return pool_loader  # type: ignore
