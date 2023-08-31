@@ -156,7 +156,8 @@ class CallbackWithMonitor(Callback):
     def _get_monitor(self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT]) -> float:
         if not isinstance(output, Dict):
             raise RuntimeError(
-                "From `*_step` and `*_epoch_end` method you need to return dict to use monitoring Callbacks like EarlyStopping and ModelCheckpoint."
+                "From `*_step` and `*_epoch_end` method you need to return dict to use ",
+                "monitoring Callbacks like EarlyStopping and ModelCheckpoint."
             )
 
         monitor = output.get(self.monitor, None)

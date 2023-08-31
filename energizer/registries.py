@@ -1,5 +1,4 @@
 import inspect
-import re
 from types import ModuleType
 from typing import Any, Callable, Generator, List, Optional, Tuple, Type
 

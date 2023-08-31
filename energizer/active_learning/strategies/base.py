@@ -168,12 +168,12 @@ class ActiveEstimator(Estimator):
 
         # fit
         if train_loader is not None:
-            output[RunningStage.TRAIN] = self.run_fit(model, optimizer, scheduler, train_loader, validation_loader)  # type: ignore
+            output[RunningStage.TRAIN] = self.run_fit(model, optimizer, scheduler, train_loader, validation_loader)
 
         # test
         if test_loader is not None:
             # print(f"TEST -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
-            output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)  # type: ignore
+            output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)
 
         # query and label
         n_labelled = None
@@ -182,7 +182,9 @@ class ActiveEstimator(Estimator):
             and not self.tracker.is_last_round  # last round is used only to test
             and len(pool_loader or []) > query_size  # enough instances
         ):
-            n_labelled = self.run_annotation(model, pool_loader, datastore, query_size, validation_perc, validation_sampling)  # type: ignore
+            n_labelled = self.run_annotation(
+                model, pool_loader, datastore, query_size, validation_perc, validation_sampling
+            )
         elif replay:
             n_labelled = datastore.query_size(self.tracker.global_round)
 

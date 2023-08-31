@@ -64,7 +64,8 @@ class Tyrogue(DiversitySamplingMixin, BaseSubsetStrategy):
         """Strategy that runs uncertainty sampling on a random subset of the pool.
 
         Args:
-            subpool_size (int): Size of the first random subset. The subpool size is determined by `r_factor * query_size`.
+            subpool_size (int): Size of the first random subset. The subpool size is
+                determined by `r_factor * query_size`.
             seed (int): Random seed for the subset selection.
         """
         base_strategy = UncertaintyBasedStrategy(*args, score_fn=score_fn, seed=seed, **kwargs)
