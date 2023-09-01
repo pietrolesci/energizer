@@ -102,7 +102,7 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
         candidate_df = self.search_pool(datastore, search_query_embeddings, search_query_ids)
 
         # USE RESULTS TO SUBSET POOL
-        return self.get_subpool_from_search_results(candidate_df, datastore)
+        return self.get_subpool_ids_from_search_results(candidate_df, datastore)
 
     def select_search_query(
         self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
@@ -133,7 +133,7 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
 
         return candidate_df
 
-    def get_subpool_from_search_results(
+    def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDataStoreWithIndex
     ) -> List[int]:
         raise NotImplementedError
@@ -145,26 +145,41 @@ class SEALSStrategy(BaseSubsetWithSearchStrategy):
     to_search: List[int] = []
     subpool_ids: List[int] = []
 
-    def select_pool_subset(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
+    def run_query(
+        self,
+        model: _FabricModule,
+        loader: _FabricDataLoader,
+        datastore: ActiveDataStore,
+        query_size: int,
     ) -> List[int]:
-        selected_ids = super().select_pool_subset(model, loader, datastore, **kwargs)
-        self.to_search += selected_ids
-        self.subpool_ids = [i for i in self.subpool_ids if i not in selected_ids]
-        return selected_ids
+        annotated_ids = super().run_query(model, loader, datastore, query_size)
+
+        # in the next round we only need to search the newly labelled data
+        self.to_search += annotated_ids
+
+        # make sure to remove instances that might have been annotated
+        self.subpool_ids = [i for i in self.subpool_ids if i not in annotated_ids]
+        return annotated_ids
 
     def select_search_query(
         self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
     ) -> List[int]:
         if len(self.to_search) < 1:
             return datastore.get_train_ids()
+        # we only search the newly labelled data at the previous round
         return self.to_search
 
-    def get_subpool_from_search_results(
+    def get_query_embeddings(self, datastore: ActiveDataStoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
+        # queries are always from the training set
+        return datastore.get_train_embeddings(search_query_ids)
+
+    def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDataStoreWithIndex
     ) -> List[int]:
-        self.subpool_ids += candidate_df[SpecialKeys.ID].unique().tolist()
-        return list(set(self.subpool_ids))
+        # we return all unique instances from the pool that are neighbours of the training set
+        selected_ids = candidate_df[SpecialKeys.ID].unique().tolist()
 
-    def get_query_embeddings(self, datastore: ActiveDataStoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
-        return datastore.get_train_embeddings(search_query_ids)
+        # in this round we only used the newly labelled data as search queries
+        # so we need to add the previously queried samples too!
+        self.subpool_ids = list(set(selected_ids + self.subpool_ids))
+        return self.subpool_ids
