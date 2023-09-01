@@ -6,6 +6,7 @@ from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import kmeans_plusplus
 
 
 def _similarity(centers: np.ndarray, X: np.ndarray, normalized: bool) -> np.ndarray:
@@ -84,29 +85,38 @@ def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomStat
     return _kmeans(X, num_clusters, rng, True, normalize)
 
 
-def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
-    """kmeans++ seeding algorithm.
+# def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
+#     """kmeans++ seeding algorithm.
 
-    k-means++ seeding selects centroids by iteratively sampling points in proportion to their squared
-    distances from the nearest centroid that has already been chosen, which, like a k-DPP, tends to
-    select a diverse batch of high-magnitude samples.
+#     k-means++ seeding selects centroids by iteratively sampling points in proportion to their squared
+#     distances from the nearest centroid that has already been chosen, which, like a k-DPP, tends to
+#     select a diverse batch of high-magnitude samples.
 
-    Note: DPP is the determinantal point process.
+#     Note: DPP is the determinantal point process.
 
-    Source: https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/cluster.py#L14
-    """
+#     Source: https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/cluster.py#L14
+#     """
 
-    if normalize:
-        X = StandardScaler().fit_transform(X)
+#     if normalize:
+#         X = StandardScaler().fit_transform(X)
 
-    # randomly choose first center
-    centers_ids = [rng.choice(X.shape[0])]
+#     # randomly choose first center
+#     centers_ids = [rng.choice(X.shape[0])]
 
-    # greedily choose centers
-    for _ in range(num_clusters - 1):
-        dist = cdist(X, X[centers_ids, :], metric="euclidean").min(axis=1) ** 2
-        prob = dist / dist.sum()
-        new_center_id = rng.choice(X.shape[0], p=prob)
-        centers_ids.append(new_center_id)
+#     # Choose center candidates by sampling with probability proportional
+#     # to the squared distance to the closest existing center
+#     for _ in range(num_clusters - 1):
+#         dist = cdist(X, X[centers_ids, :], metric="euclidean").min(axis=1) ** 2
+#         total = dist.sum()
+#         # if total > 0:
+#         print(len(centers_ids), dist.shape, dist)
+#         prob = dist / total
+#         new_center_id = rng.choice(X.shape[0], p=prob)
+#         centers_ids.append(new_center_id)
 
-    return centers_ids
+#     return centers_ids
+
+
+def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> List[int]:
+    _, indices = kmeans_plusplus(X, num_clusters, random_state=rng)
+    return indices.tolist()
