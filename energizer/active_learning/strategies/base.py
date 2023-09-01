@@ -10,6 +10,7 @@ from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import RunningStage
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
 from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
+from abc import ABC, abstractmethod
 
 
 class ActiveEstimator(Estimator):
@@ -33,7 +34,7 @@ class ActiveEstimator(Estimator):
         max_rounds: Optional[int] = None,
         max_budget: Optional[int] = None,
         validation_perc: Optional[float] = None,
-        validation_sampling: Optional[str] = None,
+        validation_sampling: Literal["uniform", "stratified"] = "uniform",
         reinit_model: bool = True,
         model_cache_dir: Union[str, Path] = ".model_cache",
         max_epochs: Optional[int] = 3,
@@ -148,7 +149,7 @@ class ActiveEstimator(Estimator):
         query_size: int,
         replay: bool,
         validation_perc: Optional[float],
-        validation_sampling: Optional[str],
+        validation_sampling: Literal["uniform", "stratified"],
         limit_test_batches: Optional[int],
         limit_pool_batches: Optional[int],
         fit_loop_kwargs: Dict,
@@ -180,6 +181,7 @@ class ActiveEstimator(Estimator):
         if (
             not replay  # do not annotate in replay
             and not self.tracker.is_last_round  # last round is used only to test
+            and pool_loader is not None
             and len(pool_loader or []) > query_size  # enough instances
         ):
             n_labelled = self.run_annotation(
@@ -210,7 +212,7 @@ class ActiveEstimator(Estimator):
         indices = self.run_query(model, loader, datastore, query_size)
 
         # prevent to query more than available budget
-        if self.tracker.global_budget + len(indices) >= self.tracker.budget_tracker.max:
+        if self.tracker.global_budget + len(indices) >= self.tracker.budget_tracker.max:  # type: ignore
             remaining_budget = min(query_size, self.tracker.budget_tracker.get_remaining_budget())
             indices = indices[:remaining_budget]
 
@@ -297,7 +299,8 @@ class ActiveEstimator(Estimator):
         return model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader
 
 
-class PoolBasedStrategyMixin:
+class PoolBasedStrategyMixin(ABC):
+    @abstractmethod
     def pool_step(
         self,
         model: _FabricModule,
@@ -306,7 +309,7 @@ class PoolBasedStrategyMixin:
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
     ) -> BATCH_OUTPUT:
-        raise NotImplementedError
+        ...
 
     def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
         return output

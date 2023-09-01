@@ -157,7 +157,7 @@ class CallbackWithMonitor(Callback):
         if not isinstance(output, Dict):
             raise RuntimeError(
                 "From `*_step` and `*_epoch_end` method you need to return dict to use ",
-                "monitoring Callbacks like EarlyStopping and ModelCheckpoint."
+                "monitoring Callbacks like EarlyStopping and ModelCheckpoint.",
             )
 
         monitor = output.get(self.monitor, None)

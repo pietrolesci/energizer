@@ -77,6 +77,18 @@ class BaseDataStore(ABC):
     Status
     """
 
+    # @abstractmethod
+    # def num_train_batches(self, *args, **kwargs) -> Optional[int]:
+    #     ...
+
+    # @abstractmethod
+    # def num_validation_batches(self, *args, **kwargs) -> Optional[int]:
+    #     ...
+
+    # @abstractmethod
+    # def num_test_batches(self, *args, **kwargs) -> Optional[int]:
+    #     ...
+
     @abstractmethod
     def train_size(self, *args, **kwargs) -> Optional[int]:
         ...
@@ -135,14 +147,14 @@ class Datastore(BaseDataStore):
     def reset_rng(self, seed: Optional[int]) -> None:
         self._rng = check_random_state(seed)
 
-    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
-        return self.get_loader(RunningStage.TRAIN, *args, **kwargs)
+    def get_collate_fn(self, stage: Optional[str] = None, show_batch: bool = False) -> Optional[Callable]:
+        return None
 
-    def validation_loader(self, *args, **kwargs) -> Optional[DataLoader]:
-        return self.get_loader(RunningStage.VALIDATION, *args, **kwargs)
-
-    def test_loader(self, *args, **kwargs) -> Optional[DataLoader]:
-        return self.get_loader(RunningStage.TEST, *args, **kwargs)
+    def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+        dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
+        if dataset is not None:
+            loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage, show_batch=True))
+            return next(iter(loader))
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
         # get dataset
@@ -172,14 +184,26 @@ class Datastore(BaseDataStore):
             drop_last=self.loading_params["drop_last"],
         )
 
-    def get_collate_fn(self, stage: Optional[str] = None, show_batch: bool = False) -> Optional[Callable]:
-        return None
-
-    def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+    def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is not None:
-            loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage, show_batch=True))
-            return next(iter(loader))
+            return len(dataset)
+
+    def _get_num_batches(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
+        loader = self.get_loader(stage, *args, **kwargs)
+        if loader is not None:
+            return len(loader)
+
+    """Abstract methods implementation"""
+
+    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+        return self.get_loader(RunningStage.TRAIN, *args, **kwargs)
+
+    def validation_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+        return self.get_loader(RunningStage.VALIDATION, *args, **kwargs)
+
+    def test_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+        return self.get_loader(RunningStage.TEST, *args, **kwargs)
 
     def train_size(self, *args, **kwargs) -> Optional[int]:
         return self._get_size(RunningStage.TRAIN, *args, **kwargs)
@@ -190,10 +214,14 @@ class Datastore(BaseDataStore):
     def test_size(self, *args, **kwargs) -> Optional[int]:
         return self._get_size(RunningStage.TEST, *args, **kwargs)
 
-    def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
-        dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
-        if dataset is not None:
-            return len(dataset)
+    # def num_train_batches(self, *args, **kwargs) -> Optional[int]:
+    #     return self._get_num_batches(RunningStage.TRAIN, *args, **kwargs)
+
+    # def num_validation_batches(self, *args, **kwargs) -> Optional[int]:
+    #     return self._get_num_batches(RunningStage.VALIDATION, *args, **kwargs)
+
+    # def num_test_batches(self, *args, **kwargs) -> Optional[int]:
+    #     return self._get_num_batches(RunningStage.VALIDATION, *args, **kwargs)
 
 
 class PandasDataStore(Datastore):
@@ -216,6 +244,26 @@ class PandasDataStore(Datastore):
     def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
         assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
         return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
+
+
+# class TorchDataStore(Datastore):
+#     _train_loader: Optional[DataLoader]
+#     _validation_loader: Optional[DataLoader]
+#     _test_loader: Optional[DataLoader]
+
+#     def _get_dataset(self, stage: RunningStage, *args, **kwargs) -> Optional[DATASET]:
+#         loader = getattr(self, f"_{stage}_loader", None)
+#         if loader is not None:
+#             return loader.dataset
+
+#     def train_dataset(self, *args, **kwargs) -> Optional[DATASET]:
+#         return self._get_dataset(RunningStage.TRAIN, *args, **kwargs)
+
+#     def validation_dataset(self, *args, **kwargs) -> Optional[DATASET]:
+#         return self._get_dataset(RunningStage.VALIDATION, *args, **kwargs)
+
+#     def test_dataset(self, *args, **kwargs) -> Optional[DATASET]:
+#         return self._get_dataset(RunningStage.TEST, *args, **kwargs)
 
 
 class IndexMixin:

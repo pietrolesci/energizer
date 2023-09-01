@@ -183,7 +183,9 @@ class Estimator:
     ) -> List[FIT_OUTPUT]:
         """Entry point for model training.
 
-        Calls `fit -> run_fit -> run_epoch -> run_training_step`
+        Calls `fit -> run_fit -> run_epoch -> run_training_step`.
+
+        Data ordering: at each epoch the loader will have different order.
         """
         # self.fabric.launch()  # NOTE: do not support distributed yet
 

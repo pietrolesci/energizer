@@ -101,18 +101,20 @@ class ActiveProgressTracker(ProgressTracker):
         ), "At least one of `max_rounds` or `max_budget` must be not None."
         assert max_budget > initial_budget, ValueError(f"`{max_budget=}` must be bigger than `{initial_budget=}`.")
 
-        max_rounds = min(int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf"))
-        max_budget = (query_size * max_rounds) + initial_budget
+        max_rounds = min(
+            int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf")
+        )  # type: ignore
+        max_budget = (query_size * max_rounds) + initial_budget  # type: ignore
 
-        self.has_test = datastore.test_size() is not None and datastore.test_size() > 0
+        self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore
         self.has_validation = (
-            datastore.validation_size() is not None and datastore.validation_size() > 0
+            datastore.validation_size() is not None and datastore.validation_size() > 0  # type: ignore
         ) or validation_perc is not None
 
         self.round_tracker.reset()
         self.budget_tracker.reset()
 
-        self.round_tracker.max = max_rounds + 1
+        self.round_tracker.max = max_rounds + 1  # type: ignore
         self.budget_tracker.query_size = query_size
         self.budget_tracker.max = max_budget
         if initial_budget > 0:
@@ -124,7 +126,7 @@ class ActiveProgressTracker(ProgressTracker):
 
     @property
     def is_last_round(self) -> bool:
-        return self.round_tracker.current >= (self.round_tracker.max - 1)
+        return self.round_tracker.current >= (self.round_tracker.max - 1)  # type: ignore
 
     @property
     def global_round(self) -> int:

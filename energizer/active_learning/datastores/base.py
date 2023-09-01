@@ -11,21 +11,27 @@ from torch.utils.data import DataLoader
 from energizer.datastores.base import Datastore, IndexMixin, PandasDataStore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import sample
+from abc import ABC, abstractmethod
 
 
-class ActiveLearningMixin:
+class ActiveLearningMixin(ABC):
+    @abstractmethod
     def pool_size(self, round: Optional[int] = None) -> int:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def labelled_size(self, round: Optional[int] = None) -> int:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def query_size(self, round: Optional[int] = None) -> int:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def total_rounds(self) -> int:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def label(
         self,
         indices: List[int],
@@ -33,8 +39,9 @@ class ActiveLearningMixin:
         validation_perc: Optional[float] = None,
         validation_sampling: Optional[Literal["uniform", "stratified"]] = "uniform",
     ) -> int:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def sample_from_pool(
         self,
         size: int,
@@ -43,25 +50,30 @@ class ActiveLearningMixin:
         with_indices: Optional[List[int]] = None,
         **kwargs,
     ) -> List[int]:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def save_labelled_dataset(self, save_dir: Union[str, Path]) -> None:
-        raise NotImplementedError
+        ...
 
     def pool_loader(self, *args, **kwargs) -> Optional[DataLoader]:
         return self.get_loader(RunningStage.POOL, *args, **kwargs)  # type: ignore
 
+    @abstractmethod
     def reset(self) -> None:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_train_ids(self, round: Optional[int] = None) -> List[int]:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_validation_ids(self, round: Optional[int] = None) -> List[int]:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_pool_ids(self, round: Optional[int] = None) -> List[int]:
-        raise NotImplementedError
+        ...
 
 
 class ActiveDataStore(ActiveLearningMixin, Datastore):
@@ -75,13 +87,13 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
     def train_size(self, round: Optional[int] = None) -> int:
         return self._train_mask(round).sum()
 
-    def pool_size(self, round: Optional[int] = None) -> int:
-        return self._pool_mask(round).sum()
-
     def validation_size(self, round: Optional[int] = None) -> int:
         if self._validation_data is not None:
             return len(self._validation_data)
         return self._validation_mask(round).sum()
+
+    def pool_size(self, round: Optional[int] = None) -> int:
+        return self._pool_mask(round).sum()
 
     def labelled_size(self, round: Optional[int] = None) -> int:
         return self._labelled_mask(round).sum()
