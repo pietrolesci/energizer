@@ -172,6 +172,8 @@ class ActiveProgressTracker(ProgressTracker):
         super().start_fit()
         if self.enable_progress_bar and self.epoch_tracker.progress_bar is not None:
             self.epoch_tracker.progress_bar.set_postfix_str("")
+        if self.enable_progress_bar and self.step_tracker.progress_bar is not None:
+            self.step_tracker.progress_bar.set_postfix_str("")
 
     def end_fit(self) -> None:
         self.step_tracker.terminate_progress_bar()
