@@ -119,4 +119,11 @@ def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomStat
 
 def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> List[int]:
     _, indices = kmeans_plusplus(X, num_clusters, random_state=rng)
-    return indices.tolist()
+
+    unique_ids = list(set(indices.tolist()))
+
+    # can this generate duplicates?
+    if len(unique_ids) != len(indices):
+        print(f"Kmeans++ returned duplicates. {X.shape=} {num_clusters=}")
+
+    return unique_ids
