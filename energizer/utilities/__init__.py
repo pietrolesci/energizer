@@ -28,7 +28,10 @@ def camel_to_snake(name: str) -> str:
 def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
     """Converts `torch.Tensor` to a `numpy.ndarray` or python scalar type."""
     # if t.numel() > 1:
-    return t.detach().cpu().numpy()
+    cpu_t = t.detach().cpu()
+    if cpu_t.dtype == torch.bfloat16:
+        cpu_t = cpu_t.to(torch.float16)    
+    return cpu_t.numpy()
     # return round(t.detach().cpu().item(), 6)
 
 
