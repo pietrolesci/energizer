@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from math import floor
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -11,7 +12,6 @@ from torch.utils.data import DataLoader
 from energizer.datastores.base import Datastore, IndexMixin, PandasDataStore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import sample
-from abc import ABC, abstractmethod
 
 
 class ActiveLearningMixin(ABC):
@@ -260,7 +260,6 @@ class ActivePandasDataStoreWithIndex(ActiveIndexMixin, ActivePandasDataStore):
         validation_perc: Optional[float] = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",
     ) -> int:
-
         n_labelled = super().label(indices, round, validation_perc, validation_sampling)
 
         if self.index is not None:

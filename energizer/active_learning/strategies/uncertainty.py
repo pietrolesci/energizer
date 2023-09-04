@@ -1,9 +1,10 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
-from numpy.random import RandomState
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from numpy.random import RandomState
+from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.registries import SCORING_FUNCTIONS
@@ -11,8 +12,6 @@ from energizer.active_learning.strategies.base import ActiveEstimator, PoolBased
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import BATCH_OUTPUT, METRIC
 from energizer.utilities import ld_to_dl
-
-from sklearn.utils.validation import check_random_state
 
 
 class UncertaintyBasedStrategy(PoolBasedStrategyMixin, ActiveEstimator):

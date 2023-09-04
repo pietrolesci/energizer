@@ -1,5 +1,6 @@
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Literal
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
@@ -10,7 +11,6 @@ from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import RunningStage
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
 from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
-from abc import ABC, abstractmethod
 
 
 class ActiveEstimator(Estimator):
@@ -55,7 +55,6 @@ class ActiveEstimator(Estimator):
         limit_test_batches: Optional[int] = None,
         limit_pool_batches: Optional[int] = None,
     ) -> Any:
-
         assert not reinit_model or (
             reinit_model and model_cache_dir
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
@@ -155,7 +154,6 @@ class ActiveEstimator(Estimator):
         fit_loop_kwargs: Dict,
         fit_opt_kwargs: Dict,
     ) -> ROUND_OUTPUT:
-
         model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader = self._setup_round(
             datastore,
             replay,
