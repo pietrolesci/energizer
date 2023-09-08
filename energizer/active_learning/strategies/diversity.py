@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -15,7 +17,7 @@ from energizer.types import METRIC
 from energizer.utilities import ld_to_dl, move_to_cpu
 
 
-class DiversitySamplingMixin:
+class DiversitySamplingMixin(ABC):
     def get_embeddings(
         self,
         model: _FabricModule,
@@ -25,8 +27,9 @@ class DiversitySamplingMixin:
     ) -> np.ndarray:
         raise NotImplementedError
 
+    @abstractmethod
     def select_from_embeddings(self, embeddings: np.ndarray, **kwargs) -> List[int]:
-        raise NotImplementedError
+        ...
 
 
 class DiversityBasedStrategy(DiversitySamplingMixin, ActiveEstimator):
@@ -84,6 +87,9 @@ class BADGE(PoolBasedStrategyMixin, DiversityBasedStrategy):
         Uses the analytical form from the paper
 
             $g(x)_i = ( f(x; \theta)_i - \mathbf{1}(\hat{y} = i) ) h(x; W)$
+
+        Refs for the implementation:
+        https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/sample.py#L65
         """
         penultimate_layer_out = self.get_penultimate_layer_out(model, batch)
         logits = self.get_logits_from_penultimate_layer_out(model, penultimate_layer_out)
@@ -118,10 +124,12 @@ class BADGE(PoolBasedStrategyMixin, DiversityBasedStrategy):
         center_ids = kmeans_pp_sampling(grads, query_size, rng=self.rng)
         return uids[center_ids].tolist()
 
+    @abstractmethod
     def get_penultimate_layer_out(self, model: _FabricModule, batch: Any) -> torch.Tensor:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_logits_from_penultimate_layer_out(
         self, model: _FabricModule, penultimate_layer_out: torch.Tensor
     ) -> torch.Tensor:
-        raise NotImplementedError
+        ...
