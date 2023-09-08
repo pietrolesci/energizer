@@ -7,11 +7,11 @@ from sklearn.utils import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDataStoreWithIndex
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
-from energizer.active_learning.strategies.diversity import DiversitySamplingMixin
+from energizer.active_learning.strategies.diversity import DiversityBasedStrategy
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
 
 
-class Tyrogue(DiversitySamplingMixin, UncertaintyBasedStrategy):
+class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     """Maekawa et al. (2022) `Low-Resource Interactive Active Labeling for Fine-tuning Language Models`.
 
     Three-step strategy that:
@@ -59,17 +59,26 @@ class Tyrogue(DiversitySamplingMixin, UncertaintyBasedStrategy):
         self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
     ) -> List[int]:
 
-        embeddings = self._get_embeddings(datastore, **kwargs)
-
         query_size: int = kwargs["query_size"]
         num_clusters = query_size * self.r_factor
 
-        return self.select_from_embeddings(embeddings, num_clusters=num_clusters)
+        embeddings = self.get_embeddings(datastore, **kwargs)
+        subpool_ids = self.select_from_embeddings(embeddings, num_clusters=num_clusters)
+        loader = self._get_subpool_loader_by_ids(datastore, subpool_ids)
+
+        return self.compute_most_uncertain(model, loader, query_size)
 
     def select_from_embeddings(self, embeddings: np.ndarray, **kwargs) -> List[int]:
         num_clusters: int = kwargs["num_clusters"]
         return self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)
 
-    def _get_embeddings(self, datastore: ActiveDataStoreWithIndex, **kwargs) -> np.ndarray:
+    def get_embeddings(self, datastore: ActiveDataStoreWithIndex, **kwargs) -> np.ndarray:
         pool_ids = kwargs.get("pool_ids", None) or datastore.get_pool_ids()
         return datastore.get_pool_embeddings(pool_ids)
+
+    def _get_subpool_loader_by_ids(
+        self, datastore: ActiveDataStoreWithIndex, subpool_ids: List[int]
+    ) -> _FabricDataLoader:
+        pool_loader = self.configure_dataloader(datastore.pool_loader(with_indices=subpool_ids))  # type: ignore
+        self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
+        return pool_loader  # type: ignore
