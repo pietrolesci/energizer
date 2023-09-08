@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union
 
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
@@ -117,14 +117,16 @@ class ActiveEstimator(Estimator):
             if reinit_model:
                 self.load_state_dict(model_cache_dir)
 
+            out = self.round_start(datastore)
             self.callback("on_round_start", datastore=datastore)
-            out = self.run_round(datastore, **kwargs)
+            out = self.run_round(datastore, **kwargs)            
+            out = self.round_end(datastore, out)
             self.callback("on_round_end", datastore=datastore, output=out)
 
             output.append(out)
-
-            # update progress
+        
             self.tracker.increment_round()
+            self.tracker.increment_budget()
 
             # check
             if not self.tracker.is_last_round:
@@ -134,7 +136,7 @@ class ActiveEstimator(Estimator):
 
             # print(f"END -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
 
-        output = self.active_fit_end(output)
+        output = self.active_fit_end(datastore, output)
 
         self.callback("on_active_fit_end", datastore=datastore, output=output)
 
@@ -165,17 +167,17 @@ class ActiveEstimator(Estimator):
 
         output = {}
 
-        # fit
+        # ============== FIT AND TEST ============== #
         if train_loader is not None:
             output[RunningStage.TRAIN] = self.run_fit(model, optimizer, scheduler, train_loader, validation_loader)
 
-        # test
         if test_loader is not None:
             # print(f"TEST -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
             output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)
+        
+        # ============== QUERY AND LABEL ==============#
 
-        # query and label
-        n_labelled = None
+        n_labelled = 0
         if (
             not replay  # do not annotate in replay
             and not self.tracker.is_last_round  # last round is used only to test
@@ -188,10 +190,8 @@ class ActiveEstimator(Estimator):
         elif replay:
             n_labelled = datastore.query_size(self.tracker.global_round)
 
-        if n_labelled:
-            self.tracker.increment_budget(n_labelled)
-
-        output = self.round_end(output, datastore)
+        # update the query size for this round
+        self.tracker.budget_tracker.query_size = n_labelled
 
         return output
 
@@ -239,10 +239,13 @@ class ActiveEstimator(Estimator):
     ) -> List[int]:
         raise NotImplementedError
 
-    def active_fit_end(self, output: List[ROUND_OUTPUT]) -> Any:
+    def active_fit_end(self, datastore: ActiveDataStore, output: List[ROUND_OUTPUT]) -> Any:
         return output
 
-    def round_end(self, output: ROUND_OUTPUT, datastore: ActiveDataStore) -> ROUND_OUTPUT:
+    def round_start(self, datastore: ActiveDataStore) -> None:
+        ...
+
+    def round_end(self, datastore: ActiveDataStore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
         return output
 
     def _setup_round(

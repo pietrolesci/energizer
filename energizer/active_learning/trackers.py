@@ -124,6 +124,13 @@ class ActiveProgressTracker(ProgressTracker):
 
     """Properties"""
 
+    def should_log(self) -> bool:
+        return self.current_stage is None or super().should_log
+
+    @property
+    def query_size(self) -> int:
+        return self.budget_tracker.query_size
+
     @property
     def is_last_round(self) -> bool:
         return self.round_tracker.current >= (self.round_tracker.max - 1)  # type: ignore
