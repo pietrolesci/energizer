@@ -1,4 +1,5 @@
 from functools import partial
+from itertools import chain
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from datasets import Dataset, DatasetDict  # type: ignore
@@ -9,7 +10,6 @@ from typing_extensions import Self
 from energizer.datastores.base import PandasDataStoreWithIndex
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import _pad, ld_to_dl, sequential_numbers
-from itertools import chain
 
 
 class LanguageModellingMixin:
@@ -98,14 +98,12 @@ class LanguageModellingMixin:
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )
-    
+
     def group_texts(self, block_size: int) -> None:
         dataset = self.train_dataset()
         dataset = dataset.with_format(columns=self.input_names)
         dataset = dataset.map(lambda ex: group_texts(ex, block_size=block_size), batched=True)
         self._train_data = dataset.to_pandas()
-    
-
 
 
 class PandasDataStoreForLanguageModelling(LanguageModellingMixin, PandasDataStoreWithIndex):
@@ -213,24 +211,23 @@ def _from_datasets(
 
 def group_texts(examples: Dict, block_size: int) -> Dict:
     """Concatenate all texts from our dataset and generate chunks of block_size.
-    
+
     Refs: https://github.com/huggingface/transformers/blob/bfb1895e3346cb8a2bf2560c75d45e70edf46a47/examples/pytorch/language-modeling/run_clm_no_trainer.py#L456
     """
-    
+
     # Concatenate all texts
     concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
     # concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-    
+
     total_length = len(concatenated_examples[list(examples.keys())[0]])
-    
+
     # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict
     # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
     total_length = (total_length // block_size) * block_size
-    
+
     # Split by chunks of max_len
     result = {
-        k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-        for k, t in concatenated_examples.items()
+        k: [t[i : i + block_size] for i in range(0, total_length, block_size)] for k, t in concatenated_examples.items()
     }
 
     return result

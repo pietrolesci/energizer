@@ -30,7 +30,7 @@ def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
     # if t.numel() > 1:
     cpu_t = t.detach().cpu()
     if cpu_t.dtype == torch.bfloat16:
-        cpu_t = cpu_t.to(torch.float16)    
+        cpu_t = cpu_t.to(torch.float16)
     return cpu_t.numpy()
     # return round(t.detach().cpu().item(), 6)
 
