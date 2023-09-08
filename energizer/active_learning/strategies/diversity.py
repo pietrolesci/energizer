@@ -2,8 +2,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from torch.nn.functional import one_hot
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from numpy.random import RandomState
+from sklearn.utils.validation import check_random_state
+from torch.nn.functional import one_hot
 
 from energizer.active_learning.clustering_utilities import kmeans_pp_sampling
 from energizer.active_learning.datastores.base import ActiveDataStore
@@ -11,9 +13,6 @@ from energizer.active_learning.strategies.base import ActiveEstimator, PoolBased
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.types import METRIC
 from energizer.utilities import ld_to_dl, move_to_cpu
-
-from numpy.random import RandomState
-from sklearn.utils.validation import check_random_state
 
 
 class DiversitySamplingMixin:

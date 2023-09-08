@@ -254,7 +254,6 @@ class Estimator:
         train_loader: _FabricDataLoader,
         validation_loader: Optional[_FabricDataLoader],
     ) -> List[FIT_OUTPUT]:
-
         self.tracker.start_fit()
 
         self.callback("on_fit_start", model=model)
@@ -363,7 +362,6 @@ class Estimator:
 
         # print("Accumulating?", self.tracker.is_accumulating)
         if not self.tracker.is_accumulating:
-
             # clip gradients
             if self.optimization_args.clip_val or self.optimization_args.max_norm:
                 self.fabric.clip_gradients(
@@ -526,7 +524,6 @@ class Estimator:
         scheduler: Optional[str] = None,
         scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
     ) -> None:
-
         # parse optimizer args
         opt_kwargs = optimizer_kwargs or {}  # if None
         opt_kwargs = opt_kwargs.to_dict() if isinstance(opt_kwargs, OptimizationArgs) else opt_kwargs
@@ -650,7 +647,6 @@ class Estimator:
         scheduler: Optional[str],
         scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]],
     ) -> Tuple[_FabricModule, _FabricOptimizer, Optional[_LRScheduler], _FabricDataLoader, Optional[_FabricDataLoader]]:
-
         # configuration
         _train_loader = self.configure_dataloader(train_loader)
         _validation_loader = self.configure_dataloader(validation_loader)

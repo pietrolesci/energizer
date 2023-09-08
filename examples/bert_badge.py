@@ -37,7 +37,6 @@ class BADGEForSequenceClassification(BADGE):
         loss_fn,
         metrics: MetricCollection,
     ) -> torch.Tensor:
-
         _ = batch.pop(InputKeys.ON_CPU, None)
         out = model(**batch)
 
@@ -76,7 +75,6 @@ class BADGEForSequenceClassification(BADGE):
 
 
 if __name__ == "__main__":
-
     # load data
     dataset_dict: DatasetDict = load_dataset("pietrolesci/agnews")  # type: ignore
 

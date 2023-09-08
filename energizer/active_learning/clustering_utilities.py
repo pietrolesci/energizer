@@ -3,10 +3,9 @@ from typing import List
 import numpy as np
 from numpy.random import RandomState
 from scipy.spatial.distance import cdist
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, kmeans_plusplus
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import kmeans_plusplus
 
 
 def _similarity(centers: np.ndarray, X: np.ndarray, normalized: bool) -> np.ndarray:
@@ -42,11 +41,9 @@ def _get_nearest_to_centers(centers: np.ndarray, X: np.ndarray, normalized: bool
 
 
 def _silhouette_k_select(X: np.ndarray, max_k: int, rng: RandomState) -> int:
-
     silhouette_avg_n_clusters = []
     k_options = list(range(2, max_k))
     for n_clusters in k_options:
-
         # Initialize the clusterer with n_clusters value and a random generator
         clusterer = KMeans(n_clusters=n_clusters, n_init="auto", random_state=rng)
         cluster_labels = clusterer.fit_predict(X)
@@ -62,7 +59,6 @@ def _silhouette_k_select(X: np.ndarray, max_k: int, rng: RandomState) -> int:
 def _kmeans(
     X: np.ndarray, num_clusters: int, rng: RandomState, use_silhouette: bool = False, normalize: bool = True
 ) -> List[int]:
-
     if normalize:
         X = StandardScaler().fit_transform(X)
 

@@ -267,7 +267,6 @@ class PandasDataStore(Datastore):
 
 
 class IndexMixin:
-
     index: hb.Index = None
     embedding_name: str
 
