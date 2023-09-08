@@ -119,12 +119,12 @@ class ActiveEstimator(Estimator):
 
             out = self.round_start(datastore)
             self.callback("on_round_start", datastore=datastore)
-            out = self.run_round(datastore, **kwargs)            
+            out = self.run_round(datastore, **kwargs)
             out = self.round_end(datastore, out)
             self.callback("on_round_end", datastore=datastore, output=out)
 
             output.append(out)
-        
+
             self.tracker.increment_round()
             self.tracker.increment_budget()
 
@@ -174,7 +174,7 @@ class ActiveEstimator(Estimator):
         if test_loader is not None:
             # print(f"TEST -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
             output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)
-        
+
         # ============== QUERY AND LABEL ==============#
 
         n_labelled = 0

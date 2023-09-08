@@ -41,13 +41,6 @@ class Tyrogue(DiversitySamplingMixin, UncertaintyBasedStrategy):
         clustering_kwargs: Optional[Dict] = None,
         **kwargs,
     ) -> None:
-        """Strategy that runs uncertainty sampling on a random subset of the pool.
-
-        Args:
-            subpool_size (int): Size of the first random subset. The subpool size is
-                determined by `r_factor * query_size`.
-            seed (int): Random seed for the subset selection.
-        """
         super().__init__(*args, score_fn=score_fn, seed=seed, **kwargs)
         self._r_factor = r_factor
         self._clustering_fn = CLUSTERING_FUNCTIONS[clustering_algorithm]
