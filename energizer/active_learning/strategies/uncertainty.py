@@ -31,11 +31,15 @@ class UncertaintyBasedStrategy(PoolBasedStrategyMixin, ActiveEstimator):
     def run_query(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
+        **kwargs,
     ) -> List[int]:
-        return self.compute_most_uncertain(model, loader, query_size)
+        pool_loader = self.get_pool_loader(datastore, **kwargs)
+        if pool_loader is None or len(pool_loader or []) <= query_size:
+            # not enough instances
+            return []
+        return self.compute_most_uncertain(model, pool_loader, query_size)
 
     def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> List[int]:
         # calls the pool_step and pool_epoch_end that we override

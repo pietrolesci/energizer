@@ -16,22 +16,7 @@ from energizer.types import METRIC
 from energizer.utilities import ld_to_dl, move_to_cpu
 
 
-class DiversitySamplingMixin(ABC):
-    def get_embeddings(
-        self,
-        model: _FabricModule,
-        loader: _FabricDataLoader,
-        datastore: ActiveDataStore,
-        **kwargs,
-    ) -> np.ndarray:
-        raise NotImplementedError
-
-    @abstractmethod
-    def select_from_embeddings(self, embeddings: np.ndarray, **kwargs) -> List[int]:
-        ...
-
-
-class DiversityBasedStrategy(DiversitySamplingMixin, ActiveEstimator):
+class DiversityBasedStrategy(ABC, ActiveEstimator):
     rng: RandomState
 
     def __init__(self, *args, seed: int = 42, **kwargs) -> None:
@@ -42,15 +27,79 @@ class DiversityBasedStrategy(DiversitySamplingMixin, ActiveEstimator):
     def run_query(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
+        **kwargs,
     ) -> List[int]:
-        embeddings = self.get_embeddings(model, loader, datastore, query_size=query_size)
-        return self.select_from_embeddings(embeddings, query_size=query_size)
+        embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
+        if embeddings_and_ids is None:
+            return []
+        else:
+            embeddings, ids = embeddings_and_ids
+        return self.select_from_embeddings(model, datastore, query_size, embeddings, ids, **kwargs)
+
+    @abstractmethod
+    def get_embeddings_and_ids(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStore,
+        query_size: int,
+        **kwargs,
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        # NOTE: Always need the ids because you might not return the entire pool
+        ...
+
+    @abstractmethod
+    def select_from_embeddings(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStore,
+        query_size: int,
+        embeddings: np.ndarray,
+        ids: np.ndarray,
+        **kwargs,
+    ) -> List[int]:
+        ...
 
 
 class BADGE(PoolBasedStrategyMixin, DiversityBasedStrategy):
+    def get_embeddings_and_ids(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStore,
+        query_size: int,
+        **kwargs,
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        pool_loader = self.get_pool_loader(datastore, **kwargs)
+        if pool_loader is not None and len(pool_loader or []) > query_size:
+            # enough instances
+            return self.compute_gradient_embeddings(model, pool_loader)
+
+    def select_from_embeddings(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStore,
+        query_size: int,
+        embeddings: np.ndarray,
+        ids: np.ndarray,
+        **kwargs,
+    ) -> List[int]:
+        # k-means++ sampling
+        center_ids = kmeans_pp_sampling(embeddings, query_size, rng=self.rng)
+        return ids[center_ids].tolist()
+
+    def compute_gradient_embeddings(
+        self, model: _FabricModule, loader: _FabricDataLoader
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        # NOTE: this is similar to `UncertaintyBasedStrategy.compute_most_uncertain`
+        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
+        _out = ld_to_dl(out)
+
+        grads = np.concatenate(_out[OutputKeys.GRAD])
+        uids = np.concatenate(_out[SpecialKeys.ID])
+
+        return grads, uids
+
     def evaluation_step(
         self,
         model: _FabricModule,
@@ -102,26 +151,6 @@ class BADGE(PoolBasedStrategyMixin, DiversityBasedStrategy):
         # multiply
         grads_3d = torch.einsum("bi,bj->bij", scales, penultimate_layer_out)
         return grads_3d.view(batch_size, -1)  # (batch_size,)
-
-    def get_embeddings(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, **kwargs
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        # NOTE: this is similar to `UncertaintyBasedStrategy.compute_most_uncertain`
-
-        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
-        _out = ld_to_dl(out)
-
-        grads = np.concatenate(_out[OutputKeys.GRAD])
-        uids = np.concatenate(_out[SpecialKeys.ID])
-
-        return grads, uids  # NOTE: we output a tuple here
-
-    def select_from_embeddings(self, grads_and_ids: Tuple[np.ndarray, np.ndarray], **kwargs) -> List[int]:
-        # NOTE: the first argument is a tuple here!
-        grads, uids = grads_and_ids
-        query_size = kwargs["query_size"]
-        center_ids = kmeans_pp_sampling(grads, query_size, rng=self.rng)
-        return uids[center_ids].tolist()
 
     @abstractmethod
     def get_penultimate_layer_out(self, model: _FabricModule, batch: Any) -> torch.Tensor:

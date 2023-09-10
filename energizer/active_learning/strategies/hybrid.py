@@ -1,7 +1,7 @@
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
 
@@ -55,30 +55,52 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     def clustering_fn(self) -> Callable:
         return self._clustering_fn
 
-    def select_pool_subset(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
+    def run_query(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStoreWithIndex,
+        query_size: int,
+        **kwargs,
     ) -> List[int]:
 
-        query_size: int = kwargs["query_size"]
+        # === DIVERSITY === #
+        embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
+        if embeddings_and_ids is None:
+            return []
+        else:
+            embeddings, ids = embeddings_and_ids
+
+        subpool_ids = self.select_from_embeddings(model, datastore, query_size, embeddings, ids, **kwargs)
+
+        # === UNCERTAINTY === #
+        pool_loader = self.get_pool_loader(datastore, subpool_ids=subpool_ids, **kwargs)
+        if pool_loader is None or len(pool_loader or []) <= query_size:
+            # not enough instances
+            return []
+        return self.compute_most_uncertain(model, pool_loader, query_size)
+
+    def get_embeddings_and_ids(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStoreWithIndex,
+        query_size: int,
+        **kwargs,
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        pool_ids = kwargs.get("subpool_ids", None) or datastore.get_pool_ids()
+        return datastore.get_pool_embeddings(pool_ids), np.ndarray(pool_ids)
+
+    def select_from_embeddings(
+        self,
+        model: _FabricModule,
+        datastore: ActiveDataStoreWithIndex,
+        query_size: int,
+        embeddings: np.ndarray,
+        ids: np.ndarray,
+        **kwargs,
+    ) -> List[int]:
+
         num_clusters = query_size * self.r_factor
 
-        embeddings = self.get_embeddings(datastore, **kwargs)
-        subpool_ids = self.select_from_embeddings(embeddings, num_clusters=num_clusters)
-        loader = self._get_subpool_loader_by_ids(datastore, subpool_ids)
+        centers_ids = self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)
 
-        return self.compute_most_uncertain(model, loader, query_size)
-
-    def select_from_embeddings(self, embeddings: np.ndarray, **kwargs) -> List[int]:
-        num_clusters: int = kwargs["num_clusters"]
-        return self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)
-
-    def get_embeddings(self, datastore: ActiveDataStoreWithIndex, **kwargs) -> np.ndarray:
-        pool_ids = kwargs.get("pool_ids", None) or datastore.get_pool_ids()
-        return datastore.get_pool_embeddings(pool_ids)
-
-    def _get_subpool_loader_by_ids(
-        self, datastore: ActiveDataStoreWithIndex, subpool_ids: List[int]
-    ) -> _FabricDataLoader:
-        pool_loader = self.configure_dataloader(datastore.pool_loader(with_indices=subpool_ids))  # type: ignore
-        self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
-        return pool_loader  # type: ignore
+        return ids[centers_ids].tolist()

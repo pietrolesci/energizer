@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
@@ -77,10 +77,6 @@ class ActiveEstimator(Estimator):
             model_cache_dir,
             query_size=query_size,
             replay=False,
-            validation_sampling=validation_sampling,
-            validation_perc=validation_perc,
-            limit_test_batches=limit_test_batches,
-            limit_pool_batches=limit_pool_batches,
             fit_loop_kwargs=dict(
                 max_epochs=max_epochs,
                 min_epochs=min_epochs,
@@ -98,6 +94,9 @@ class ActiveEstimator(Estimator):
                 scheduler=scheduler,
                 scheduler_kwargs=scheduler_kwargs,
             ),
+            test_kwargs=dict(limit_test_batches=limit_test_batches),
+            query_kwargs=dict(limit_pool_batches=limit_pool_batches),
+            label_kwargs=dict(validation_perc=validation_perc, validation_sampling=validation_sampling),
         )
 
     def run_active_fit(
@@ -117,9 +116,12 @@ class ActiveEstimator(Estimator):
             if reinit_model:
                 self.load_state_dict(model_cache_dir)
 
+            # === RUN ROUND === #
             out = self.round_start(datastore)
             self.callback("on_round_start", datastore=datastore)
+
             out = self.run_round(datastore, **kwargs)
+
             out = self.round_end(datastore, out)
             self.callback("on_round_end", datastore=datastore, output=out)
 
@@ -127,6 +129,7 @@ class ActiveEstimator(Estimator):
 
             self.tracker.increment_round()
             self.tracker.increment_budget()
+            # ================= #
 
             # check
             if not self.tracker.is_last_round:
@@ -149,20 +152,18 @@ class ActiveEstimator(Estimator):
         datastore: ActiveDataStore,
         query_size: int,
         replay: bool,
-        validation_perc: Optional[float],
-        validation_sampling: Literal["uniform", "stratified"],
-        limit_test_batches: Optional[int],
-        limit_pool_batches: Optional[int],
         fit_loop_kwargs: Dict,
         fit_opt_kwargs: Dict,
+        test_kwargs: Dict,
+        query_kwargs: Dict,
+        label_kwargs: Dict,
     ) -> ROUND_OUTPUT:
-        model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader = self._setup_round(
+        model, optimizer, scheduler, train_loader, validation_loader, test_loader = self._setup_round(
             datastore,
             replay,
             fit_loop_kwargs,
             fit_opt_kwargs,
-            limit_test_batches,
-            limit_pool_batches,
+            test_kwargs,
         )
 
         output = {}
@@ -181,12 +182,8 @@ class ActiveEstimator(Estimator):
         if (
             not replay  # do not annotate in replay
             and not self.tracker.is_last_round  # last round is used only to test
-            and pool_loader is not None
-            and len(pool_loader or []) > query_size  # enough instances
         ):
-            n_labelled = self.run_annotation(
-                model, pool_loader, datastore, query_size, validation_perc, validation_sampling
-            )
+            n_labelled = self.run_annotation(model, datastore, query_size, query_kwargs, label_kwargs)
         elif replay:
             n_labelled = datastore.query_size(self.tracker.global_round)
 
@@ -198,16 +195,17 @@ class ActiveEstimator(Estimator):
     def run_annotation(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
-        validation_perc: Optional[float],
-        validation_sampling: Optional[Literal["uniform", "stratified"]],
+        query_kwargs: Dict,
+        label_kwargs: Dict,
     ) -> int:
-        # query
+
+        # === QUERY === #
         self.callback("on_query_start", model=model, datastore=datastore)
 
-        indices = self.run_query(model, loader, datastore, query_size)
+        # NOTE: run_query is in charge of defining the pool_loader and the relative tracker
+        indices = self.run_query(model, datastore, query_size, **query_kwargs)
 
         # prevent to query more than available budget
         if self.tracker.global_budget + len(indices) >= self.tracker.budget_tracker.max:  # type: ignore
@@ -216,26 +214,32 @@ class ActiveEstimator(Estimator):
 
         self.callback("on_query_end", model=model, datastore=datastore, indices=indices)
 
-        # label
+        # ============= #
+
+        # if no indices are returned, no need to annotated
+        if len(indices) == 0:
+            return 0
+
+        # === LABEL === #
         self.callback("on_label_start", datastore=datastore)
 
         n_labelled = datastore.label(
             indices=indices,
             round=self.tracker.global_round + 1,  # because the data will be used in the following round
-            validation_perc=validation_perc,
-            validation_sampling=validation_sampling,
+            **label_kwargs,
         )
 
         self.callback("on_label_end", datastore=datastore)
+        # ============= #
 
         return n_labelled
 
     def run_query(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
+        **kwargs,
     ) -> List[int]:
         raise NotImplementedError
 
@@ -254,8 +258,7 @@ class ActiveEstimator(Estimator):
         replay: bool,
         fit_loop_kwargs: Dict,
         fit_opt_kwargs: Dict,
-        limit_test_batches: Optional[int],
-        limit_pool_batches: Optional[int],
+        test_kwargs: Dict,
     ) -> Tuple[
         _FabricModule,
         _FabricOptimizer,
@@ -263,9 +266,8 @@ class ActiveEstimator(Estimator):
         Optional[_FabricDataLoader],
         Optional[_FabricDataLoader],
         Optional[_FabricDataLoader],
-        Optional[_FabricDataLoader],
     ]:
-        # start progress tracking
+        """Start progress tracking."""
 
         num_round = self.tracker.global_round if replay else None
 
@@ -285,19 +287,11 @@ class ActiveEstimator(Estimator):
 
         # configuration test
         test_loader = datastore.test_loader()
+        limit_test_batches = test_kwargs.get("limit_test_batches", None)
         self.tracker.setup_eval(RunningStage.TEST, num_batches=len(test_loader or []), limit_batches=limit_test_batches)
         test_loader = self.configure_dataloader(test_loader)
 
-        # configuration pool
-        pool_loader = None
-        if not replay:
-            pool_loader = datastore.pool_loader(round=num_round)
-            self.tracker.setup_eval(
-                RunningStage.POOL, num_batches=len(pool_loader or []), limit_batches=limit_pool_batches
-            )
-            pool_loader = self.configure_dataloader(pool_loader)
-
-        return model, optimizer, scheduler, train_loader, validation_loader, test_loader, pool_loader
+        return model, optimizer, scheduler, train_loader, validation_loader, test_loader
 
 
 class PoolBasedStrategyMixin(ABC):
@@ -314,3 +308,16 @@ class PoolBasedStrategyMixin(ABC):
 
     def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
         return output
+
+    def get_pool_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
+        subpool_ids = kwargs.get("subpool_ids", None)
+        loader = datastore.pool_loader(with_indices=subpool_ids) if subpool_ids is not None else datastore.pool_loader()
+
+        if loader is not None:
+            if subpool_ids is not None:
+                assert len(loader) == len(subpool_ids), "Problems getting the subset of the `pool_loader`."
+            pool_loader = self.configure_dataloader(loader)  # type: ignore
+            self.tracker.setup_eval(  # type: ignore
+                RunningStage.POOL, num_batches=len(pool_loader or []), limit_batches=kwargs.get("limit_pool_batches")
+            )
+            return pool_loader
