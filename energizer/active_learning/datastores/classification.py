@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
@@ -13,21 +13,20 @@ class ActivePandasDataStoreForSequenceClassification(SequenceClassificationMixin
     @classmethod
     def from_datasets(
         cls,
-        input_names: Union[str, List[str]],
-        target_name: str,
         tokenizer: PreTrainedTokenizerBase,
-        train_dataset: Dataset,
-        validation_dataset: Optional[Dataset] = None,
-        test_dataset: Optional[Dataset] = None,
         uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
         seed: Optional[int] = 42,
+        train_dataset: Optional[Dataset] = None,
+        validation_dataset: Optional[Dataset] = None,
+        test_dataset: Optional[Dataset] = None,
     ) -> Self:
-        obj = cls(seed)
+        obj = cls(seed)  # type: ignore
         obj = _from_datasets(
             obj=obj,
-            input_names=input_names,
-            target_name=target_name,
+            mandatory_input_names=cls.MANDATORY_INPUT_NAMES,
+            optional_input_names=cls.OPTIONAL_INPUT_NAMES,
+            mandatory_target_name=cls.MANDATORY_TARGET_NAME,
             tokenizer=tokenizer,
             uid_name=uid_name,
             on_cpu=on_cpu,
