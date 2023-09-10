@@ -3,7 +3,7 @@ from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
 
@@ -59,7 +59,7 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDataStore, query_size: int, **kwargs
     ) -> List[int]:
-        raise NotImplementedError
+        ...
 
     def __getattr__(self, attr: str) -> Any:
         if attr not in self.__dict__:

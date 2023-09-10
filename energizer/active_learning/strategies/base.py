@@ -315,7 +315,7 @@ class PoolBasedStrategyMixin(ABC):
 
         if loader is not None:
             if subpool_ids is not None:
-                assert len(loader) == len(subpool_ids), "Problems getting the subset of the `pool_loader`."
+                assert len(loader.dataset) == len(subpool_ids), "Problems subsetting pool"  # type: ignore
             pool_loader = self.configure_dataloader(loader)  # type: ignore
             self.tracker.setup_eval(  # type: ignore
                 RunningStage.POOL, num_batches=len(pool_loader or []), limit_batches=kwargs.get("limit_pool_batches")
