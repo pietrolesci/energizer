@@ -1,7 +1,9 @@
 import os
 from argparse import Namespace
+from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Union
 
+import pandas as pd
 import torch.nn as nn
 import wandb
 from lightning.fabric.loggers.logger import Logger, rank_zero_experiment
@@ -100,7 +102,7 @@ class WandbLogger(Logger):
 
     @rank_zero_only
     def finalize(self, status: str) -> None:
-        self.experiment.finalize(status)
+        self.experiment.finish()
 
     @rank_zero_only
     def log_hyperparams(self, params: Union[Dict[str, Any], Namespace]) -> None:
@@ -112,6 +114,10 @@ class WandbLogger(Logger):
     def log_metrics(self, metrics: Mapping, step: int) -> None:
         assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
         self.experiment.log(dict(metrics, **{"step": step}))
+
+    def save_to_parquet(self, path: Union[str, Path]) -> None:
+        df = pd.DataFrame(self.experiment.history())
+        df.to_parquet(path, index=False)
 
     # @rank_zero_only
     # def log_table(
