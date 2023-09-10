@@ -16,6 +16,7 @@ from wandb.wandb_run import Run
 
 class WandbLogger(Logger):
     _experiment: Optional[Union[Run, RunDisabled]] = None
+    LOGGER_NAME: str = "wandb"
 
     def __init__(
         self,
@@ -54,6 +55,10 @@ class WandbLogger(Logger):
         return state
 
     @property
+    def logger_name(self) -> str:
+        return self.LOGGER_NAME
+
+    @property
     def name(self) -> Optional[str]:
         return self._wandb_init.get("name")
 
@@ -62,8 +67,24 @@ class WandbLogger(Logger):
         return self._experiment.id if self._experiment else self._wandb_init.get("id")
 
     @property
+    def entity(self) -> Optional[Union[int, str]]:
+        return self._experiment.entity if self._experiment else self._wandb_init.get("entity")
+
+    @property
+    def project(self) -> Optional[Union[int, str]]:
+        return self._experiment.project if self._experiment else self._wandb_init.get("project")
+
+    @property
     def root_dir(self) -> Optional[str]:
         return self._wandb_init.get("dir")
+
+    @property
+    def run_id(self) -> Optional[Union[int, str]]:
+        return self.version
+
+    @property
+    def run_path(self) -> str:
+        return f"{self.entity}/{self.project}/{self.run_id}"
 
     @property
     @rank_zero_experiment
@@ -116,7 +137,8 @@ class WandbLogger(Logger):
         self.experiment.log(dict(metrics, **{"step": step}))
 
     def save_to_parquet(self, path: Union[str, Path]) -> None:
-        df = pd.DataFrame(self.experiment.history())
+        run = wandb.Api().run(self.run_path)
+        df = pd.DataFrame(run.scan_history())
         df.to_parquet(path, index=False)
 
     # @rank_zero_only
