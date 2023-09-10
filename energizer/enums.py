@@ -40,6 +40,7 @@ class RunningStage(StrEnum):
 
 class Interval(StrEnum):
     BATCH: str = "batch"
+    STEP: str = "step"
     EPOCH: str = "epoch"
     ROUND: str = "round"
 
@@ -69,3 +70,4 @@ class OutputKeys(StrEnum):
     BATCH_SIZE: str = "batch_size"
     METRICS: str = "metrics"
     SCORES: str = "scores"
+    GRAD: str = "gradients"

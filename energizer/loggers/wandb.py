@@ -1,200 +1,147 @@
-# import os
-# from argparse import Namespace
-# from typing import Any, Dict, List, Mapping, Optional, Union
+import os
+from argparse import Namespace
+from typing import Any, Dict, Mapping, Optional, Union
 
-# import torch.nn as nn
-# import logging
-# from lightning.fabric.utilities.logger import _add_prefix, _convert_params, _sanitize_callable_params
-# from lightning.fabric.utilities.types import _PATH
-# from lightning.fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn
-# from lightning.fabric.loggers.logger import Logger, rank_zero_experiment
-
-# import wandb
-# from wandb.sdk.lib import RunDisabled
-# from wandb.wandb_run import Run
-
-# log = logging.getLogger(__name__)
+import torch.nn as nn
+import wandb
+from lightning.fabric.loggers.logger import Logger, rank_zero_experiment
+from lightning.fabric.utilities.logger import _convert_params, _sanitize_callable_params
+from lightning.fabric.utilities.rank_zero import rank_zero_only, rank_zero_warn  # type: ignore
+from lightning.fabric.utilities.types import _PATH
+from wandb.sdk.lib import RunDisabled
+from wandb.wandb_run import Run
 
 
-# class WandbLogger(Logger):
-#     r"""Log using `Weights and Biases."""
+class WandbLogger(Logger):
+    _experiment: Optional[Union[Run, RunDisabled]] = None
 
-#     LOGGER_JOIN_CHAR = "-"
+    def __init__(
+        self,
+        project: str,
+        name: Optional[str] = None,
+        dir: _PATH = ".",
+        anonymous: Optional[bool] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__()
 
-#     def __init__(
-#         self,
-#         dir: _PATH = ".",
-#         project: Optional[str] = None,
-#         name: Optional[str] = None,
-#         id: Optional[str] = None,
-#         offline: bool = False,
-#         anonymous: Optional[bool] = None,
-#         prefix: str = "",
-#         **kwargs: Any,
-#     ) -> None:
+        # set wandb init arguments
+        self._wandb_init: Dict[str, Any] = {
+            "project": project or os.environ.get("WANDB_PROJECT", "energizer_logs"),
+            "dir": os.fspath(dir) if dir is not None else dir,
+            "name": name,
+            "resume": "allow",
+            "anonymous": ("allow" if anonymous else None),
+            **kwargs,
+        }
 
-#         super().__init__()
+        # start wandb run (to create an attach_id for distributed modes)
+        wandb.require("service")  # type: ignore
+        _ = self.experiment
 
-#         # paths are processed as strings
-#         if dir is not None:
-#             dir = os.fspath(dir)
+    def __getstate__(self) -> Dict[str, Any]:
+        state = self.__dict__.copy()
+        # args needed to reload correct experiment
+        if self._experiment is not None:
+            state["_id"] = getattr(self._experiment, "id", None)
+            state["_attach_id"] = getattr(self._experiment, "_attach_id", None)
+            state["_name"] = self._experiment.name
 
-#         project = project or os.environ.get("WANDB_PROJECT", "energizer_logs")
+        # cannot be pickled
+        state["_experiment"] = None
+        return state
 
-#         # set wandb init arguments
-#         self._wandb_init: Dict[str, Any] = {
-#             "dir": dir,
-#             "project": project,
-#             "name": name,
-#             "id": id,
-#             "resume": "allow",
-#             "anonymous": ("allow" if anonymous else None),
-#         }
-#         self._wandb_init.update(**kwargs)
+    @property
+    def name(self) -> Optional[str]:
+        return self._wandb_init.get("name")
 
-#         # extract parameters
-#         self._project = self._wandb_init.get("project")
-#         self._dir = self._wandb_init.get("dir")
-#         self._name = self._wandb_init.get("name")
-#         self._id = self._wandb_init.get("id")
-#         self._offline = offline
-#         self._prefix = prefix
-#         self._experiment = None
+    @property
+    def version(self) -> Optional[Union[int, str]]:
+        return self._experiment.id if self._experiment else self._wandb_init.get("id")
 
-#         # start wandb run (to create an attach_id for distributed modes)
-#         wandb.require("service")  # type: ignore
-#         _ = self.experiment
+    @property
+    def root_dir(self) -> Optional[str]:
+        return self._wandb_init.get("dir")
 
-#     def __getstate__(self) -> Dict[str, Any]:
-#         state = self.__dict__.copy()
-#         # args needed to reload correct experiment
-#         if self._experiment is not None:
-#             state["_id"] = getattr(self._experiment, "id", None)
-#             state["_attach_id"] = getattr(self._experiment, "_attach_id", None)
-#             state["_name"] = self._experiment.name
+    @property
+    @rank_zero_experiment
+    def experiment(self) -> Union[Run, RunDisabled]:
+        if self._experiment is None:
+            if self._wandb_init.get("mode", None) == "offline":
+                os.environ["WANDB_MODE"] = "dryrun"
 
-#         # cannot be pickled
-#         state["_experiment"] = None
-#         return state
+            attach_id = getattr(self, "_attach_id", None)
+            if wandb.run is not None:
+                # wandb process already created in this instance
+                rank_zero_warn(
+                    "There is a wandb run already in progress and newly created instances of `WandbLogger` will reuse"
+                    " this run. If this is not desired, call `wandb.finish()` before instantiating `WandbLogger`."
+                )
+                self._experiment = wandb.run
+            elif attach_id is not None and hasattr(wandb, "_attach"):
+                # attach to wandb process referenced
+                self._experiment = wandb._attach(attach_id)
+            else:
+                # create new wandb process
+                self._experiment = wandb.init(**self._wandb_init)
 
-#     @property
-#     def dir(self) -> Optional[str]:
-#         return self._dir
+                # define default x-axis
+                if isinstance(self._experiment, (Run, RunDisabled)) and getattr(
+                    self._experiment, "define_metric", None
+                ):
+                    self._experiment.define_metric("step")
+                    self._experiment.define_metric("*", step_metric="step", step_sync=True)
 
-#     @property
-#     def project(self) -> Optional[str]:
-#         return self._project
+        assert isinstance(self._experiment, (Run, RunDisabled))
+        return self._experiment
 
-#     @property
-#     def name(self) -> Optional[str]:
-#         return self._name
+    def watch(self, model: nn.Module, log: str = "gradients", log_freq: int = 100, log_graph: bool = True) -> None:
+        self.experiment.watch(model, log=log, log_freq=log_freq, log_graph=log_graph)
 
-#     @property
-#     def id(self) -> Optional[str]:
-#         """Gets the id of the experiment.
+    @rank_zero_only
+    def finalize(self, status: str) -> None:
+        self.experiment.finalize(status)
 
-#         Returns:
-#             The id of the experiment if the experiment exists else the id given to the constructor.
-#         """
-#         # don't create an experiment if we don't have one
-#         return self._experiment.id if self._experiment else self._id
+    @rank_zero_only
+    def log_hyperparams(self, params: Union[Dict[str, Any], Namespace]) -> None:
+        params = _convert_params(params)
+        params = _sanitize_callable_params(params)
+        self.experiment.config.update(params, allow_val_change=True)
 
-#     @property
-#     @rank_zero_experiment
-#     def experiment(self) -> Union[Run, RunDisabled]:
-#         r"""
+    @rank_zero_only
+    def log_metrics(self, metrics: Mapping, step: int) -> None:
+        assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
+        self.experiment.log(dict(metrics, **{"step": step}))
 
-#         Actual wandb object. To use wandb features in your
-#         :class:`~lightning.pytorch.core.module.LightningModule` do the following.
+    # @rank_zero_only
+    # def log_table(
+    #     self,
+    #     step: int,
+    #     key: str,
+    #     columns: Optional[List[str]] = None,
+    #     data: Optional[List[List[Any]]] = None,
+    #     dataframe: Any = None,
+    # ) -> None:
+    #     """Log a Table containing any object type (text, image, audio, video, molecule, html, etc).
 
-#         Example::
+    #     Can be defined either with `columns` and `data` or with `dataframe`.
+    #     """
 
-#         .. code-block:: python
+    #     metrics = {key: wandb.Table(columns=columns, data=data, dataframe=dataframe)}
+    #     self.log_metrics(metrics, step)
 
-#             self.logger.experiment.some_wandb_function()
+    # @rank_zero_only
+    # def log_text(
+    #     self,
+    #     key: str,
+    #     columns: Optional[List[str]] = None,
+    #     data: Optional[List[List[str]]] = None,
+    #     dataframe: Any = None,
+    #     step: Optional[int] = None,
+    # ) -> None:
+    #     """Log text as a Table.
 
-#         """
-#         if self._experiment is None:
-#             if self._offline:
-#                 os.environ["WANDB_MODE"] = "dryrun"
+    #     Can be defined either with `columns` and `data` or with `dataframe`.
+    #     """
 
-#             attach_id = getattr(self, "_attach_id", None)
-#             if wandb.run is not None:
-#                 # wandb process already created in this instance
-#                 rank_zero_warn(
-#                     "There is a wandb run already in progress and newly created instances of `WandbLogger` will reuse"
-#                     " this run. If this is not desired, call `wandb.finish()` before instantiating `WandbLogger`."
-#                 )
-#                 self._experiment = wandb.run
-#             elif attach_id is not None and hasattr(wandb, "_attach"):
-#                 # attach to wandb process referenced
-#                 self._experiment = wandb._attach(attach_id)
-#             else:
-#                 # create new wandb process
-#                 self._experiment = wandb.init(**self._wandb_init)
-
-#                 # define default x-axis
-#                 if isinstance(self._experiment, (Run, RunDisabled)) and getattr(
-#                     self._experiment, "define_metric", None
-#                 ):
-#                     self._experiment.define_metric("trainer/global_step")
-#                     self._experiment.define_metric("*", step_metric="trainer/global_step", step_sync=True)
-
-#         assert isinstance(self._experiment, (Run, RunDisabled))
-#         return self._experiment
-
-#     def watch(self, model: nn.Module, log: str = "gradients", log_freq: int = 100, log_graph: bool = True) -> None:
-#         self.experiment.watch(model, log=log, log_freq=log_freq, log_graph=log_graph)
-
-#     @rank_zero_only
-#     def log_hyperparams(self, params: Union[Dict[str, Any], Namespace]) -> None:
-#         params = _convert_params(params)
-#         params = _sanitize_callable_params(params)
-#         self.experiment.config.update(params, allow_val_change=True)
-
-#     @rank_zero_only
-#     def log_metrics(self, metrics: Mapping[str, float], step: Optional[int] = None) -> None:
-#         assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
-
-#         metrics = _add_prefix(metrics, self._prefix, self.LOGGER_JOIN_CHAR)
-#         if step is not None:
-#             self.experiment.log(dict(metrics, **{"step": step}))
-#         else:
-#             self.experiment.log(metrics)
-
-#     @rank_zero_only
-#     def log_table(
-#         self,
-#         key: str,
-#         columns: Optional[List[str]] = None,
-#         data: Optional[List[List[Any]]] = None,
-#         dataframe: Any = None,
-#         step: Optional[int] = None,
-#     ) -> None:
-#         """Log a Table containing any object type (text, image, audio, video, molecule, html, etc).
-
-#         Can be defined either with `columns` and `data` or with `dataframe`.
-#         """
-
-#         metrics = {key: wandb.Table(columns=columns, data=data, dataframe=dataframe)}
-#         self.log_metrics(metrics, step)
-
-#     @rank_zero_only
-#     def log_text(
-#         self,
-#         key: str,
-#         columns: Optional[List[str]] = None,
-#         data: Optional[List[List[str]]] = None,
-#         dataframe: Any = None,
-#         step: Optional[int] = None,
-#     ) -> None:
-#         """Log text as a Table.
-
-#         Can be defined either with `columns` and `data` or with `dataframe`.
-#         """
-
-#         self.log_table(key, columns, data, dataframe, step)
-
-#     @rank_zero_only
-#     def finalize(self, status: str) -> None:
-#         ...
+    #     self.log_table(key, columns, data, dataframe, step)

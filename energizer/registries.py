@@ -1,5 +1,4 @@
 import inspect
-import re
 from types import ModuleType
 from typing import Any, Callable, Generator, List, Optional, Tuple, Type
 
@@ -8,12 +7,7 @@ import torch_optimizer
 import transformers
 from transformers.optimization import TYPE_TO_SCHEDULER_FUNCTION
 
-from energizer import acquisition_functions
-
-
-def camel_to_snake(name):
-    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+from energizer.utilities import camel_to_snake
 
 
 class Registry(dict):
@@ -72,9 +66,6 @@ OPTIMIZER_REGISTRY.register_classes(torch.optim, torch.optim.Optimizer, override
 SCHEDULER_REGISTRY = Registry()
 SCHEDULER_REGISTRY.register_classes(torch.optim.lr_scheduler, torch.optim.lr_scheduler._LRScheduler)
 SCHEDULER_REGISTRY.update({v.__name__[4:]: v for v in TYPE_TO_SCHEDULER_FUNCTION.values()})
-
-SCORING_FUNCTIONS = Registry()
-SCORING_FUNCTIONS.register_functions(acquisition_functions)
 
 
 def filter_fn(k: str, v: Any) -> bool:

@@ -2,7 +2,8 @@
 import contextlib
 import os
 import random
-from typing import Any, Dict, Generator, List, Optional, Union
+import re
+from typing import Any, Dict, Generator, List, Literal, Union
 
 import numpy as np
 import torch
@@ -14,14 +15,23 @@ from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 
-# from torch.utils.data import BatchSampler, SequentialSampler
-# from energizer.enums import RunningStage
+
+def parse_locals(vars) -> Dict:
+    return {k: v for k, v in vars.items() if k not in ("self", "__class__")}
+
+
+def camel_to_snake(name: str) -> str:
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 
 
 def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
     """Converts `torch.Tensor` to a `numpy.ndarray` or python scalar type."""
     # if t.numel() > 1:
-    return t.detach().cpu().numpy()
+    cpu_t = t.detach().cpu()
+    if cpu_t.dtype == torch.bfloat16:
+        cpu_t = cpu_t.to(torch.float16)
+    return cpu_t.numpy()
     # return round(t.detach().cpu().item(), 6)
 
 
@@ -62,9 +72,15 @@ def local_seed(seed: int) -> Generator[None, None, None]:
     _set_rng_states(states)
 
 
-def init_deterministic(deterministic: bool) -> None:
+def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
+    kwargs = {}
+    if isinstance(deterministic, str):
+        assert deterministic == "warn_only", "deterministic can be a bool or `warn_only`"
+        deterministic, kwargs = True, {"warn_only": True}
+
     # NOTE: taken from the lightning Trainer
-    torch.use_deterministic_algorithms(deterministic)
+    torch.use_deterministic_algorithms(deterministic, **kwargs)
+
     if deterministic:
         # fixing non-deterministic part of horovod
         # https://github.com/Lightning-AI/lightning/pull/1572/files#r420279383
@@ -73,8 +89,12 @@ def init_deterministic(deterministic: bool) -> None:
         # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
+        # Enable CUDNN deterministic mode
+        torch.backends.cudnn.deterministic = True  # type: ignore
+        torch.backends.cudnn.benchmark = False  # type: ignore
 
-def _pad(inputs: List[int], padding_value: float, max_length: int) -> Tensor:
+
+def _pad(inputs: List[Tensor], padding_value: float, max_length: int) -> Tensor:
     # truncate -> convert to tensor -> pad
     return pad_sequence(
         [torch.tensor(t[:max_length]) for t in inputs],
@@ -87,19 +107,20 @@ def sample(
     indices: List[int],
     size: int,
     random_state: RandomState,
-    labels: Optional[List[int]] = None,
-    sampling: Optional[str] = None,
+    mode: Literal["uniform", "stratified"] = "uniform",
+    **kwargs,
 ) -> List[int]:
     """Makes sure to seed everything consistently."""
 
-    if sampling is None or sampling == "uniform":
+    if mode == "uniform":
         sample = random_state.choice(indices, size=size, replace=False).tolist()
 
-    elif sampling == "stratified" and labels is not None:
+    elif mode == "stratified":
+        assert "labels" in kwargs, ValueError("Must pass `labels` for stratified sampling.")
         sample = resample(
             indices,
             replace=False,
-            stratify=labels,
+            stratify=kwargs.get("labels"),
             n_samples=size,
             random_state=random_state,
         )

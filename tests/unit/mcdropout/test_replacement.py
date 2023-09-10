@@ -44,7 +44,6 @@ def test_replace_dropout(dropout_module):
 
 
 def test_consistent_inputs(dropout_module):
-
     # checks inputs
     with pytest.raises(MisconfigurationException):
         replace_dropout_layers(dropout_module, consistent=True)

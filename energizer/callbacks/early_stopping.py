@@ -7,7 +7,7 @@ from lightning.fabric.wrappers import _FabricModule
 
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import Interval, RunningStage
-from energizer.estimators.estimator import Estimator
+from energizer.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
 from energizer.utilities import make_dict_json_serializable
 
@@ -87,15 +87,11 @@ class EarlyStopping(CallbackWithMonitor):
         stage: Union[str, RunningStage],
         interval: Interval,
     ) -> None:
-        if (self.stage == stage and self.interval == interval) and estimator.progress_tracker.is_fitting:
-            step = (
-                estimator.progress_tracker.safe_global_epoch
-                if interval == Interval.EPOCH
-                else estimator.progress_tracker.global_batch
-            )
+        if (self.stage == stage and self.interval == interval) and estimator.tracker.is_fitting:
+            step = estimator.tracker.safe_global_epoch if interval == Interval.EPOCH else estimator.tracker.global_batch
             should_stop, reason = self._check_stopping_criteria(output, step)
             if should_stop:
-                estimator.progress_tracker.set_stop_training(True)
+                estimator.tracker.set_stop_training(True)
                 if self.verbose:
                     _msg = {
                         "best_score": round(self.best_score, 6),
