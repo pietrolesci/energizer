@@ -117,7 +117,6 @@ class ActiveEstimator(Estimator):
                 self.load_state_dict(model_cache_dir)
 
             # === RUN ROUND === #
-            out = self.round_start(datastore)
             self.callback("on_round_start", datastore=datastore)
 
             out = self.run_round(datastore, **kwargs)
@@ -245,9 +244,6 @@ class ActiveEstimator(Estimator):
 
     def active_fit_end(self, datastore: ActiveDataStore, output: List[ROUND_OUTPUT]) -> Any:
         return output
-
-    def round_start(self, datastore: ActiveDataStore) -> None:
-        ...
 
     def round_end(self, datastore: ActiveDataStore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
         return output
