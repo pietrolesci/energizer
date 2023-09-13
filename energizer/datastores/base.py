@@ -12,6 +12,7 @@ import pandas as pd
 import srsly
 import torch
 from datasets import Dataset
+from lightning_utilities.core.rank_zero import rank_zero_warn
 from numpy.random import RandomState
 from sklearn.utils import check_random_state  # type: ignore
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
@@ -292,6 +293,10 @@ class IndexMixin:
 
         # if dataset has been downsampled, mask the ids
         if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):  # type: ignore
+            rank_zero_warn(
+                "Index has more ids than dataset. Masking the missing ids from the index. "
+                "If this is expected (e.g., you downsampled your dataset), everything is fine."
+            )
             missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))  # type: ignore
             self.mask_ids_from_index(list(missing_ids))
 
