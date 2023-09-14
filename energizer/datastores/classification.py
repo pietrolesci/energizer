@@ -16,7 +16,7 @@ from energizer.utilities import _pad, ld_to_dl, sequential_numbers
 class SequenceClassificationMixin:
     MANDATORY_INPUT_NAMES: List[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
     OPTIONAL_INPUT_NAMES: List[str] = [InputKeys.TOKEN_TYPE_IDS]
-    MANDATORY_TARGET_NAME: str = InputKeys.TARGET
+    MANDATORY_TARGET_NAME: str = InputKeys.LABELS
 
     _tokenizer: PreTrainedTokenizerBase
     _labels: List[str]
@@ -149,7 +149,7 @@ def collate_fn(
     # remove string columns that cannot be transfered on gpu
     values_on_cpu = {col: new_batch.pop(col, None) for col in on_cpu if col in new_batch}
 
-    labels = new_batch.pop(InputKeys.TARGET, None)
+    labels = new_batch.pop(InputKeys.LABELS, None)
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
     new_batch = {
@@ -162,7 +162,7 @@ def collate_fn(
     }
 
     if labels is not None:
-        new_batch[InputKeys.TARGET] = torch.tensor(labels, dtype=torch.long)
+        new_batch[InputKeys.LABELS] = torch.tensor(labels, dtype=torch.long)
 
     # add things that need to remain on cpu
     if len(on_cpu) > 0:

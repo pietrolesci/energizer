@@ -36,7 +36,7 @@ class UncertaintyBasedStrategy(PoolBasedStrategyMixin, ActiveEstimator):
         **kwargs,
     ) -> List[int]:
         pool_loader = self.get_pool_loader(datastore, **kwargs)
-        if pool_loader is None or len(pool_loader or []) <= query_size:
+        if pool_loader is None or len(pool_loader.dataset or []) <= query_size:  # type: ignore
             # not enough instances
             return []
         return self.compute_most_uncertain(model, pool_loader, query_size)
