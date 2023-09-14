@@ -118,6 +118,7 @@ class EmbeddingClustering(DiversityBasedStrategyWithPool):
         clustering_fn: Literal["kmeans_sampling", "kmeans_silhouette_sampling", "kmeans_pp_sampling"],
         **kwargs,
     ) -> None:
+        super().__init__(*args, **kwargs)
         self.clustering_fn = CLUSTERING_FUNCTIONS[clustering_fn]
 
     def select_from_embeddings(
