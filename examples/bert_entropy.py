@@ -34,7 +34,7 @@ class UncertaintyStrategyForSequenceClassification(UncertaintyBasedStrategy):
         if stage == RunningStage.POOL:
             return self.score_fn(out.logits)
 
-        out_metrics = metrics(out.logits, batch[InputKeys.TARGET])
+        out_metrics = metrics(out.logits, batch[InputKeys.LABELS])
         if stage == RunningStage.TRAIN:
             logs = {OutputKeys.LOSS: out.loss, **out_metrics}
             self.log_dict({f"{stage}/{k}": v for k, v in logs.items()}, step=self.tracker.global_batch)

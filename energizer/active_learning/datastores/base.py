@@ -132,7 +132,7 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         if with_indices is not None:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
         return Dataset.from_pandas(
-            self._train_data.loc[mask, [i for i in self._train_data.columns if i != InputKeys.TARGET]]
+            self._train_data.loc[mask, [i for i in self._train_data.columns if i != InputKeys.LABELS]]
         )
 
     def label(
@@ -155,11 +155,11 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         # train-validation split
         if validation_perc is not None:
             n_val = floor(validation_perc * len(indices)) or 1  # at least add one
-            currentdata = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.TARGET]]
+            currentdata = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.LABELS]]
             val_indices = sample(
                 indices=currentdata[SpecialKeys.ID].tolist(),
                 size=n_val,
-                labels=currentdata[InputKeys.TARGET].tolist(),
+                labels=currentdata[InputKeys.LABELS].tolist(),
                 mode=validation_sampling,
                 random_state=self._rng,
             )
@@ -180,13 +180,13 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         mask = self._pool_mask(round)
         if with_indices:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
-        data = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.TARGET]]
+        data = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.LABELS]]
 
         return sample(
             indices=data[SpecialKeys.ID].tolist(),
             size=size,
             random_state=random_state or self._rng,
-            labels=data[InputKeys.TARGET].tolist(),
+            labels=data[InputKeys.LABELS].tolist(),
             **kwargs,
         )
 

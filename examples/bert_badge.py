@@ -40,7 +40,7 @@ class BADGEForSequenceClassification(BADGE):
         _ = batch.pop(InputKeys.ON_CPU, None)
         out = model(**batch)
 
-        out_metrics = metrics(out.logits, batch[InputKeys.TARGET])
+        out_metrics = metrics(out.logits, batch[InputKeys.LABELS])
         if stage == RunningStage.TRAIN:
             logs = {OutputKeys.LOSS: out.loss, **out_metrics}
             self.log_dict({f"{stage}/{k}": v for k, v in logs.items()}, step=self.tracker.global_batch)
