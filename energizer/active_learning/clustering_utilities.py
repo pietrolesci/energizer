@@ -93,6 +93,7 @@ def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args
 
     return unique_ids
 
+
 # def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
 #     """kmeans++ seeding algorithm.
 
