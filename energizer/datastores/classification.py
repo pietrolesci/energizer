@@ -126,11 +126,10 @@ class SequenceClassificationMixin(ABC):
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )
-    
+
 
 class PandasDataStoreForSequenceClassification(SequenceClassificationMixin, PandasDataStoreWithIndex):
-    ...            
-        
+    ...
 
 
 """
