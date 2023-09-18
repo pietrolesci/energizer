@@ -2,15 +2,17 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
+import numpy as np
 import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.trackers import ActiveProgressTracker
-from energizer.enums import RunningStage
+from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
 from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
+from energizer.utilities import ld_to_dl
 
 
 class ActiveEstimator(Estimator):
@@ -290,7 +292,37 @@ class ActiveEstimator(Estimator):
         return model, optimizer, scheduler, train_loader, validation_loader, test_loader
 
 
-class PoolBasedStrategyMixin(ABC):
+class PoolBasedMixin(ABC):
+    """Allows strategy to use the pool and/or the training set during the query process."""
+
+    POOL_OUTPUT_KEY: OutputKeys
+
+    def run_pool_evaluation(self, model: _FabricModule, loader: _FabricDataLoader) -> Dict[str, np.ndarray]:
+        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
+        _out = ld_to_dl(out)
+        return {k: np.concatenate(v) for k, v in _out.items()}
+
+    def evaluation_step(
+        self,
+        model: _FabricModule,
+        batch: Any,
+        batch_idx: int,
+        loss_fn: Optional[Union[torch.nn.Module, Callable]],
+        metrics: Optional[METRIC],
+        stage: Union[str, RunningStage],
+    ) -> Union[Dict, BATCH_OUTPUT]:
+        if stage != RunningStage.POOL:
+            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
+
+        # keep IDs here in case user messes up in the function definition
+        ids = batch[InputKeys.ON_CPU][SpecialKeys.ID]
+        pool_out = self.pool_step(model, batch, batch_idx, loss_fn, metrics)
+
+        assert isinstance(pool_out, torch.Tensor), f"`{stage}_step` must return a tensor`."
+
+        # enforce that we always return a dict here
+        return {self.POOL_OUTPUT_KEY: pool_out, SpecialKeys.ID: ids}
+
     @abstractmethod
     def pool_step(
         self,
@@ -299,7 +331,7 @@ class PoolBasedStrategyMixin(ABC):
         batch_idx: int,
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC] = None,
-    ) -> BATCH_OUTPUT:
+    ) -> torch.Tensor:
         ...
 
     def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
@@ -317,3 +349,9 @@ class PoolBasedStrategyMixin(ABC):
                 RunningStage.POOL, num_batches=len(pool_loader or []), limit_batches=kwargs.get("limit_pool_batches")
             )
             return pool_loader
+
+    def get_train_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
+        loader = datastore.train_loader(**kwargs)
+        if loader is not None:
+            train_loader = self.configure_dataloader(loader)  # type: ignore
+            return train_loader

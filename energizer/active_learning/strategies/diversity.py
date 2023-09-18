@@ -1,18 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDataStore
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
-from energizer.active_learning.strategies.base import ActiveEstimator, PoolBasedStrategyMixin
-from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
+from energizer.active_learning.strategies.base import ActiveEstimator, PoolBasedMixin
+from energizer.enums import OutputKeys, SpecialKeys
 from energizer.types import METRIC
-from energizer.utilities import ld_to_dl, move_to_cpu
 
 
 class DiversityBasedStrategy(ABC, ActiveEstimator):
@@ -66,7 +65,9 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
         ...
 
 
-class DiversityBasedStrategyWithPool(PoolBasedStrategyMixin, DiversityBasedStrategy):
+class DiversityBasedStrategyWithPool(PoolBasedMixin, DiversityBasedStrategy):
+    POOL_OUTPUT_KEY: OutputKeys = OutputKeys.EMBEDDINGS
+
     def get_embeddings_and_ids(
         self,
         model: _FabricModule,
@@ -77,41 +78,11 @@ class DiversityBasedStrategyWithPool(PoolBasedStrategyMixin, DiversityBasedStrat
         pool_loader = self.get_pool_loader(datastore, **kwargs)
         if pool_loader is not None and len(pool_loader.dataset or []) > query_size:  # type: ignore
             # enough instances
-            return self.compute_pool_embeddings(model, pool_loader)
-
-    def compute_pool_embeddings(self, model: _FabricModule, loader: _FabricDataLoader) -> Tuple[np.ndarray, np.ndarray]:
-        # NOTE: this is similar to `UncertaintyBasedStrategy.compute_most_uncertain`
-        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
-        _out = ld_to_dl(out)
-
-        embs = np.concatenate(_out[OutputKeys.EMBEDDINGS])
-        uids = np.concatenate(_out[SpecialKeys.ID])
-
-        return embs, uids
-
-    def evaluation_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
-        stage: Union[str, RunningStage],
-    ) -> Dict:
-        if stage != RunningStage.POOL:
-            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
-
-        # keep IDs here in case user messes up in the function definition
-        ids = batch[InputKeys.ON_CPU][SpecialKeys.ID]
-        pool_out = self.pool_step(model, batch, batch_idx, loss_fn, metrics)
-
-        assert isinstance(pool_out, torch.Tensor), "`pool_step` must return the gradient tensor`."
-
-        # enforce that we always return a dict here
-        return {OutputKeys.EMBEDDINGS: move_to_cpu(pool_out), SpecialKeys.ID: ids}
+            out = self.run_pool_evaluation(model, pool_loader)
+            return out[self.POOL_OUTPUT_KEY], out[SpecialKeys.ID]
 
 
-class EmbeddingClustering(DiversityBasedStrategyWithPool):
+class ClusteringMixin:
     def __init__(
         self,
         *args,
@@ -130,9 +101,16 @@ class EmbeddingClustering(DiversityBasedStrategyWithPool):
         ids: np.ndarray,
         **kwargs,
     ) -> List[int]:
-        center_ids = self.clustering_fn(embeddings, query_size, rng=self.rng)
+        center_ids = self.clustering_fn(embeddings, query_size, rng=self.rng)  # type: ignore
         return ids[center_ids].tolist()
 
+
+class EmbeddingClustering(ClusteringMixin, DiversityBasedStrategy):
+    ...
+
+
+class PoolBasedEmbeddingClustering(ClusteringMixin, DiversityBasedStrategyWithPool):
+    @abstractmethod
     def pool_step(
         self,
         model: _FabricModule,
@@ -141,10 +119,7 @@ class EmbeddingClustering(DiversityBasedStrategyWithPool):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
     ) -> torch.Tensor:
-        return self.get_model_embeddings(model, batch)
-
-    @abstractmethod
-    def get_model_embeddings(self, model: _FabricModule, batch: Any) -> torch.Tensor:
+        """This needs to return the embedded batch."""
         ...
 
 
