@@ -200,19 +200,19 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
     """
 
     def _labelled_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = self._train_data[SpecialKeys.IS_LABELLED] == True
+        mask = self._train_data[SpecialKeys.IS_LABELLED] == True  # noqa: E712
         if round is not None:
             mask = mask & (self._train_data[SpecialKeys.LABELLING_ROUND] <= round)
         return mask
 
     def _train_mask(self, round: Optional[int] = None) -> pd.Series:
-        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == False)
+        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == False)  # noqa: E712
 
     def _validation_mask(self, round: Optional[int] = None) -> pd.Series:
-        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == True)
+        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == True)  # noqa: E712
 
     def _pool_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = self._train_data[SpecialKeys.IS_LABELLED] == False
+        mask = self._train_data[SpecialKeys.IS_LABELLED] == False  # noqa: E712
         if round is not None:
             mask = mask | (self._train_data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
@@ -233,7 +233,8 @@ class ActiveIndexMixin(IndexMixin):
 
     def get_train_embeddings(self, ids: List[int]) -> np.ndarray:
         # check all the ids are training ids
-        assert len(set(self.get_train_ids()).intersection(set(ids))) == len(ids)  # type: ignore
+        train_ids = self.get_train_ids()  # type: ignore
+        assert all(i in train_ids for i in ids), set(train_ids).difference(set(ids))
 
         # now that we are sure, let's unmask them and get the items
         self.unmask_ids_from_index(ids)
