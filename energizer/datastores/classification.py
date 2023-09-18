@@ -1,3 +1,4 @@
+from abc import ABC
 from collections import Counter
 from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -13,7 +14,7 @@ from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import _pad, ld_to_dl, sequential_numbers
 
 
-class SequenceClassificationMixin:
+class SequenceClassificationMixin(ABC):
     MANDATORY_INPUT_NAMES: List[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
     OPTIONAL_INPUT_NAMES: List[str] = [InputKeys.TOKEN_TYPE_IDS]
     MANDATORY_TARGET_NAME: str = InputKeys.LABELS
@@ -125,10 +126,11 @@ class SequenceClassificationMixin:
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )
-
+    
 
 class PandasDataStoreForSequenceClassification(SequenceClassificationMixin, PandasDataStoreWithIndex):
-    ...
+    ...            
+        
 
 
 """

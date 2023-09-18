@@ -1,4 +1,3 @@
-from abc import abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -92,7 +91,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         **kwargs,
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         pool_ids = kwargs.get("subpool_ids", None) or datastore.get_pool_ids()
-        return datastore.get_pool_embeddings(pool_ids), np.ndarray(pool_ids)
+        return datastore.get_pool_embeddings(pool_ids), np.array(pool_ids)
 
     def select_from_embeddings(
         self,
@@ -155,15 +154,13 @@ class BADGE(DiversityBasedStrategyWithPool):
         grads_3d = torch.einsum("bi,bj->bij", scales, penultimate_layer_out)
         return grads_3d.view(batch_size, -1)  # (batch_size,)
 
-    @abstractmethod
     def get_penultimate_layer_out(self, model: _FabricModule, batch: Any) -> torch.Tensor:
-        ...
+        raise NotImplementedError("Either implement `get_penultimate_layer_out` of `pool_step` directly.")
 
-    @abstractmethod
     def get_logits_from_penultimate_layer_out(
         self, model: _FabricModule, penultimate_layer_out: torch.Tensor
     ) -> torch.Tensor:
-        ...
+        raise NotImplementedError("Either implement `get_logits_from_penultimate_layer_out` of `pool_step` directly.")
 
 
 # class ContrastiveActiveLearning(DiversityBasedStrategy, UncertaintyBasedStrategy):
