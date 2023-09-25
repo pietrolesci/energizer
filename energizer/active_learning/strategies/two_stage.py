@@ -154,7 +154,7 @@ class SEALSStrategy(BaseSubsetWithSearchStrategy):
         annotated_ids = super().run_query(model, datastore, query_size, **kwargs)
 
         # in the next round we only need to search the newly labelled data
-        self.to_search += annotated_ids
+        self.to_search = annotated_ids
 
         # make sure to remove instances that might have been annotated
         self.subpool_ids = [i for i in self.subpool_ids if i not in annotated_ids]
