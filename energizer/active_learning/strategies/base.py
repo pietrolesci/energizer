@@ -351,7 +351,16 @@ class PoolBasedMixin(ABC):
             return pool_loader
 
     def get_train_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
+
+        # NOTE: hack -- load train dataloader with the evaluation batch size
+        batch_size = datastore.loading_params["batch_size"]
+        datastore._loading_params["batch_size"] = datastore.loading_params["eval_batch_size"]
         loader = datastore.train_loader(**kwargs)
+        datastore._loading_params["batch_size"] = batch_size
+
         if loader is not None:
             train_loader = self.configure_dataloader(loader)  # type: ignore
+            self.tracker.setup_eval(  # type: ignore
+                RunningStage.POOL, num_batches=len(train_loader or []), limit_batches=kwargs.get("limit_pool_batches")
+            )
             return train_loader

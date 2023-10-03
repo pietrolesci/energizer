@@ -158,6 +158,7 @@ class Datastore(BaseDataStore):
             return next(iter(loader))
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
+
         # get dataset
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is None:
