@@ -8,7 +8,7 @@ from sklearn.utils import check_random_state
 from torch.nn.functional import one_hot
 
 from energizer.active_learning.clustering_utilities import kmeans_pp_sampling
-from energizer.active_learning.datastores.base import ActiveDataStore, ActiveDataStoreWithIndex
+from energizer.active_learning.datastores.base import ActiveDatastore, ActiveDatastoreWithIndex
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
 from energizer.active_learning.strategies.diversity import DiversityBasedStrategy, DiversityBasedStrategyWithPool
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
@@ -62,7 +62,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     def run_query(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
+        datastore: ActiveDatastoreWithIndex,
         query_size: int,
         **kwargs,
     ) -> List[int]:
@@ -85,7 +85,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     def get_embeddings_and_ids(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
+        datastore: ActiveDatastoreWithIndex,
         query_size: int,
         **kwargs,
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -95,7 +95,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
+        datastore: ActiveDatastoreWithIndex,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
@@ -112,7 +112,7 @@ class BADGE(DiversityBasedStrategyWithPool):
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,

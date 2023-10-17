@@ -8,7 +8,7 @@ from torchmetrics.classification import Accuracy, F1Score, Precision, Recall
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from energizer import seed_everything
-from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
+from energizer.active_learning.datastores.classification import ActivePandasDatastoreForSequenceClassification
 from energizer.active_learning.strategies.random import RandomStrategy
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     dataset_dict = dataset_dict.map(lambda ex: tokenizer(ex["text"]), batched=True)
 
     # create datastore
-    datastore = ActivePandasDataStoreForSequenceClassification.from_dataset_dict(
+    datastore = ActivePandasDatastoreForSequenceClassification.from_dataset_dict(
         dataset_dict=dataset_dict,
         input_names=["input_ids", "attention_mask"],
         target_name="labels",

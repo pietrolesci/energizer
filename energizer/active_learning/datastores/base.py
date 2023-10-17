@@ -9,7 +9,7 @@ from datasets import Dataset
 from numpy.random import RandomState
 from torch.utils.data import DataLoader
 
-from energizer.datastores.base import Datastore, IndexMixin, PandasDataStore
+from energizer.datastores.base import Datastore, IndexMixin, PandasDatastore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import sample
 
@@ -76,11 +76,11 @@ class ActiveLearningMixin(ABC):
         ...
 
 
-class ActiveDataStore(ActiveLearningMixin, Datastore):
+class ActiveDatastore(ActiveLearningMixin, Datastore):
     ...
 
 
-class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
+class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
     _train_data: pd.DataFrame
     _test_data: Optional[Dataset]
 
@@ -249,11 +249,11 @@ class ActiveIndexMixin(IndexMixin):
         raise ValueError("Use `get_{train/pool}_embeddings` methods instead.")
 
 
-class ActiveDataStoreWithIndex(ActiveIndexMixin, ActiveDataStore):
+class ActiveDatastoreWithIndex(ActiveIndexMixin, ActiveDatastore):
     ...
 
 
-class ActivePandasDataStoreWithIndex(ActiveIndexMixin, ActivePandasDataStore):
+class ActivePandasDatastoreWithIndex(ActiveIndexMixin, ActivePandasDatastore):
     def label(
         self,
         indices: List[int],

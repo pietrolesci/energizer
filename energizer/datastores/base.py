@@ -3,25 +3,21 @@ Here we define the classes that take care of loading the data.
 """
 
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
-import hnswlib as hb
-import numpy as np
 import pandas as pd
-import srsly
 import torch
 from datasets import Dataset
-from lightning_utilities.core.rank_zero import rank_zero_warn
 from numpy.random import RandomState
 from sklearn.utils import check_random_state  # type: ignore
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
 
 from energizer.enums import RunningStage, SpecialKeys
 from energizer.types import DATA_SOURCE, DATASET
+from energizer.datastores.mixins import IndexMixin
 
 
-class BaseDataStore(ABC):
+class BaseDatastore(ABC):
     """General container for data."""
 
     """
@@ -103,7 +99,7 @@ class BaseDataStore(ABC):
         ...
 
 
-class Datastore(BaseDataStore):
+class Datastore(BaseDatastore):
     """Defines dataloading for training and evaluation."""
 
     _collate_fn: Optional[Callable]
@@ -210,15 +206,9 @@ class Datastore(BaseDataStore):
     def test_size(self, *args, **kwargs) -> Optional[int]:
         return self._get_size(RunningStage.TEST, *args, **kwargs)
 
-
-class PandasDataStore(Datastore):
-    _train_data: Optional[pd.DataFrame]
-    _validation_data: Optional[Dataset]
-    _test_data: Optional[Dataset]
-
     def train_dataset(self) -> Optional[Dataset]:
         if self._train_data is not None:
-            return Dataset.from_pandas(self._train_data, preserve_index=False)
+            return self._train_data
 
     def validation_dataset(self) -> Optional[Dataset]:
         if self._validation_data is not None:
@@ -228,57 +218,22 @@ class PandasDataStore(Datastore):
         if self._test_data is not None:
             return self._test_data
 
+
+class PandasDatastore(Datastore):
+    _train_data: Optional[pd.DataFrame]
+    _validation_data: Optional[Dataset]
+    _test_data: Optional[Dataset]
+
+    def train_dataset(self) -> Optional[Dataset]:
+        if self._train_data is not None:
+            return Dataset.from_pandas(self._train_data, preserve_index=False)
+
     def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
         assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
         return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
 
 
-class IndexMixin:
-    index: hb.Index = None
-    embedding_name: str
-
-    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> Tuple[np.ndarray, np.ndarray]:
-        # retrieve one additional element if the query is in the set we are looking in
-        # because the query itself is returned as the most similar element and we need to remove it
-        query_size = query_size + 1 if query_in_set else query_size
-        indices, distances = self.index.knn_query(data=query, k=query_size)
-        if query_in_set:
-            # remove the first element retrieved if the query is in the set since it's the element itself
-            indices, distances = indices[:, 1:], distances[:, 1:]
-        return indices, distances
-
-    def load_index(self, index_path: Union[str, Path], metadata_path: Union[str, Path]) -> None:
-        meta: Dict = srsly.read_json(metadata_path)  # type: ignore
-        index = hb.Index(space=meta["metric"], dim=meta["dim"])
-        index.load_index(str(index_path))
-        self.index = index
-
-        # consistency check: data in index must be the same or more
-        assert self._train_data is not None  # type: ignore
-        assert len(index.get_ids_list()) >= len(self._train_data[SpecialKeys.ID]), "Index is not compatible with data."  # type: ignore
-
-        # if dataset has been downsampled, mask the ids
-        if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):  # type: ignore
-            rank_zero_warn(
-                "Index has more ids than dataset. Masking the missing ids from the index. "
-                "If this is expected (e.g., you downsampled your dataset), everything is fine."
-            )
-            missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))  # type: ignore
-            self.mask_ids_from_index(list(missing_ids))
-
-    def mask_ids_from_index(self, ids: List[int]) -> None:
-        for i in ids:
-            self.index.mark_deleted(i)
-
-    def unmask_ids_from_index(self, ids: List[int]) -> None:
-        for i in ids:
-            self.index.unmark_deleted(i)
-
-    def get_embeddings(self, ids: List[int]) -> np.ndarray:
-        return np.stack(self.index.get_items(ids))
-
-
-class PandasDataStoreWithIndex(IndexMixin, PandasDataStore):
+class PandasDatastoreWithIndex(IndexMixin, PandasDatastore):
     """DataModule that defines dataloading and indexing logic."""
 
 

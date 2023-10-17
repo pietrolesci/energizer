@@ -6,7 +6,7 @@ from numpy.random import RandomState
 # https://scikit-learn.org/stable/developers/develop.html#random-numbers
 from sklearn.utils.validation import check_random_state
 
-from energizer.active_learning.datastores.base import ActiveDataStore
+from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.active_learning.strategies.base import ActiveEstimator
 
 
@@ -21,7 +21,7 @@ class RandomStrategy(ActiveEstimator):
     def run_query(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         **kwargs,
     ) -> List[int]:

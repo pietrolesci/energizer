@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from tqdm.auto import tqdm
 
-from energizer.active_learning.datastores.base import ActiveDataStore
+from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.enums import RunningStage
 from energizer.trackers import ProgressTracker, StageTracker, Tracker
 
@@ -80,7 +80,7 @@ class ActiveProgressTracker(ProgressTracker):
         max_rounds: Optional[int],
         max_budget: Optional[int],
         query_size: int,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         validation_perc: Optional[float],
         log_interval: int,
         enable_progress_bar: bool,

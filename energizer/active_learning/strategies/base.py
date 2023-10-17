@@ -7,7 +7,7 @@ import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
-from energizer.active_learning.datastores.base import ActiveDataStore
+from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
@@ -31,7 +31,7 @@ class ActiveEstimator(Estimator):
 
     def active_fit(
         self,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         max_rounds: Optional[int] = None,
         max_budget: Optional[int] = None,
@@ -103,7 +103,7 @@ class ActiveEstimator(Estimator):
 
     def run_active_fit(
         self,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         reinit_model: bool,
         model_cache_dir: Union[str, Path],
         **kwargs,
@@ -150,7 +150,7 @@ class ActiveEstimator(Estimator):
 
     def run_round(
         self,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         replay: bool,
         fit_loop_kwargs: Dict,
@@ -196,7 +196,7 @@ class ActiveEstimator(Estimator):
     def run_annotation(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         query_kwargs: Dict,
         label_kwargs: Dict,
@@ -237,21 +237,21 @@ class ActiveEstimator(Estimator):
     def run_query(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         **kwargs,
     ) -> List[int]:
         raise NotImplementedError
 
-    def active_fit_end(self, datastore: ActiveDataStore, output: List[ROUND_OUTPUT]) -> Any:
+    def active_fit_end(self, datastore: ActiveDatastore, output: List[ROUND_OUTPUT]) -> Any:
         return output
 
-    def round_end(self, datastore: ActiveDataStore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
+    def round_end(self, datastore: ActiveDatastore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
         return output
 
     def _setup_round(
         self,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         replay: bool,
         fit_loop_kwargs: Dict,
         fit_opt_kwargs: Dict,
@@ -336,7 +336,7 @@ class PoolBasedMixin(ABC):
     def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
         return output
 
-    def get_pool_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
+    def get_pool_loader(self, datastore: ActiveDatastore, **kwargs) -> Optional[_FabricDataLoader]:
         subpool_ids = kwargs.get("subpool_ids", None)
         loader = datastore.pool_loader(with_indices=subpool_ids) if subpool_ids is not None else datastore.pool_loader()
 
@@ -349,7 +349,7 @@ class PoolBasedMixin(ABC):
             )
             return pool_loader
 
-    def get_train_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
+    def get_train_loader(self, datastore: ActiveDatastore, **kwargs) -> Optional[_FabricDataLoader]:
         # NOTE: hack -- load train dataloader with the evaluation batch size
         batch_size = datastore.loading_params["batch_size"]
         datastore._loading_params["batch_size"] = datastore.loading_params["eval_batch_size"]

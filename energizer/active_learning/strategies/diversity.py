@@ -7,7 +7,7 @@ from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils.validation import check_random_state
 
-from energizer.active_learning.datastores.base import ActiveDataStore
+from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
 from energizer.active_learning.strategies.base import ActiveEstimator, PoolBasedMixin
 from energizer.enums import OutputKeys, SpecialKeys
@@ -30,7 +30,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
     def run_query(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         **kwargs,
     ) -> List[int]:
@@ -45,7 +45,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
     def get_embeddings_and_ids(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         **kwargs,
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -56,7 +56,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
@@ -71,7 +71,7 @@ class DiversityBasedStrategyWithPool(PoolBasedMixin, DiversityBasedStrategy):
     def get_embeddings_and_ids(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         **kwargs,
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -95,7 +95,7 @@ class ClusteringMixin:
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
