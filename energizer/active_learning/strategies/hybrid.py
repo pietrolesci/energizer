@@ -66,7 +66,6 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         query_size: int,
         **kwargs,
     ) -> List[int]:
-
         # === DIVERSITY === #
         embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
         if embeddings_and_ids is None:
@@ -102,7 +101,6 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         ids: np.ndarray,
         **kwargs,
     ) -> List[int]:
-
         num_clusters = query_size * self.r_factor
 
         centers_ids = self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)

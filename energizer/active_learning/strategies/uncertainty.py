@@ -40,7 +40,6 @@ class UncertaintyBasedStrategy(PoolBasedMixin, ActiveEstimator):
         return self.compute_most_uncertain(model, pool_loader, query_size)
 
     def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> List[int]:
-
         # run evaluation
         out = self.run_pool_evaluation(model, loader)
         scores = out[self.POOL_OUTPUT_KEY]

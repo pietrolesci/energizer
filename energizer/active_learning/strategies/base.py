@@ -201,7 +201,6 @@ class ActiveEstimator(Estimator):
         query_kwargs: Dict,
         label_kwargs: Dict,
     ) -> int:
-
         # === QUERY === #
         self.callback("on_query_start", model=model, datastore=datastore)
 
@@ -351,7 +350,6 @@ class PoolBasedMixin(ABC):
             return pool_loader
 
     def get_train_loader(self, datastore: ActiveDataStore, **kwargs) -> Optional[_FabricDataLoader]:
-
         # NOTE: hack -- load train dataloader with the evaluation batch size
         batch_size = datastore.loading_params["batch_size"]
         datastore._loading_params["batch_size"] = datastore.loading_params["eval_batch_size"]

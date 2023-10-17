@@ -184,7 +184,6 @@ def _from_datasets(
     validation_dataset: Optional[Dataset] = None,
     test_dataset: Optional[Dataset] = None,
 ) -> Any:
-
     _datasets = {
         RunningStage.TRAIN: train_dataset,
         RunningStage.VALIDATION: validation_dataset,

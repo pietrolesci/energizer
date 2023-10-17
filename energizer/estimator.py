@@ -9,6 +9,7 @@ from lightning.fabric import Fabric
 from lightning.fabric.accelerators.accelerator import Accelerator
 from lightning.fabric.loggers.logger import Logger
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
+from lightning.fabric.connector import _PLUGIN_INPUT
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
@@ -66,6 +67,7 @@ class Estimator:
         loggers: Optional[Union[Logger, List[Logger]]] = None,
         deterministic: Union[bool, Literal["warn_only"]] = "warn_only",
         tf32_mode: Literal["highest", "high", "medium"] = "highest",
+        plugins: Optional[Union[_PLUGIN_INPUT, List[_PLUGIN_INPUT]]] = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -76,13 +78,14 @@ class Estimator:
             loggers=loggers,
             devices=1,  # only works with single-GPU
             num_nodes=1,  # only works with single-node
+            plugins=plugins,
         )
 
         self.set_deterministic(deterministic)
         self.set_torch_matmul_precision(tf32_mode)
 
-        self.init_model(model, **kwargs)
         self.init_tracker()
+        self.configure_model(model, **kwargs)
 
     @property
     def model(self) -> Union[torch.nn.Module, Callable]:
@@ -110,14 +113,6 @@ class Estimator:
         """Returns the first logger in the list passed to Fabric, which is considered the main logger."""
         return self.fabric.logger
 
-    # @property
-    # def prediction_dtype(self) -> torch.dtype:
-    #     dtype = self.precision
-    #     if "-" in dtype:
-    #         dtype = dtype.split("-")[0]
-    #         dtype = f"bfloat{dtype[2:]}" if dtype.startswith("b") else f"float{dtype}"
-    #     return getattr(torch, dtype)
-
     @property
     def model_summary(self) -> str:
         return summarize(self)
@@ -133,7 +128,7 @@ class Estimator:
     def init_tracker(self) -> None:
         self._tracker = ProgressTracker()
 
-    def init_model(self, model: Any, **kwargs) -> None:
+    def configure_model(self, model: Any, **kwargs) -> None:
         self._model = model
 
     def compile(self, **kwargs) -> None:
@@ -634,7 +629,6 @@ class Estimator:
         self.model.load_state_dict(self.fabric.load(cache_dir / name))
 
     def callback(self, hook: str, *args, **kwargs) -> Optional[Any]:
-
         # if estimator has the method
         method = getattr(self, hook, None)
         if method is not None and callable(method):
