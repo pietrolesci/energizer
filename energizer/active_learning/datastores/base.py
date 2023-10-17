@@ -132,7 +132,7 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         if with_indices is not None:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
         return Dataset.from_pandas(
-            self._train_data.loc[mask, [i for i in self._train_data.columns if i != InputKeys.TARGET]]
+            self._train_data.loc[mask, [i for i in self._train_data.columns if i != InputKeys.LABELS]]
         )
 
     def label(
@@ -155,11 +155,11 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         # train-validation split
         if validation_perc is not None:
             n_val = floor(validation_perc * len(indices)) or 1  # at least add one
-            currentdata = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.TARGET]]
+            currentdata = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.LABELS]]
             val_indices = sample(
                 indices=currentdata[SpecialKeys.ID].tolist(),
                 size=n_val,
-                labels=currentdata[InputKeys.TARGET].tolist(),
+                labels=currentdata[InputKeys.LABELS].tolist(),
                 mode=validation_sampling,
                 random_state=self._rng,
             )
@@ -180,13 +180,13 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         mask = self._pool_mask(round)
         if with_indices:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
-        data = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.TARGET]]
+        data = self._train_data.loc[mask, [SpecialKeys.ID, InputKeys.LABELS]]
 
         return sample(
             indices=data[SpecialKeys.ID].tolist(),
             size=size,
             random_state=random_state or self._rng,
-            labels=data[InputKeys.TARGET].tolist(),
+            labels=data[InputKeys.LABELS].tolist(),
             **kwargs,
         )
 
@@ -200,19 +200,19 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
     """
 
     def _labelled_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = self._train_data[SpecialKeys.IS_LABELLED] == True
+        mask = self._train_data[SpecialKeys.IS_LABELLED] == True  # noqa: E712
         if round is not None:
             mask = mask & (self._train_data[SpecialKeys.LABELLING_ROUND] <= round)
         return mask
 
     def _train_mask(self, round: Optional[int] = None) -> pd.Series:
-        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == False)
+        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == False)  # noqa: E712
 
     def _validation_mask(self, round: Optional[int] = None) -> pd.Series:
-        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == True)
+        return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == True)  # noqa: E712
 
     def _pool_mask(self, round: Optional[int] = None) -> pd.Series:
-        mask = self._train_data[SpecialKeys.IS_LABELLED] == False
+        mask = self._train_data[SpecialKeys.IS_LABELLED] == False  # noqa: E712
         if round is not None:
             mask = mask | (self._train_data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
@@ -233,7 +233,8 @@ class ActiveIndexMixin(IndexMixin):
 
     def get_train_embeddings(self, ids: List[int]) -> np.ndarray:
         # check all the ids are training ids
-        assert len(set(self.get_train_ids()).intersection(set(ids))) == len(ids)  # type: ignore
+        train_ids = self.get_train_ids()  # type: ignore
+        assert all(i in train_ids for i in ids), set(train_ids).difference(set(ids))
 
         # now that we are sure, let's unmask them and get the items
         self.unmask_ids_from_index(ids)

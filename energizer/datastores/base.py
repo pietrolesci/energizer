@@ -12,6 +12,7 @@ import pandas as pd
 import srsly
 import torch
 from datasets import Dataset
+from lightning_utilities.core.rank_zero import rank_zero_warn
 from numpy.random import RandomState
 from sklearn.utils import check_random_state  # type: ignore
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
@@ -157,6 +158,7 @@ class Datastore(BaseDataStore):
             return next(iter(loader))
 
     def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
+
         # get dataset
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is None:
@@ -189,11 +191,6 @@ class Datastore(BaseDataStore):
         if dataset is not None:
             return len(dataset)
 
-    def _get_num_batches(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
-        loader = self.get_loader(stage, *args, **kwargs)
-        if loader is not None:
-            return len(loader)
-
     """Abstract methods implementation"""
 
     def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
@@ -213,15 +210,6 @@ class Datastore(BaseDataStore):
 
     def test_size(self, *args, **kwargs) -> Optional[int]:
         return self._get_size(RunningStage.TEST, *args, **kwargs)
-
-    # def num_train_batches(self, *args, **kwargs) -> Optional[int]:
-    #     return self._get_num_batches(RunningStage.TRAIN, *args, **kwargs)
-
-    # def num_validation_batches(self, *args, **kwargs) -> Optional[int]:
-    #     return self._get_num_batches(RunningStage.VALIDATION, *args, **kwargs)
-
-    # def num_test_batches(self, *args, **kwargs) -> Optional[int]:
-    #     return self._get_num_batches(RunningStage.VALIDATION, *args, **kwargs)
 
 
 class PandasDataStore(Datastore):
@@ -244,26 +232,6 @@ class PandasDataStore(Datastore):
     def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
         assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
         return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
-
-
-# class TorchDataStore(Datastore):
-#     _train_loader: Optional[DataLoader]
-#     _validation_loader: Optional[DataLoader]
-#     _test_loader: Optional[DataLoader]
-
-#     def _get_dataset(self, stage: RunningStage, *args, **kwargs) -> Optional[DATASET]:
-#         loader = getattr(self, f"_{stage}_loader", None)
-#         if loader is not None:
-#             return loader.dataset
-
-#     def train_dataset(self, *args, **kwargs) -> Optional[DATASET]:
-#         return self._get_dataset(RunningStage.TRAIN, *args, **kwargs)
-
-#     def validation_dataset(self, *args, **kwargs) -> Optional[DATASET]:
-#         return self._get_dataset(RunningStage.VALIDATION, *args, **kwargs)
-
-#     def test_dataset(self, *args, **kwargs) -> Optional[DATASET]:
-#         return self._get_dataset(RunningStage.TEST, *args, **kwargs)
 
 
 class IndexMixin:
@@ -292,6 +260,10 @@ class IndexMixin:
 
         # if dataset has been downsampled, mask the ids
         if len(index.get_ids_list()) > len(self._train_data[SpecialKeys.ID]):  # type: ignore
+            rank_zero_warn(
+                "Index has more ids than dataset. Masking the missing ids from the index. "
+                "If this is expected (e.g., you downsampled your dataset), everything is fine."
+            )
             missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))  # type: ignore
             self.mask_ids_from_index(list(missing_ids))
 

@@ -1,3 +1,4 @@
+from abc import ABC
 from collections import Counter
 from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -13,11 +14,14 @@ from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import _pad, ld_to_dl, sequential_numbers
 
 
-class SequenceClassificationMixin:
+class SequenceClassificationMixin(ABC):
+    MANDATORY_INPUT_NAMES: List[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
+    OPTIONAL_INPUT_NAMES: List[str] = [InputKeys.TOKEN_TYPE_IDS]
+    MANDATORY_TARGET_NAME: str = InputKeys.LABELS
+
     _tokenizer: PreTrainedTokenizerBase
     _labels: List[str]
     _label_distribution: Dict[str, int]
-
     input_names: List[str]
     on_cpu: List[str]
 
@@ -34,7 +38,7 @@ class SequenceClassificationMixin:
         replacement: bool = False,
         max_length: int = 512,
     ) -> None:
-        super().prepare_for_loading(
+        super().prepare_for_loading(  # type: ignore
             batch_size,
             eval_batch_size,
             num_workers,
@@ -45,7 +49,7 @@ class SequenceClassificationMixin:
             seed,
             replacement,
         )
-        self._loading_params["max_length"] = max_length
+        self._loading_params["max_length"] = max_length  # type: ignore
 
     @property
     def tokenizer(self) -> PreTrainedTokenizerBase:
@@ -72,8 +76,6 @@ class SequenceClassificationMixin:
     @classmethod
     def from_datasets(
         cls,
-        input_names: Union[str, List[str]],
-        target_name: str,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
@@ -82,11 +84,12 @@ class SequenceClassificationMixin:
         validation_dataset: Optional[Dataset] = None,
         test_dataset: Optional[Dataset] = None,
     ) -> Self:
-        obj = cls(seed)
+        obj = cls(seed)  # type: ignore
         return _from_datasets(
             obj=obj,
-            input_names=input_names,
-            target_name=target_name,
+            mandatory_input_names=cls.MANDATORY_INPUT_NAMES,
+            optional_input_names=cls.OPTIONAL_INPUT_NAMES,
+            mandatory_target_name=cls.MANDATORY_TARGET_NAME,
             tokenizer=tokenizer,
             uid_name=uid_name,
             on_cpu=on_cpu,
@@ -99,16 +102,12 @@ class SequenceClassificationMixin:
     def from_dataset_dict(
         cls,
         dataset_dict: DatasetDict,
-        input_names: Union[str, List[str]],
-        target_name: str,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
         on_cpu: Optional[List[str]] = None,
         seed: Optional[int] = 42,
     ) -> Self:
         return cls.from_datasets(
-            input_names=input_names,
-            target_name=target_name,
             tokenizer=tokenizer,
             uid_name=uid_name,
             on_cpu=on_cpu,
@@ -123,7 +122,7 @@ class SequenceClassificationMixin:
             collate_fn,
             input_names=self.input_names,
             on_cpu=self.on_cpu,
-            max_length=None if show_batch else self.loading_params["max_length"],
+            max_length=None if show_batch else self.loading_params["max_length"],  # type: ignore
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )
@@ -151,7 +150,7 @@ def collate_fn(
     # remove string columns that cannot be transfered on gpu
     values_on_cpu = {col: new_batch.pop(col, None) for col in on_cpu if col in new_batch}
 
-    labels = new_batch.pop(InputKeys.TARGET, None)
+    labels = new_batch.pop(InputKeys.LABELS, None)
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
     new_batch = {
@@ -164,7 +163,7 @@ def collate_fn(
     }
 
     if labels is not None:
-        new_batch[InputKeys.TARGET] = torch.tensor(labels, dtype=torch.long)
+        new_batch[InputKeys.LABELS] = torch.tensor(labels, dtype=torch.long)
 
     # add things that need to remain on cpu
     if len(on_cpu) > 0:
@@ -174,9 +173,10 @@ def collate_fn(
 
 
 def _from_datasets(
-    obj: Any,
-    input_names: Union[str, List[str]],
-    target_name: str,
+    obj,
+    mandatory_input_names: List[str],
+    optional_input_names: List[str],
+    mandatory_target_name: str,
     tokenizer: PreTrainedTokenizerBase,
     uid_name: Optional[str] = None,
     on_cpu: Optional[List[str]] = None,
@@ -184,53 +184,85 @@ def _from_datasets(
     validation_dataset: Optional[Dataset] = None,
     test_dataset: Optional[Dataset] = None,
 ) -> Any:
-    obj._tokenizer = tokenizer
 
-    datasets = {
+    _datasets = {
         RunningStage.TRAIN: train_dataset,
         RunningStage.VALIDATION: validation_dataset,
         RunningStage.TEST: test_dataset,
     }
-    datasets = DatasetDict({k: v for k, v in datasets.items() if v is not None})
-
-    # label distribution
-    dataset = train_dataset or validation_dataset or test_dataset
-    if dataset is None:
+    datasets: Dict[RunningStage, Dataset] = {k: v for k, v in _datasets.items() if v is not None}
+    if len(datasets) < 1:
         raise ValueError("You need to pass at least one dataset.")
-    obj._labels = dataset.features[target_name].names
-    obj._label_distribution = Counter(dataset[target_name])
 
-    # column names
-    obj.input_names = [input_names] if isinstance(input_names, str) else input_names
-    assert all(
-        i in d.features for i in obj.input_names + [target_name] for d in datasets.values()
-    ), "Check input/target names passed."
-    datasets = datasets.rename_columns({target_name: InputKeys.TARGET})
+    # === INPUT NAMES === #
+    input_names = []
+    for name in mandatory_input_names:
+        for split, dataset in datasets.items():
+            if name in dataset.features:
+                input_names.append(name)
+            else:
+                raise ValueError(f"Mandatory column {name} not in dataset[{split}].")
 
-    obj.on_cpu = on_cpu or []
-    for i in obj.on_cpu:
-        for d in datasets.values():
-            if i not in d.features:
-                print(f"Some `on_cpu`={i} is not in dataset={d.features.keys()}")
-    obj.on_cpu += [SpecialKeys.ID]
+    for name in optional_input_names:
+        for dataset in datasets.values():
+            if name in dataset.features:
+                input_names.append(name)
 
-    if datasets.get(RunningStage.TRAIN) is not None:
+    # === TARGET NAME === #
+    labels = []
+    for split, dataset in datasets.items():
+        assert (
+            mandatory_target_name in dataset.features
+        ), f"Mandatory column {mandatory_target_name} not in dataset[{split}]."
+        labels.append(set(dataset.features[mandatory_target_name].names))
+
+    # check labels are consistent
+    assert all(s == labels[0] for s in labels), "Labels are inconsistent across splits"
+
+    # === ON_CPU === #
+    if on_cpu is not None:
+        for name in on_cpu:
+            for split, dataset in datasets.items():
+                assert name in dataset.features, f"{name=} not in dataset[{split}]={dataset.features.keys()}"
+    else:
+        on_cpu = []
+
+    # === UID NAME === #
+    uid_generator = sequential_numbers()
+    new_datasets = {}
+    for k, d in datasets.items():
         if uid_name is None:
-            uid_generator = sequential_numbers()
-            datasets = datasets.map(
-                lambda ex: {SpecialKeys.ID: [next(uid_generator) for _ in range(len(ex[target_name]))]},
-                batched=True,
-            )
+            uids = [next(uid_generator) for _ in range(len(d))]
+            new_dataset = d.add_column(SpecialKeys.ID, uids)  # type: ignore
+            print(f"UID column {SpecialKeys.ID} automatically created in dataset[{k}]")
         else:
-            # check
-            col = list(datasets[RunningStage.TRAIN][SpecialKeys.ID])
-            assert len(set(col)) == len(col), f"`uid_column` {uid_name} is not unique."
-            datasets[RunningStage.TRAIN] = datasets[RunningStage.TRAIN].rename_columns({uid_name: SpecialKeys.ID})
+            assert uid_name in d.features, f"{uid_name=} not in dataset[{k}]={d.features.keys()}"
+            ids = d[uid_name]
+            assert len(set(ids)) == len(ids), f"`uid_column` {uid_name} is not unique."
 
-    # set data sources
-    datasets = datasets.select_columns(obj.input_names + obj.on_cpu + [InputKeys.TARGET])  # type: ignore
-    obj._train_data = datasets[RunningStage.TRAIN].to_pandas()  # type: ignore
-    obj._validation_data = datasets.get(RunningStage.VALIDATION)
-    obj._test_data = datasets.get(RunningStage.TEST)
+            new_dataset = d
+            if uid_name != SpecialKeys.ID:
+                new_dataset = new_dataset.rename_columns({uid_name: SpecialKeys.ID})
+                print(f"UID column {uid_name} automatically renamed to {SpecialKeys.ID} in dataset[{k}]")
+
+        new_datasets[k] = new_dataset
+
+    on_cpu += [SpecialKeys.ID]
+
+    # === FORMAT (KEEP ONLY USEFUL COLUMNS) === #
+    columns = input_names + on_cpu + [mandatory_target_name]
+    new_datasets = {k: v.with_format(columns=columns) for k, v in new_datasets.items()}
+
+    # === SET ATTRIBUTES === #
+    if RunningStage.TRAIN in new_datasets:
+        obj._label_distribution = Counter(new_datasets[RunningStage.TRAIN][mandatory_target_name])
+
+    obj._labels = next(iter(new_datasets.values())).features[mandatory_target_name].names
+    obj.input_names = input_names
+    obj.on_cpu = on_cpu
+    obj._tokenizer = tokenizer
+    obj._train_data = new_datasets[RunningStage.TRAIN].to_pandas()  # type: ignore
+    obj._validation_data = new_datasets.get(RunningStage.VALIDATION)  # type: ignore
+    obj._test_data = new_datasets.get(RunningStage.TEST)  # type: ignore
 
     return obj

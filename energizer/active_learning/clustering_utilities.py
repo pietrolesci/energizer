@@ -2,7 +2,8 @@ from typing import List
 
 import numpy as np
 from numpy.random import RandomState
-from scipy.spatial.distance import cdist
+
+# from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans, kmeans_plusplus
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
@@ -81,6 +82,18 @@ def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomStat
     return _kmeans(X, num_clusters, rng, True, normalize)
 
 
+def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> List[int]:
+    _, indices = kmeans_plusplus(X, num_clusters, random_state=rng)
+
+    unique_ids = list(set(indices.tolist()))
+
+    # can this generate duplicates?
+    if len(unique_ids) != len(indices):
+        print(f"Kmeans++ returned duplicates. {X.shape=} {num_clusters=}")
+
+    return unique_ids
+
+
 # def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
 #     """kmeans++ seeding algorithm.
 
@@ -111,15 +124,3 @@ def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomStat
 #         centers_ids.append(new_center_id)
 
 #     return centers_ids
-
-
-def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> List[int]:
-    _, indices = kmeans_plusplus(X, num_clusters, random_state=rng)
-
-    unique_ids = list(set(indices.tolist()))
-
-    # can this generate duplicates?
-    if len(unique_ids) != len(indices):
-        print(f"Kmeans++ returned duplicates. {X.shape=} {num_clusters=}")
-
-    return unique_ids

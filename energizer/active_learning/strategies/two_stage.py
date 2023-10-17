@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
-from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
+from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
 
@@ -11,7 +12,7 @@ from energizer.active_learning.strategies.base import ActiveEstimator
 from energizer.enums import SpecialKeys
 
 
-class BaseSubsetStrategy(ActiveEstimator):
+class BaseSubsetStrategy(ABC, ActiveEstimator):
     """These strategies are applied in conjunction with a base query strategy. If the size of the pool
     falls below the given `k`, this implementation will not select a subset anymore and will just delegate
     to the base strategy instead.
@@ -44,25 +45,21 @@ class BaseSubsetStrategy(ActiveEstimator):
     def run_query(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
+        **kwargs,
     ) -> List[int]:
         if datastore.pool_size() > self.subpool_size:
-            subpool_ids = self.select_pool_subset(model, loader, datastore, query_size=query_size)
-            loader = self._get_subpool_loader_by_ids(datastore, subpool_ids)
+            subpool_ids = self.select_pool_subset(model, datastore, query_size, **kwargs)
+            kwargs["subpool_ids"] = subpool_ids
 
-        return self.base_strategy.run_query(model, loader, datastore, query_size)
+        return self.base_strategy.run_query(model, datastore, query_size, **kwargs)
 
+    @abstractmethod
     def select_pool_subset(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, **kwargs
+        self, model: _FabricModule, datastore: ActiveDataStore, query_size: int, **kwargs
     ) -> List[int]:
-        raise NotImplementedError
-
-    def _get_subpool_loader_by_ids(self, datastore: ActiveDataStore, subpool_ids: List[int]) -> _FabricDataLoader:
-        pool_loader = self.configure_dataloader(datastore.pool_loader(with_indices=subpool_ids))  # type: ignore
-        self.tracker.pool_tracker.max = len(pool_loader)  # type: ignore
-        return pool_loader  # type: ignore
+        ...
 
     def __getattr__(self, attr: str) -> Any:
         if attr not in self.__dict__:
@@ -72,7 +69,7 @@ class BaseSubsetStrategy(ActiveEstimator):
 
 class RandomSubsetStrategy(BaseSubsetStrategy):
     def select_pool_subset(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStore, **kwargs
+        self, model: _FabricModule, datastore: ActiveDataStore, query_size: int, **kwargs
     ) -> List[int]:
         subpool_size = min(datastore.pool_size(), self.subpool_size)
         return datastore.sample_from_pool(size=subpool_size, random_state=self.rng)
@@ -85,12 +82,11 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
         self.max_search_size = max_search_size
 
     def select_pool_subset(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
+        self, model: _FabricModule, datastore: ActiveDataStoreWithIndex, query_size: int, **kwargs
     ) -> List[int]:
-        query_size: int = kwargs["query_size"]
 
         # SELECT QUERIES
-        search_query_ids = self.select_search_query(model, loader, datastore, query_size=query_size)
+        search_query_ids = self.select_search_query(model, datastore, query_size, **kwargs)
 
         if len(search_query_ids) == 0:
             # if cold-starting there is no training embedding, fall-back to random sampling
@@ -103,14 +99,6 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
 
         # USE RESULTS TO SUBSET POOL
         return self.get_subpool_ids_from_search_results(candidate_df, datastore)
-
-    def select_search_query(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
-    ) -> List[int]:
-        raise NotImplementedError
-
-    def get_query_embeddings(self, datastore: ActiveDataStoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
-        raise NotImplementedError
 
     def search_pool(
         self, datastore: ActiveDataStoreWithIndex, search_query_embeddings: np.ndarray, search_query_ids: List[int]
@@ -133,10 +121,21 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
 
         return candidate_df
 
+    @abstractmethod
+    def select_search_query(
+        self, model: _FabricModule, datastore: ActiveDataStore, query_size: int, **kwargs
+    ) -> List[int]:
+        ...
+
+    @abstractmethod
+    def get_query_embeddings(self, datastore: ActiveDataStoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
+        ...
+
+    @abstractmethod
     def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDataStoreWithIndex
     ) -> List[int]:
-        raise NotImplementedError
+        ...
 
 
 class SEALSStrategy(BaseSubsetWithSearchStrategy):
@@ -148,21 +147,21 @@ class SEALSStrategy(BaseSubsetWithSearchStrategy):
     def run_query(
         self,
         model: _FabricModule,
-        loader: _FabricDataLoader,
         datastore: ActiveDataStore,
         query_size: int,
+        **kwargs,
     ) -> List[int]:
-        annotated_ids = super().run_query(model, loader, datastore, query_size)
+        annotated_ids = super().run_query(model, datastore, query_size, **kwargs)
 
         # in the next round we only need to search the newly labelled data
-        self.to_search += annotated_ids
+        self.to_search = annotated_ids
 
         # make sure to remove instances that might have been annotated
         self.subpool_ids = [i for i in self.subpool_ids if i not in annotated_ids]
         return annotated_ids
 
     def select_search_query(
-        self, model: _FabricModule, loader: _FabricDataLoader, datastore: ActiveDataStoreWithIndex, **kwargs
+        self, model: _FabricModule, datastore: ActiveDataStore, query_size: int, **kwargs
     ) -> List[int]:
         if len(self.to_search) < 1:
             return datastore.get_train_ids()

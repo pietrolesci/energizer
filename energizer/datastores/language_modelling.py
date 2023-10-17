@@ -128,7 +128,7 @@ def collate_fn(
     # remove string columns that cannot be transfered on gpu
     values_on_cpu = {col: new_batch.pop(col, None) for col in on_cpu if col in new_batch}
 
-    labels = new_batch.pop(InputKeys.TARGET, None)
+    labels = new_batch.pop(InputKeys.LABELS, None)
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
     new_batch = {
@@ -144,7 +144,7 @@ def collate_fn(
     labels = new_batch[InputKeys.INPUT_IDS].clone()
     if pad_token_id is not None:
         labels[labels == pad_token_id] = -100
-    new_batch[InputKeys.TARGET] = labels
+    new_batch[InputKeys.LABELS] = labels
 
     # add things that need to remain on cpu
     if len(on_cpu) > 0:

@@ -53,7 +53,7 @@ class SpecialKeys(StrEnum):
 
 
 class InputKeys(StrEnum):
-    TARGET: str = "labels"
+    LABELS: str = "labels"
     INPUT_IDS: str = "input_ids"
     ATT_MASK: str = "attention_mask"
     TOKEN_TYPE_IDS: str = "token_type_ids"
@@ -62,12 +62,13 @@ class InputKeys(StrEnum):
 
 
 class OutputKeys(StrEnum):
-    PRED: str = "y_hat"
-    TARGET: str = "y"
+    PREDS: str = "y_hat"
+    LABELS: str = "y"
     LOSS: str = "loss"
     LOGS: str = "logs"
     LOGITS: str = "logits"
     BATCH_SIZE: str = "batch_size"
     METRICS: str = "metrics"
     SCORES: str = "scores"
-    GRAD: str = "gradients"
+    GRADS: str = "gradients"
+    EMBEDDINGS: str = "embeddings"
