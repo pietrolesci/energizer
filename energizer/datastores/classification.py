@@ -101,6 +101,7 @@ class SequenceClassificationMixin(TextMixin):
             pad_fn=_pad,
         )
 
+
 class DatastoreForLanguageModelling(SequenceClassificationMixin, Datastore):
     ...
 
