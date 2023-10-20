@@ -50,8 +50,10 @@ def collate_fn_for_sequence_classification(
 
 
 class SequenceClassificationMixin(TextMixin):
+    MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
+
     _labels: List[str]
-    _label_distribution: Dict[str, int]
+    _label_distribution: Dict[str, Dict[str, int]]
 
     @property
     def labels(self) -> List[str]:
@@ -65,19 +67,24 @@ class SequenceClassificationMixin(TextMixin):
     def label2id(self) -> Dict[str, int]:
         return {v: k for k, v in self.id2label.items()}
 
-    def label_distribution(self, normalized: bool = False) -> Dict[str, Union[float, int]]:
+    def label_distribution(self, normalized: bool = False) -> Dict[str, Dict]:
         if normalized:
-            total = sum(self._label_distribution.values())
-            return {k: self._label_distribution[k] / total for k in self._label_distribution}
-        return dict(self._label_distribution)
+            norm_label_distribution = {}
+            for split, label_dist in self._label_distribution.items():
+                total = sum(label_dist.values())
+                norm_label_distribution[split] = {k: label_dist[k] / total for k in label_dist}
+            return norm_label_distribution
+
+        return self._label_distribution
 
     def _set_attributes(self, dataset_dict: Dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
         super()._set_attributes(dataset_dict, tokenizer)
 
         # === SET ATTRIBUTES === #
-        if self._train_data is not None:
-            self._label_distribution = Counter(self._train_data[self.MANDATORY_TARGET_NAME])
-
+        _label_distribution = {}
+        for k in dataset_dict:
+            _label_distribution[k] = dict(Counter(dataset_dict[k][self.MANDATORY_TARGET_NAME]))  # type: ignore
+        self._label_distribution = _label_distribution
         self._labels = next(iter(dataset_dict.values())).features[self.MANDATORY_TARGET_NAME].names
 
     def _check_labels(self, dataset_dict: Dict[RunningStage, Dataset], mandatory_target_name: str) -> None:
@@ -102,7 +109,7 @@ class SequenceClassificationMixin(TextMixin):
         )
 
 
-class DatastoreForLanguageModelling(SequenceClassificationMixin, Datastore):
+class DatastoreForSequenceClassification(SequenceClassificationMixin, Datastore):
     ...
 
 
