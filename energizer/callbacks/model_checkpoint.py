@@ -54,7 +54,6 @@ class ModelCheckpoint(CallbackWithMonitor):
             # during active learning we do not want to keep checkpoints from previous iterations
             for ckpt_path in self.dirpath.glob("*.pt"):
                 ckpt_path.unlink()
-                # shutil.rmtree(str(i))
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self._best_k_models = {}
 

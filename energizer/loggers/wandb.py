@@ -1,7 +1,7 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import pandas as pd
 import torch.nn as nn
@@ -132,9 +132,9 @@ class WandbLogger(Logger):
         self.experiment.config.update(params, allow_val_change=True)
 
     @rank_zero_only
-    def log_metrics(self, metrics: Mapping, step: int) -> None:
+    def log_metrics(self, metrics: Dict, step: int) -> None:
         assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
-        self.experiment.log(dict(metrics, **{"step": step}))
+        self.experiment.log({**metrics, "step": step})
 
     def save_to_parquet(self, path: Union[str, Path]) -> None:
         run = wandb.Api().run(self.run_path)

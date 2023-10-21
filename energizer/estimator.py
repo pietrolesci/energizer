@@ -298,8 +298,6 @@ class Estimator:
 
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
-            # print("=======")
-
             # run model on batch
             batch_out = self.run_training_step(model, optimizer, scheduler, batch, batch_idx, loss_fn, metrics)
 
@@ -309,7 +307,6 @@ class Estimator:
             train_out.append(move_to_cpu(batch_out))
 
             # validation loop
-            # print("IN ->", self.tracker.should_validate, "Step:", self.tracker.global_step, "Batch:", self.tracker.global_batch)
             if self.tracker.should_validate:
                 out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
                 if out is not None:
@@ -324,7 +321,6 @@ class Estimator:
         self.callback("on_train_epoch_end", model=model, output=train_out, metrics=metrics)
 
         # validation loop
-        # print("OUT ->", self.tracker.should_validate)
         if self.tracker.should_validate:
             out = self.run_evaluation(model, validation_loader, RunningStage.VALIDATION)  # type: ignore
             if out is not None:
@@ -345,7 +341,6 @@ class Estimator:
         metrics: Optional[METRIC],
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
-        # print(self.tracker.is_accumulating, self.tracker.global_batch)
 
         with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
             # compute loss
@@ -355,7 +350,6 @@ class Estimator:
             # compute gradients
             self.fabric.backward(loss / self.tracker.gradient_accumulation_steps)  # instead of loss.backward()
 
-        # print("Accumulating?", self.tracker.is_accumulating)
         if not self.tracker.is_accumulating:
             # clip gradients
             if self.optimization_args.clip_val or self.optimization_args.max_norm:
@@ -376,12 +370,12 @@ class Estimator:
 
             # update scheduler
             if scheduler is not None:
+                self.callback("on_before_scheduler", model=model, optimizer=optimizer, scheduler=scheduler)
                 scheduler.step()
+                self.callback("on_after_scheduler", model=model, optimizer=optimizer, scheduler=scheduler)
 
             # update tracker
             self.tracker.increment_step()
-
-            # print("UPDATED")
 
         return output
 
@@ -537,6 +531,7 @@ class Estimator:
         sch_kwargs = scheduler_kwargs or {}  # if None
         sch_kwargs = sch_kwargs.to_dict() if isinstance(sch_kwargs, SchedulerArgs) else sch_kwargs
 
+        # defaults to constant schedule
         sch_kwargs["name"] = scheduler or sch_kwargs.get("name")
 
         num_train_steps = self.tracker.step_tracker.max
@@ -617,7 +612,7 @@ class Estimator:
     def log_dict(self, value_dict: Mapping[str, Any], step: int) -> None:
         """Automatically moves to cpu and then logs mapping of values."""
         if self.tracker.should_log:
-            self.fabric.log_dict(value_dict, step)
+            self.fabric.log_dict(move_to_cpu(value_dict), step)
 
     def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
         cache_dir = Path(cache_dir)
