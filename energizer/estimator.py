@@ -1,7 +1,7 @@
 import copy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union, Set
 
 import numpy as np
 import torch
@@ -53,7 +53,7 @@ class OptimizationArgs(Args):
 
 
 class Estimator:
-    _model: Union[torch.nn.Module, Callable]
+    _model: torch.nn.Module
     _tracker: ProgressTracker
     _optimization_args: OptimizationArgs
     _is_compiled: bool = False
@@ -88,7 +88,7 @@ class Estimator:
         self.configure_model(model, **kwargs)
 
     @property
-    def model(self) -> Union[torch.nn.Module, Callable]:
+    def model(self) -> torch.nn.Module:
         return self._model
 
     @property
@@ -102,6 +102,20 @@ class Estimator:
     @property
     def precision(self) -> str:
         return self.fabric._precision.precision
+
+    @property
+    def dtypes(self) -> Set[str]:
+        # need to setup for changes to take effect
+        model = self.fabric.setup(self.model)
+        return {str(p.dtype) for p in model.parameters()}
+
+    @property
+    def num_parameters(self) -> int:
+        return sum(p.numel() for p in self.model.parameters())
+
+    @property
+    def num_trainable_parameters(self) -> int:
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     @property
     def loggers(self) -> List[Logger]:
@@ -133,7 +147,7 @@ class Estimator:
 
     def compile(self, **kwargs) -> None:
         # model becomes a Callable
-        self._model = torch.compile(self._model, **kwargs)
+        self._model = torch.compile(self._model, **kwargs)  # type: ignore
         self._is_compiled = True
 
     def set_torch_matmul_precision(self, tf32_mode: Literal["highest", "high", "medium"] = "highest") -> None:
