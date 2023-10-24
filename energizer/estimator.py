@@ -318,7 +318,8 @@ class Estimator:
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
             # record output
-            train_out.append(move_to_cpu(batch_out))
+            if batch_out is not None:
+                train_out.append(move_to_cpu(batch_out))
 
             # validation loop
             if self.tracker.should_validate:

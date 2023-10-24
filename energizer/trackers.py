@@ -204,10 +204,9 @@ class ProgressTracker:
             self.has_validation = True
             self.validate_every_n = every_n
             self.validation_interval = interval
+            self.validation_tracker.max = max_validation_batches
         else:
             self.has_validation = False
-
-        self.validation_tracker.max = max_validation_batches
 
     def setup_eval(self, stage: Union[str, RunningStage], num_batches: int, limit_batches: Optional[int]) -> None:
         getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
@@ -324,12 +323,16 @@ class ProgressTracker:
 
     def end(self) -> None:
         """Close progress bars of stage tracker when testing or re-attach training when validating."""
+        
+        # NOTE: when testing we directly close the progress bar when we are done
         if not self.is_fitting:
             return self.get_stage_tracker().close_progress_bar()
 
         self.get_stage_tracker().terminate_progress_bar()
+        
+        # NOTE: if this is the end of the validation stage we need to reattach the training tracker
         if self.current_stage == RunningStage.VALIDATION:
-            self.current_stage = RunningStage.TRAIN  # reattach training
+            self.current_stage = RunningStage.TRAIN  
             if self.train_tracker.progress_bar is not None:
                 self.train_tracker.progress_bar.set_postfix_str("")
 
