@@ -323,16 +323,16 @@ class ProgressTracker:
 
     def end(self) -> None:
         """Close progress bars of stage tracker when testing or re-attach training when validating."""
-        
+
         # NOTE: when testing we directly close the progress bar when we are done
         if not self.is_fitting:
             return self.get_stage_tracker().close_progress_bar()
 
         self.get_stage_tracker().terminate_progress_bar()
-        
+
         # NOTE: if this is the end of the validation stage we need to reattach the training tracker
         if self.current_stage == RunningStage.VALIDATION:
-            self.current_stage = RunningStage.TRAIN  
+            self.current_stage = RunningStage.TRAIN
             if self.train_tracker.progress_bar is not None:
                 self.train_tracker.progress_bar.set_postfix_str("")
 
