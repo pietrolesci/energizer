@@ -49,9 +49,9 @@ def collate_fn_for_seq2seq(
 
 
 class Seq2SeqMixin(TextMixin):
+    MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
     OPTIONAL_INPUT_NAMES: List[str] = []
     BLOCK_SIZE: int = 1_000
-    MANDATORY_TARGET_NAME: Optional[str] = None
 
     def prepare_for_loading(
         self,
