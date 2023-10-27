@@ -48,6 +48,10 @@ def ld_to_dl(ld: List[Dict]) -> Dict[str, List]:
     return {k: [dic[k] for dic in ld] for k in ld[0]}
 
 
+def dl_to_ld(dl: Dict[str, list]) -> List[Dict]:
+    return [dict(zip(dl, t)) for t in zip(*dl.values())]
+
+
 @contextlib.contextmanager
 def local_seed(seed: int) -> Generator[None, None, None]:
     """A context manager that allows to locally change the seed.
