@@ -179,6 +179,9 @@ class Datastore(BaseDatastore):
             sampler=sampler,
             collate_fn=self.get_collate_fn(stage),
             drop_last=self.loading_params["drop_last"],
+            num_workers=min(batch_size, self.loading_params["num_workers"]),
+            pin_memory=self.loading_params["pin_memory"],
+            persistent_workers=self.loading_params["persistent_workers"],
         )
 
     def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
