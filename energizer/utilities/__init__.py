@@ -98,7 +98,7 @@ def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
         torch.backends.cudnn.benchmark = False  # type: ignore
 
 
-def _pad(inputs: List[Tensor], padding_value: float, max_length: int) -> Tensor:
+def _pad(inputs: List[List[Union[int, float]]], padding_value: Union[int, float], max_length: int) -> Tensor:
     # truncate -> convert to tensor -> pad
     return pad_sequence(
         [torch.tensor(t[:max_length]) for t in inputs],

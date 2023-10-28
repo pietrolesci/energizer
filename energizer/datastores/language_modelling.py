@@ -43,7 +43,7 @@ def collate_fn_for_language_modelling(
     new_batch[InputKeys.LABELS] = labels
 
     # add things that need to remain on cpu
-    if len(on_cpu) > 0:
+    if len(values_on_cpu) > 0:
         new_batch[InputKeys.ON_CPU] = values_on_cpu
 
     return new_batch
