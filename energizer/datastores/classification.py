@@ -12,6 +12,8 @@ from energizer.datastores.base import PandasDatastoreWithIndex, Datastore
 from energizer.enums import InputKeys, RunningStage
 from energizer.utilities import ld_to_dl
 from energizer.datastores.mixins import TextMixin
+from energizer.datastores.base import DataloaderArgs
+from dataclasses import dataclass
 
 
 def collate_fn_for_sequence_classification(
@@ -49,11 +51,43 @@ def collate_fn_for_sequence_classification(
     return new_batch
 
 
+@dataclass
+class SequenceClassificationDataloaderArgs(DataloaderArgs):
+    max_length: int
+
+
 class SequenceClassificationMixin(TextMixin):
     MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
+    _loading_params: Optional[SequenceClassificationDataloaderArgs] = None
 
     _labels: List[str]
     _label_distribution: Dict[str, Dict[str, int]]
+
+    def prepare_for_loading(
+        self,
+        batch_size: int = 32,
+        eval_batch_size: int = 32,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        drop_last: bool = False,
+        persistent_workers: bool = False,
+        shuffle: bool = True,
+        replacement: bool = False,
+        data_seed: int = 42,
+        max_length: int = 512,
+    ) -> None:
+        self._loading_params = SequenceClassificationDataloaderArgs(
+            batch_size=batch_size,
+            eval_batch_size=eval_batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            persistent_workers=persistent_workers,
+            shuffle=shuffle,
+            data_seed=data_seed,
+            replacement=replacement,
+            max_length=max_length,
+        )
 
     @property
     def labels(self) -> List[str]:
@@ -103,7 +137,7 @@ class SequenceClassificationMixin(TextMixin):
             collate_fn_for_sequence_classification,
             input_names=self.input_names,
             on_cpu=self.on_cpu,
-            max_length=None if show_batch else self.loading_params["max_length"],  # type: ignore
+            max_length=None if show_batch else self.loading_params.max_length,  # type: ignore
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )

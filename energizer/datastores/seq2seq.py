@@ -1,11 +1,12 @@
 from functools import partial
 from typing import Callable, Dict, List, Optional, Union
+from dataclasses import dataclass
 
 from datasets import Dataset
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import PandasDatastoreWithIndex, Datastore
+from energizer.datastores.base import PandasDatastoreWithIndex, Datastore, DataloaderArgs
 from energizer.datastores.mixins import TextMixin
 from energizer.enums import InputKeys, RunningStage
 from energizer.utilities import _pad, ld_to_dl
@@ -48,10 +49,17 @@ def collate_fn_for_seq2seq(
     return new_batch
 
 
+@dataclass
+class Seq2SeqDataloaderArgs(DataloaderArgs):
+    max_source_length: int
+    max_target_length: int
+
+
 class Seq2SeqMixin(TextMixin):
     MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
     OPTIONAL_INPUT_NAMES: List[str] = []
     BLOCK_SIZE: int = 1_000
+    _loading_params: Optional[Seq2SeqDataloaderArgs] = None
 
     def prepare_for_loading(
         self,
@@ -62,32 +70,32 @@ class Seq2SeqMixin(TextMixin):
         drop_last: bool = False,
         persistent_workers: bool = False,
         shuffle: bool = True,
-        seed: int = 42,
+        data_seed: int = 42,
         replacement: bool = False,
         max_source_length: int = 512,
         max_target_length: int = 512,
     ) -> None:
-        super().prepare_for_loading(  # type: ignore
-            batch_size,
-            eval_batch_size,
-            num_workers,
-            pin_memory,
-            drop_last,
-            persistent_workers,
-            shuffle,
-            seed,
-            replacement,
+        self._loading_params = Seq2SeqDataloaderArgs(
+            batch_size=batch_size,
+            eval_batch_size=eval_batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            persistent_workers=persistent_workers,
+            shuffle=shuffle,
+            replacement=replacement,
+            data_seed=data_seed,
+            max_source_length=max_source_length,
+            max_target_length=max_target_length,
         )
-        self._loading_params["max_source_length"] = max_source_length  # type: ignore
-        self._loading_params["max_target_length"] = max_target_length  # type: ignore
 
     def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
         return partial(
             collate_fn_for_seq2seq,
             input_names=self.input_names,
             on_cpu=self.on_cpu,
-            max_source_length=None if show_batch else self.loading_params["max_source_length"],  # type: ignore
-            max_target_length=None if show_batch else self.loading_params["max_target_length"],  # type: ignore
+            max_source_length=None if show_batch else self.loading_params.max_source_length,  # type: ignore
+            max_target_length=None if show_batch else self.loading_params.max_target_length,  # type: ignore
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
         )

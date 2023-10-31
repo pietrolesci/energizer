@@ -27,32 +27,6 @@ class TextMixin(ABC):
     def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
         ...
 
-    def prepare_for_loading(
-        self,
-        batch_size: int = 32,
-        eval_batch_size: int = 32,
-        num_workers: int = 0,
-        pin_memory: bool = True,
-        drop_last: bool = False,
-        persistent_workers: bool = False,
-        shuffle: bool = True,
-        seed: int = 42,
-        replacement: bool = False,
-        max_length: int = 512,
-    ) -> None:
-        super().prepare_for_loading(  # type: ignore
-            batch_size,
-            eval_batch_size,
-            num_workers,
-            pin_memory,
-            drop_last,
-            persistent_workers,
-            shuffle,
-            seed,
-            replacement,
-        )
-        self._loading_params["max_length"] = max_length  # type: ignore
-
     @property
     def tokenizer(self) -> PreTrainedTokenizerBase:
         return self._tokenizer

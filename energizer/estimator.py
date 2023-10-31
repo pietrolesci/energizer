@@ -1,7 +1,7 @@
-import copy
-from dataclasses import dataclass, field
+from dataclasses import field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union, Set
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -19,15 +19,8 @@ from energizer.enums import OutputKeys, RunningStage
 from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import move_to_cpu, set_deterministic
+from energizer.utilities import move_to_cpu, set_deterministic, Args
 from energizer.utilities.model_summary import summarize
-
-
-@dataclass
-class Args:
-    def to_dict(self) -> Dict[str, Any]:
-        out = copy.deepcopy(self.__dict__)
-        return out
 
 
 @dataclass

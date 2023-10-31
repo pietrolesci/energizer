@@ -5,10 +5,11 @@ from datasets import Dataset
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import PandasDatastoreWithIndex, Datastore
+from energizer.datastores.base import PandasDatastoreWithIndex, Datastore, DataloaderArgs
 from energizer.datastores.mixins import TextMixin
 from energizer.enums import InputKeys, RunningStage
 from energizer.utilities import _pad, ld_to_dl
+from dataclasses import dataclass
 
 
 def collate_fn_for_language_modelling(
@@ -49,19 +50,51 @@ def collate_fn_for_language_modelling(
     return new_batch
 
 
+@dataclass
+class LanguageModellingDataloaderArgs(DataloaderArgs):
+    max_length: int
+
+
 class LanguageModellingMixin(TextMixin):
     OPTIONAL_INPUT_NAMES: List[str] = []
     BLOCK_SIZE: int = 1_000
     MANDATORY_TARGET_NAME: Optional[str] = None
+    _loading_params: Optional[LanguageModellingDataloaderArgs] = None
 
     def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
         return partial(
             collate_fn_for_language_modelling,
             input_names=self.input_names,
             on_cpu=self.on_cpu,
-            max_length=None if show_batch else self.loading_params["max_length"],  # type: ignore
+            max_length=None if show_batch else self.loading_params.max_length,  # type: ignore
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
+        )
+
+    def prepare_for_loading(
+        self,
+        batch_size: int = 32,
+        eval_batch_size: int = 32,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        drop_last: bool = False,
+        persistent_workers: bool = False,
+        shuffle: bool = True,
+        replacement: bool = False,
+        data_seed: int = 42,
+        max_length: int = 512,
+    ) -> None:
+        self._loading_params = LanguageModellingDataloaderArgs(
+            batch_size=batch_size,
+            eval_batch_size=eval_batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            persistent_workers=persistent_workers,
+            shuffle=shuffle,
+            data_seed=data_seed,
+            replacement=replacement,
+            max_length=max_length,
         )
 
 

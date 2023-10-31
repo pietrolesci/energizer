@@ -3,7 +3,8 @@ Here we define the classes that take care of loading the data.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
+from dataclasses import dataclass
 
 import pandas as pd
 import torch
@@ -15,6 +16,7 @@ from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampl
 from energizer.enums import RunningStage, SpecialKeys
 from energizer.types import DATA_SOURCE, DATASET
 from energizer.datastores.mixins import IndexMixin
+from energizer.utilities import Args
 
 
 class BaseDatastore(ABC):
@@ -99,11 +101,24 @@ class BaseDatastore(ABC):
         ...
 
 
+@dataclass
+class DataloaderArgs(Args):
+    batch_size: int
+    eval_batch_size: int
+    num_workers: int
+    pin_memory: bool
+    drop_last: bool
+    persistent_workers: bool
+    shuffle: bool
+    replacement: bool
+    data_seed: int
+
+
 class Datastore(BaseDatastore):
     """Defines dataloading for training and evaluation."""
 
     _collate_fn: Optional[Callable]
-    _loading_params: Dict[str, Any] = {}
+    _loading_params: Optional[DataloaderArgs] = None
     _rng: RandomState
 
     def __init__(self, seed: Optional[int] = 42) -> None:
@@ -120,10 +135,10 @@ class Datastore(BaseDatastore):
         drop_last: bool = False,
         persistent_workers: bool = False,
         shuffle: bool = True,
-        data_seed: int = 42,
         replacement: bool = False,
+        data_seed: int = 42,
     ) -> None:
-        self._loading_params = dict(
+        self._loading_params = DataloaderArgs(
             batch_size=batch_size,
             eval_batch_size=eval_batch_size,
             num_workers=num_workers,
@@ -136,10 +151,9 @@ class Datastore(BaseDatastore):
         )
 
     @property
-    def loading_params(self) -> Dict[str, Any]:
-        if len(self._loading_params) > 0:
-            return self._loading_params
-        raise ValueError("You need to `prepare_for_loading`")
+    def loading_params(self) -> DataloaderArgs:
+        assert self._loading_params is not None, ValueError("You need to `prepare_for_loading`")
+        return self._loading_params
 
     def reset_rng(self, seed: Optional[int]) -> None:
         self._rng = check_random_state(seed)
@@ -160,28 +174,28 @@ class Datastore(BaseDatastore):
             return
 
         batch_size = (
-            self.loading_params["batch_size"] if stage == RunningStage.TRAIN else self.loading_params["eval_batch_size"]
+            self.loading_params.batch_size if stage == RunningStage.TRAIN else self.loading_params.eval_batch_size
         )
         batch_size = min(batch_size, len(dataset))
 
         # sampler
         sampler = _get_sampler(
             dataset,
-            shuffle=self.loading_params["shuffle"] if stage == RunningStage.TRAIN else False,
-            replacement=self.loading_params["replacement"],
-            seed=self.loading_params["data_seed"],
+            shuffle=self.loading_params.shuffle if stage == RunningStage.TRAIN else False,
+            replacement=self.loading_params.replacement,
+            seed=self.loading_params.data_seed,
         )
 
         # put everything together
         return DataLoader(
             dataset=dataset,
-            batch_size=self.loading_params["batch_size"],
+            batch_size=self.loading_params.batch_size,
             sampler=sampler,
             collate_fn=self.get_collate_fn(stage),
-            drop_last=self.loading_params["drop_last"],
-            num_workers=min(batch_size, self.loading_params["num_workers"]),
-            pin_memory=self.loading_params["pin_memory"],
-            persistent_workers=self.loading_params["persistent_workers"],
+            drop_last=self.loading_params.drop_last,
+            num_workers=min(batch_size, self.loading_params.num_workers),
+            pin_memory=self.loading_params.pin_memory,
+            persistent_workers=self.loading_params.persistent_workers,
         )
 
     def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:

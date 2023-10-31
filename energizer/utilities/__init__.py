@@ -14,6 +14,20 @@ from numpy.random import RandomState
 from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
+import copy
+from dataclasses import dataclass
+
+
+@dataclass
+class Args:
+    """Dataclass which is subscriptable like a dict"""
+
+    def __getitem__(self, k):
+        return getattr(self, k)
+
+    def to_dict(self) -> Dict[str, Any]:
+        out = copy.deepcopy(self.__dict__)
+        return out
 
 
 def parse_locals(vars) -> Dict:
