@@ -167,7 +167,7 @@ class Estimator:
         self,
         train_loader: DataLoader,
         validation_loader: Optional[DataLoader] = None,
-        max_epochs: Optional[int] = 3,
+        max_epochs: Optional[int] = None,
         min_epochs: Optional[int] = None,
         max_steps: Optional[int] = None,
         min_steps: Optional[int] = None,
