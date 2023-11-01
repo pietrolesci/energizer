@@ -351,6 +351,8 @@ class ProgressTracker:
 
     def increment_step(self) -> None:
         self.step_tracker.increment()
+        if self.step_tracker.max_reached():
+            self.stop_training = True
 
     """Helpers"""
 
