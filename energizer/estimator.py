@@ -9,6 +9,8 @@ from lightning.fabric import Fabric
 from lightning.fabric.accelerators.accelerator import Accelerator
 from lightning.fabric.loggers.logger import Logger
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
+from lightning_utilities.core.rank_zero import rank_zero_info
+from lightning.fabric.plugins.precision.bitsandbytes import BitsandbytesPrecision
 from lightning.fabric.connector import _PLUGIN_INPUT
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
@@ -21,6 +23,7 @@ from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from energizer.utilities import move_to_cpu, set_deterministic, Args
 from energizer.utilities.model_summary import summarize
+import bitsandbytes as bnb
 
 
 @dataclass
@@ -80,6 +83,13 @@ class Estimator:
         self.init_tracker()
         self.configure_model(model, **kwargs)
 
+    def init_tracker(self) -> None:
+        self._tracker = ProgressTracker()
+
+    """
+    Properties
+    """
+
     @property
     def model(self) -> torch.nn.Module:
         return self._model
@@ -94,21 +104,41 @@ class Estimator:
 
     @property
     def precision(self) -> str:
+        # NOTE: doing this because model is not cast at __init__ but only when `self.fabric.setup` is called
+        if self.is_quantized:
+            rank_zero_info(
+                "Model is loaded with the `BitsandbytesPrecision` plugin thus it currently is not cast to the correct dtype. "
+                f"It will only be cast during `fit` or `test`. Furthermore, the linear layers will be cast to {self.quantization_mode}"
+            )
+            dtype = self.fabric._precision.dtype  # type: ignore
+            return "bf16-true" if dtype == torch.bfloat16 else "16-true"
         return self.fabric._precision.precision
+
+    @property
+    def is_quantized(self) -> bool:
+        # NOTE: hacky -- this is very specific to the BitsandbytesPrecision plugin
+        return isinstance(self.fabric._precision, BitsandbytesPrecision)
+
+    @property
+    def quantization_mode(self) -> Optional[str]:
+        # NOTE: look at the BitsandbytesPrecision class
+        cls_to_mode = {
+            "_NF4Linear": "nf4",
+            "_NF4DQLinear": "nf4-dq",
+            "_FP4Linear": "fp4",
+            "_FP4DQLinear": "fp4-dq",
+            "_Linear8bitLt": "int8-training",
+            "_Int8LinearInference": "int8",
+        }
+        if self.is_quantized:
+            return cls_to_mode[self.fabric._precision._linear_cls.__name__]  # type: ignore
+        rank_zero_info("Model is not quantized")
 
     @property
     def dtypes(self) -> Set[str]:
         # need to setup for changes to take effect
         model = self.fabric.setup(self.model)
         return {str(p.dtype) for p in model.parameters()}
-
-    @property
-    def num_parameters(self) -> int:
-        return sum(p.numel() for p in self.model.parameters())
-
-    @property
-    def num_trainable_parameters(self) -> int:
-        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     @property
     def loggers(self) -> List[Logger]:
@@ -131,33 +161,6 @@ class Estimator:
     @property
     def optimization_args(self) -> OptimizationArgs:
         return self._optimization_args
-
-    def init_tracker(self) -> None:
-        self._tracker = ProgressTracker()
-
-    def configure_model(self, model: Any, **kwargs) -> None:
-        self._model = model
-
-    def compile(self, **kwargs) -> None:
-        # model becomes a Callable
-        self._model = torch.compile(self._model, **kwargs)  # type: ignore
-        self._is_compiled = True
-
-    def set_torch_matmul_precision(self, tf32_mode: Literal["highest", "high", "medium"] = "highest") -> None:
-        # equivalent to `torch.backends.cudnn.allow_tf32 = True`
-        # convolutions are not changed, to do that you need
-        # `torch.backends.cudnn.allow_tf32 = True`
-        torch.set_float32_matmul_precision(tf32_mode)
-
-    def set_deterministic(self, deterministic: Union[bool, Literal["warn_only"]]) -> None:
-        # sets deterministic convolutions too
-        set_deterministic(deterministic)
-
-    def set_eval_mode(self) -> None:
-        self.model.eval()
-
-    def set_train_mode(self, mode: bool = True) -> None:
-        self.model.train(mode)
 
     """
     Entry points
@@ -513,6 +516,9 @@ class Estimator:
     Configuration
     """
 
+    def configure_model(self, model: Any, **kwargs) -> None:
+        self._model = model
+
     def configure_optimization_args(
         self,
         learning_rate: Optional[float] = None,
@@ -639,6 +645,72 @@ class Estimator:
 
         # passes self as first argument
         return self.fabric.call(hook, self, *args, **kwargs)
+
+    def compile(self, **kwargs) -> None:
+        # model becomes a Callable
+        self._model = torch.compile(self._model, **kwargs)  # type: ignore
+        self._is_compiled = True
+
+    def set_torch_matmul_precision(self, tf32_mode: Literal["highest", "high", "medium"] = "highest") -> None:
+        # equivalent to `torch.backends.cudnn.allow_tf32 = True`
+        # convolutions are not changed, to do that you need
+        # `torch.backends.cudnn.allow_tf32 = True`
+        torch.set_float32_matmul_precision(tf32_mode)
+
+    def set_deterministic(self, deterministic: Union[bool, Literal["warn_only"]]) -> None:
+        # sets deterministic convolutions too
+        set_deterministic(deterministic)
+
+    def set_eval_mode(self) -> None:
+        self.model.eval()
+
+    def set_train_mode(self, mode: bool = True) -> None:
+        self.model.train(mode)
+
+    def num_parameters(self, only_trainable: bool = False, exclude_embeddings: bool = False) -> int:
+        """Get number of (optionally, trainable or non-embeddings) parameters in the module.
+
+        Refs: https://github.com/huggingface/transformers/blob/ae093eef016533a3670561fa9e26addb42d446d1/src/transformers/modeling_utils.py#L976-L1021
+
+        Args:
+            only_trainable (`bool`, *optional*, defaults to `False`):
+                Whether or not to return only the number of trainable parameters
+
+            exclude_embeddings (`bool`, *optional*, defaults to `False`):
+                Whether or not to return only the number of non-embeddings parameters
+
+        Returns:
+            `int`: The number of parameters.
+        """
+
+        if exclude_embeddings:
+            embedding_param_names = [
+                f"{name}.weight"
+                for name, module_type in self.model.named_modules()
+                if isinstance(module_type, torch.nn.Embedding)
+            ]
+            total_parameters = [
+                parameter for name, parameter in self.model.named_parameters() if name not in embedding_param_names
+            ]
+        else:
+            total_parameters = list(self.model.parameters())
+
+        total_numel = []
+        is_loaded_in_4bit = self.is_quantized and "4" in self.quantization_mode  # type: ignore
+        for param in total_parameters:
+            if param.requires_grad or not only_trainable:
+                # For 4bit models, we need to multiply the number of parameters by 2 as half of the parameters are
+                # used for the 4bit quantization (uint8 tensors are stored)
+                if is_loaded_in_4bit and isinstance(param, bnb.nn.Params4bit):
+                    total_numel.append(param.numel() * 2)
+                else:
+                    total_numel.append(param.numel())
+
+        return sum(total_numel)
+
+    """
+    Private methods
+    """
 
     def _setup_fit(
         self,
