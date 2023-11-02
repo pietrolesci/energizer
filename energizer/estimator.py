@@ -377,6 +377,7 @@ class Estimator:
             optimizer.step()
             self.callback("on_after_optimizer", model=model, optimizer=optimizer)
 
+            # reset the gradients
             optimizer.zero_grad(set_to_none=self.optimization_args.set_to_none)  # type: ignore
 
             # update scheduler
