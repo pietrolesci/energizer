@@ -112,6 +112,7 @@ class DataloaderArgs(Args):
     shuffle: bool
     replacement: bool
     data_seed: int
+    multiprocessing_context: Optional[str]
 
 
 class Datastore(BaseDatastore):
@@ -137,6 +138,7 @@ class Datastore(BaseDatastore):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
+        multiprocessing_context: Optional[str] = None,
     ) -> None:
         self._loading_params = DataloaderArgs(
             batch_size=batch_size,
@@ -148,6 +150,7 @@ class Datastore(BaseDatastore):
             shuffle=shuffle,
             replacement=replacement,
             data_seed=data_seed,
+            multiprocessing_context=multiprocessing_context,
         )
 
     @property
@@ -196,6 +199,7 @@ class Datastore(BaseDatastore):
             num_workers=min(batch_size, self.loading_params.num_workers),
             pin_memory=self.loading_params.pin_memory,
             persistent_workers=self.loading_params.persistent_workers,
+            multiprocessing_context=self.loading_params.multiprocessing_context,
         )
 
     def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:

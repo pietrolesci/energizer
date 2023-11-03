@@ -100,6 +100,7 @@ class LanguageModellingMixin(TextMixin):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
+        multiprocessing_context: Optional[str] = None,
         max_length: int = 512,
     ) -> None:
         self._loading_params = LanguageModellingDataloaderArgs(
@@ -112,6 +113,7 @@ class LanguageModellingMixin(TextMixin):
             shuffle=shuffle,
             data_seed=data_seed,
             replacement=replacement,
+            multiprocessing_context=multiprocessing_context,
             max_length=max_length,
         )
 

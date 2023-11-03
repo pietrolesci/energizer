@@ -70,8 +70,9 @@ class Seq2SeqMixin(TextMixin):
         drop_last: bool = False,
         persistent_workers: bool = False,
         shuffle: bool = True,
-        data_seed: int = 42,
         replacement: bool = False,
+        data_seed: int = 42,
+        multiprocessing_context: Optional[str] = None,
         max_source_length: int = 512,
         max_target_length: int = 512,
     ) -> None:
@@ -85,6 +86,7 @@ class Seq2SeqMixin(TextMixin):
             shuffle=shuffle,
             replacement=replacement,
             data_seed=data_seed,
+            multiprocessing_context=multiprocessing_context,
             max_source_length=max_source_length,
             max_target_length=max_target_length,
         )

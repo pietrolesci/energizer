@@ -24,6 +24,7 @@ class WandbLogger(Logger):
         name: Optional[str] = None,
         dir: _PATH = ".",
         anonymous: Optional[bool] = None,
+        start_method: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -37,6 +38,8 @@ class WandbLogger(Logger):
             "anonymous": ("allow" if anonymous else None),
             **kwargs,
         }
+        if start_method is not None:
+            self._wandb_init["settings"] = wandb.Settings(start_method=start_method)
 
         # start wandb run (to create an attach_id for distributed modes)
         wandb.require("service")  # type: ignore
@@ -124,6 +127,7 @@ class WandbLogger(Logger):
     @rank_zero_only
     def finalize(self, status: str) -> None:
         self.experiment.finish()
+        wandb.finish()
 
     @rank_zero_only
     def log_hyperparams(self, params: Union[Dict[str, Any], Namespace]) -> None:

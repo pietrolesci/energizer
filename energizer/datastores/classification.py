@@ -74,6 +74,7 @@ class SequenceClassificationMixin(TextMixin):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
+        multiprocessing_context: Optional[str] = None,
         max_length: int = 512,
     ) -> None:
         self._loading_params = SequenceClassificationDataloaderArgs(
@@ -84,8 +85,9 @@ class SequenceClassificationMixin(TextMixin):
             drop_last=drop_last,
             persistent_workers=persistent_workers,
             shuffle=shuffle,
-            data_seed=data_seed,
             replacement=replacement,
+            data_seed=data_seed,
+            multiprocessing_context=multiprocessing_context,
             max_length=max_length,
         )
 
