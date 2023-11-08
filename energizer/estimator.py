@@ -162,6 +162,10 @@ class Estimator:
     def optimization_args(self) -> OptimizationArgs:
         return self._optimization_args
 
+    @property
+    def callbacks(self) -> List:
+        return self.fabric._callbacks
+
     """
     Entry points
     """
@@ -339,7 +343,8 @@ class Estimator:
 
         self.tracker.end()
 
-        return train_out, validation_out
+        # validation_out is already on cpu, but here we might need to move
+        return move_to_cpu(train_out), validation_out
 
     def run_training_step(
         self,
@@ -443,7 +448,7 @@ class Estimator:
 
         self.tracker.end()
 
-        return output
+        return move_to_cpu(output)
 
     def evaluation_step(
         self,
