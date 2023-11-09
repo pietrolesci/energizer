@@ -634,12 +634,12 @@ class Estimator:
         if self.tracker.should_log:
             self.fabric.log_dict(move_to_cpu(value_dict), step)
 
-    def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
+    def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.fabric.save(state=self.model.state_dict(), path=cache_dir / name)
 
-    def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt") -> None:
+    def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
         self.model.load_state_dict(self.fabric.load(cache_dir / name))
 
