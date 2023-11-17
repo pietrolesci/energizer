@@ -1,4 +1,3 @@
-
 from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 
