@@ -1,4 +1,4 @@
-from typing import Dict, Union, List, Tuple
+from typing import Dict, Union, List, Tuple, Iterable
 
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
 from energizer.callbacks import Callback
@@ -119,7 +119,7 @@ class GradNorm(Callback):
         """
         self.group_separator = group_separator
 
-        if not isinstance(norm_types, List):
+        if not isinstance(norm_types, Iterable) or isinstance(norm_types, str):
             norm_types = [norm_types]
 
         self.norm_types = [float(i) for i in norm_types]

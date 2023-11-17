@@ -1,1 +1,0 @@
-::: energizer.acquisition_functions

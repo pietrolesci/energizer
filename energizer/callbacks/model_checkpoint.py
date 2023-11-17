@@ -16,28 +16,33 @@ from lightning_utilities.core.rank_zero import rank_zero_info
 
 class ModelCheckpoint(CallbackWithMonitor):
     _best_k_models: Dict[str, float] = {}
+    monitor: Optional[str] = None
+    mode: Optional[str] = "min"
 
     def __init__(
         self,
         dirpath: Union[Path, str],
-        monitor: str,
         stage: Union[str, RunningStage],
-        mode: str = "min",
-        save_last: Optional[bool] = None,
-        save_top_k: int = 1,
-        verbose: bool = True,
         frequency: str = "1:epoch",
+        monitor: Optional[str] = None,
+        mode: Optional[str] = "min",
+        save_last: Optional[bool] = False,
+        save_top_k: Optional[int] = 1,
+        verbose: bool = True,
     ) -> None:
         super().__init__()
         self.dirpath = Path(dirpath)
-        self.monitor = monitor
         self.stage = stage
+
+        # monitor
+        self.monitor = monitor
         self.mode = mode
         self.save_last = save_last
         self.save_top_k = save_top_k
         self.verbose = verbose
-        self.frequency = frequency
 
+        # frequency
+        self.frequency = frequency
         every_n, interval = self.frequency.split(":")
         every_n = int(every_n)
         assert every_n > 0
@@ -110,24 +115,28 @@ class ModelCheckpoint(CallbackWithMonitor):
     def checkpoint(
         self, stage: Union[str, RunningStage], estimator: Estimator, output: Union[EPOCH_OUTPUT, BATCH_OUTPUT]
     ) -> None:
-        current = self._get_monitor(output)
-        if self._check_should_save(stage, current):
-            # checkpoint
-            name = self._get_name(estimator, current)
-            estimator.save_state_dict(self.dirpath, name)
-            self._update_best_models(name, current)
+        if self.monitor is not None:
+            current = self._get_monitor(output)
+            if self._check_should_save(stage, current):
+                # checkpoint
+                name = self._get_name(estimator, current)
+                estimator.save_state_dict(self.dirpath, name)
+                self._update_best_models(name, current)
 
-            # log
-            if self.verbose:
-                logs = {"step": estimator.tracker.global_step, **self._best_k_models}
-                if hasattr(estimator.tracker, "global_round"):
-                    logs["round"] = getattr(estimator.tracker, "global_round", None)
-                srsly.write_jsonl(
-                    self.dirpath / "checkpoint_logs.jsonl",
-                    [make_dict_json_serializable(logs)],
-                    append=True,
-                    append_new_line=False,
-                )
+                # log
+                if self.verbose:
+                    logs = {"step": estimator.tracker.global_step, **self._best_k_models}
+                    if hasattr(estimator.tracker, "global_round"):
+                        logs["round"] = getattr(estimator.tracker, "global_round", None)
+                    srsly.write_jsonl(
+                        self.dirpath / "checkpoint_logs.jsonl",
+                        [make_dict_json_serializable(logs)],
+                        append=True,
+                        append_new_line=False,
+                    )
+        else:
+            name = f"{self.interval}_{getattr(estimator.tracker, f'global_{self.interval}')}"
+            estimator.save_state_dict(self.dirpath, name)
 
     def _check_should_save(self, stage: Union[str, RunningStage], current: Optional[float]) -> bool:
         should_save = False
