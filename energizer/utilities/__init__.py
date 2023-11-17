@@ -3,7 +3,7 @@ import contextlib
 import os
 import random
 import re
-from typing import Any, Dict, Generator, List, Literal, Union
+from typing import Any, Dict, Generator, List, Literal, Union, Iterator
 
 import numpy as np
 import torch
@@ -22,12 +22,18 @@ from dataclasses import dataclass
 class Args:
     """Dataclass which is subscriptable like a dict"""
 
-    def __getitem__(self, k):
-        return getattr(self, k)
-
     def to_dict(self) -> Dict[str, Any]:
         out = copy.deepcopy(self.__dict__)
         return out
+
+    def __getitem__(self, k: str) -> Any:
+        return self.__dict__[k]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.__dict__)
+
+    def __len__(self) -> int:
+        return len(self.__dict__)
 
 
 def parse_locals(vars) -> Dict:
