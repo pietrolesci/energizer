@@ -1,4 +1,5 @@
-from typing import Callable, List, Union
+from collections.abc import Callable
+from typing import Union
 
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from numpy.random import RandomState
@@ -26,20 +27,14 @@ class UncertaintyBasedStrategy(PoolBasedMixin, ActiveEstimator):
     def score_fn(self) -> Callable:
         return self._score_fn
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         pool_loader = self.get_pool_loader(datastore, **kwargs)
         if pool_loader is None or len(pool_loader.dataset or []) <= query_size:  # type: ignore
             # not enough instances
             return []
         return self.compute_most_uncertain(model, pool_loader, query_size)
 
-    def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> List[int]:
+    def compute_most_uncertain(self, model: _FabricModule, loader: _FabricDataLoader, query_size: int) -> list[int]:
         # run evaluation
         out = self.run_pool_evaluation(model, loader)
         scores = out[self.POOL_OUTPUT_KEY]

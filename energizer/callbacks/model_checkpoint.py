@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 import srsly
 from lightning.fabric.wrappers import _FabricModule
@@ -15,7 +15,7 @@ from energizer.utilities import make_dict_json_serializable
 
 
 class ModelCheckpoint(CallbackWithMonitor):
-    _best_k_models: Dict[str, float] = {}
+    _best_k_models: dict[str, float] = {}
     monitor: Optional[str] = None
     mode: Optional[str] = "min"
 
@@ -73,7 +73,7 @@ class ModelCheckpoint(CallbackWithMonitor):
             if self.verbose:
                 logs = {"selected": self.best_model_path, "step": estimator.tracker.safe_global_epoch}
                 if hasattr(estimator.tracker, "global_round"):
-                    logs["round"] = getattr(estimator.tracker, "global_round")
+                    logs["round"] = estimator.tracker.global_round
 
                 srsly.write_jsonl(
                     self.dirpath / "checkpoint_logs.jsonl",

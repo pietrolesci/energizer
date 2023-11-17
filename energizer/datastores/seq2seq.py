@@ -1,6 +1,7 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Dict, List, Optional, Union
+from typing import Optional, Union
 
 from datasets import Dataset
 from torch import Tensor
@@ -13,14 +14,14 @@ from energizer.utilities import _pad, ld_to_dl
 
 
 def collate_fn_for_seq2seq(
-    batch: List[Dict[str, Union[List[str], Tensor]]],
-    input_names: List[str],
-    on_cpu: List[str],
+    batch: list[dict[str, Union[list[str], Tensor]]],
+    input_names: list[str],
+    on_cpu: list[str],
     max_source_length: Optional[int],
     max_target_length: Optional[int],
     pad_token_id: Optional[int],
     pad_fn: Callable,
-) -> Dict[str, Union[List[str], Tensor]]:
+) -> dict[str, Union[list[str], Tensor]]:
     new_batch = ld_to_dl(batch)
 
     # remove string columns that cannot be transfered on gpu
@@ -30,12 +31,7 @@ def collate_fn_for_seq2seq(
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
     new_batch = {
-        k: pad_fn(
-            inputs=new_batch[k],
-            padding_value=pad_token_id,
-            max_length=max_source_length,
-        )
-        for k in input_names
+        k: pad_fn(inputs=new_batch[k], padding_value=pad_token_id, max_length=max_source_length) for k in input_names
     }
 
     # labels substitute pad_token_id with -100
@@ -57,7 +53,7 @@ class Seq2SeqDataloaderArgs(DataloaderArgs):
 
 class Seq2SeqMixin(TextMixin):
     MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
-    OPTIONAL_INPUT_NAMES: List[str] = []
+    OPTIONAL_INPUT_NAMES: list[str] = []
     BLOCK_SIZE: int = 1_000
     _loading_params: Optional[Seq2SeqDataloaderArgs] = None
 
@@ -108,6 +104,6 @@ class DatastoreForSeq2Seq(Seq2SeqMixin, Datastore):
 
 
 class PandasDatastoreForSeq2Seq(Seq2SeqMixin, PandasDatastoreWithIndex):
-    def _set_attributes(self, dataset_dict: Dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
+    def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
         super()._set_attributes(dataset_dict, tokenizer)
         self._train_data = self._train_data.to_pandas()  # type: ignore

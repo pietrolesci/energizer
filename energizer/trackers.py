@@ -54,23 +54,13 @@ class Tracker:
 @dataclass
 class EpochTracker(Tracker):
     def make_progress_bar(self) -> Optional[tqdm]:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Completed epochs",
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Completed epochs", dynamic_ncols=True, leave=True)
 
 
 @dataclass
 class StepTracker(Tracker):
     def make_progress_bar(self) -> Optional[tqdm]:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Optimisation steps",
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Optimisation steps", dynamic_ncols=True, leave=True)
 
 
 @dataclass
@@ -79,12 +69,7 @@ class StageTracker(Tracker):
 
     def make_progress_bar(self) -> Optional[tqdm]:
         desc = f"Epoch {self.total}".strip() if self.stage == RunningStage.TRAIN else f"{self.stage.title()}"
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc=desc,
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc=desc, dynamic_ncols=True, leave=True)
 
 
 @dataclass

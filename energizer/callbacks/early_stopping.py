@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import srsly
@@ -41,7 +41,7 @@ class EarlyStopping(CallbackWithMonitor):
 
     def _check_stopping_criteria(
         self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int
-    ) -> Tuple[bool, Union[str, None]]:
+    ) -> tuple[bool, Union[str, None]]:
         current = self._get_monitor(output)
 
         should_stop = False

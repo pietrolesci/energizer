@@ -1,4 +1,3 @@
-from typing import List
 
 from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
@@ -18,11 +17,5 @@ class RandomStrategy(ActiveEstimator):
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         return datastore.sample_from_pool(size=query_size, random_state=self.rng)

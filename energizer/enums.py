@@ -1,5 +1,6 @@
+from collections.abc import Generator
 from enum import Enum, EnumMeta
-from typing import Any, Generator
+from typing import Any
 
 
 class ValueOnlyEnumMeta(EnumMeta):

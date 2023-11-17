@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -42,13 +42,7 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
     def base_strategy(self) -> ActiveEstimator:
         return self._base_strategy
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         if datastore.pool_size() > self.subpool_size:
             subpool_ids = self.select_pool_subset(model, datastore, query_size, **kwargs)
             kwargs["subpool_ids"] = subpool_ids
@@ -58,7 +52,7 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
     @abstractmethod
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> List[int]:
+    ) -> list[int]:
         ...
 
     def __getattr__(self, attr: str) -> Any:
@@ -70,7 +64,7 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
 class RandomSubsetStrategy(BaseSubsetStrategy):
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> List[int]:
+    ) -> list[int]:
         subpool_size = min(datastore.pool_size(), self.subpool_size)
         return datastore.sample_from_pool(size=subpool_size, random_state=self.rng)
 
@@ -83,7 +77,7 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
 
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDatastoreWithIndex, query_size: int, **kwargs
-    ) -> List[int]:
+    ) -> list[int]:
         # SELECT QUERIES
         search_query_ids = self.select_search_query(model, datastore, query_size, **kwargs)
 
@@ -100,7 +94,7 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
         return self.get_subpool_ids_from_search_results(candidate_df, datastore)
 
     def search_pool(
-        self, datastore: ActiveDatastoreWithIndex, search_query_embeddings: np.ndarray, search_query_ids: List[int]
+        self, datastore: ActiveDatastoreWithIndex, search_query_embeddings: np.ndarray, search_query_ids: list[int]
     ) -> pd.DataFrame:
         num_neighbours = self.num_neighbours
         if self.max_search_size is not None:
@@ -123,33 +117,27 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
     @abstractmethod
     def select_search_query(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> List[int]:
+    ) -> list[int]:
         ...
 
     @abstractmethod
-    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
+    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: list[int]) -> np.ndarray:
         ...
 
     @abstractmethod
     def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDatastoreWithIndex
-    ) -> List[int]:
+    ) -> list[int]:
         ...
 
 
 class SEALSStrategy(BaseSubsetWithSearchStrategy):
     """Colemann et al. (2020) `Similarity Search for Efficient Active Learning and Search of Rare Concepts`."""
 
-    to_search: List[int] = []
-    subpool_ids: List[int] = []
+    to_search: list[int] = []
+    subpool_ids: list[int] = []
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         annotated_ids = super().run_query(model, datastore, query_size, **kwargs)
 
         # in the next round we only need to search the newly labelled data
@@ -161,19 +149,19 @@ class SEALSStrategy(BaseSubsetWithSearchStrategy):
 
     def select_search_query(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> List[int]:
+    ) -> list[int]:
         if len(self.to_search) < 1:
             return datastore.get_train_ids()
         # we only search the newly labelled data at the previous round
         return self.to_search
 
-    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: List[int]) -> np.ndarray:
+    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: list[int]) -> np.ndarray:
         # queries are always from the training set
         return datastore.get_train_embeddings(search_query_ids)
 
     def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDatastoreWithIndex
-    ) -> List[int]:
+    ) -> list[int]:
         # we return all unique instances from the pool that are neighbours of the training set
         selected_ids = candidate_df[SpecialKeys.ID].unique().tolist()
 

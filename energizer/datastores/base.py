@@ -3,8 +3,9 @@ Here we define the classes that take care of loading the data.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Optional, Union
 
 import pandas as pd
 import torch
@@ -249,7 +250,7 @@ class PandasDatastore(Datastore):
         if self._train_data is not None:
             return Dataset.from_pandas(self._train_data, preserve_index=False)
 
-    def get_by_ids(self, ids: List[int]) -> pd.DataFrame:
+    def get_by_ids(self, ids: list[int]) -> pd.DataFrame:
         assert self._train_data is not None, "To `get_by_ids` you need to specify the train_data."  # type: ignore
         return self._train_data.loc[self._train_data[SpecialKeys.ID].isin(ids)]  # type: ignore
 
@@ -263,12 +264,7 @@ Define as globals otherwise pickle complains when running in multi-gpu
 """
 
 
-def _get_sampler(
-    dataset: DATASET,
-    shuffle: bool,
-    replacement: bool,
-    seed: int,
-) -> Sampler:
+def _get_sampler(dataset: DATASET, shuffle: bool, replacement: bool, seed: int) -> Sampler:
     """Get a sampler optimizer to work with `datasets.Dataset`.
 
     ref: https://huggingface.co/docs/datasets/use_with_pytorch

@@ -17,11 +17,7 @@ class RoundTracker(Tracker):
 
     def make_progress_bar(self) -> None:
         self.progress_bar = tqdm(
-            total=self.max,
-            desc="Completed rounds",
-            dynamic_ncols=True,
-            leave=True,
-            colour="#32a852",
+            total=self.max, desc="Completed rounds", dynamic_ncols=True, leave=True, colour="#32a852"
         )
 
     def increment(self) -> None:
@@ -40,13 +36,7 @@ class BudgetTracker(Tracker):
         return super().reset()
 
     def make_progress_bar(self) -> None:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Labelled",
-            dynamic_ncols=True,
-            leave=True,
-            colour="#32a852",
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Labelled", dynamic_ncols=True, leave=True, colour="#32a852")
         if self.current > 0:
             self.progress_bar.update(self.current)
 

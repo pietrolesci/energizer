@@ -1,6 +1,7 @@
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Literal, Optional, Union
 
 import bitsandbytes as bnb
 import numpy as np
@@ -30,7 +31,7 @@ class SchedulerArgs(Args):
     name: Optional[str] = None
     num_warmup_steps: Optional[int] = None
     num_training_steps: Optional[int] = None
-    init_kwargs: Dict = field(default_factory=dict)
+    init_kwargs: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -38,12 +39,12 @@ class OptimizationArgs(Args):
     name: Optional[str] = None
     lr: Optional[float] = None
     weight_decay: Optional[float] = None
-    no_decay: Optional[List[str]] = None
+    no_decay: Optional[list[str]] = None
     set_to_none: bool = False
     clip_val: Optional[Union[float, int]] = None
     max_norm: Optional[Union[float, int]] = None
     norm_type: Union[float, int] = 2.0
-    init_kwargs: Dict = field(default_factory=dict)
+    init_kwargs: dict = field(default_factory=dict)
     scheduler_kwargs: SchedulerArgs = field(default_factory=lambda: SchedulerArgs())
 
 
@@ -58,11 +59,11 @@ class Estimator:
         model: Any,
         accelerator: Union[str, Accelerator] = "cpu",
         precision: _PRECISION_INPUT = 32,
-        callbacks: Optional[Union[List[Any], Any]] = None,
-        loggers: Optional[Union[Logger, List[Logger]]] = None,
+        callbacks: Optional[Union[list[Any], Any]] = None,
+        loggers: Optional[Union[Logger, list[Logger]]] = None,
         deterministic: Union[bool, Literal["warn_only"]] = "warn_only",
         tf32_mode: Literal["highest", "high", "medium"] = "highest",
-        plugins: Optional[Union[_PLUGIN_INPUT, List[_PLUGIN_INPUT]]] = None,
+        plugins: Optional[Union[_PLUGIN_INPUT, list[_PLUGIN_INPUT]]] = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -134,13 +135,13 @@ class Estimator:
         rank_zero_info("Model is not quantized")
 
     @property
-    def dtypes(self) -> Set[str]:
+    def dtypes(self) -> set[str]:
         # need to setup for changes to take effect
         model = self.fabric.setup(self.model)
         return {str(p.dtype) for p in model.parameters()}
 
     @property
-    def loggers(self) -> List[Logger]:
+    def loggers(self) -> list[Logger]:
         """Returns all loggers passed to Fabric."""
         return self.fabric.loggers
 
@@ -162,7 +163,7 @@ class Estimator:
         return self._optimization_args
 
     @property
-    def callbacks(self) -> List:
+    def callbacks(self) -> list:
         return self.fabric._callbacks
 
     """
@@ -181,14 +182,14 @@ class Estimator:
         gradient_accumulation_steps: Optional[int] = None,
         learning_rate: Optional[float] = None,
         optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]] = None,
+        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
         scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
+        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
         limit_train_batches: Optional[int] = None,
         limit_validation_batches: Optional[int] = None,
-    ) -> List[FIT_OUTPUT]:
+    ) -> list[FIT_OUTPUT]:
         """Entry point for model training.
 
         Calls `fit -> run_fit -> run_epoch -> run_training_step`.
@@ -215,13 +216,7 @@ class Estimator:
         )
 
         model, _optimizer, _scheduler, _train_loader, _validation_loader = self._setup_fit(
-            train_loader,
-            validation_loader,
-            learning_rate,
-            optimizer,
-            optimizer_kwargs,
-            scheduler,
-            scheduler_kwargs,
+            train_loader, validation_loader, learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs
         )
         return self.run_fit(model, _optimizer, _scheduler, _train_loader, _validation_loader)  # type: ignore
 
@@ -261,7 +256,7 @@ class Estimator:
         scheduler: Optional[_LRScheduler],
         train_loader: _FabricDataLoader,
         validation_loader: Optional[_FabricDataLoader],
-    ) -> List[FIT_OUTPUT]:
+    ) -> list[FIT_OUTPUT]:
         self.tracker.start_fit()
 
         self.callback("on_fit_start", model=model)
@@ -504,17 +499,17 @@ class Estimator:
         return self.step(RunningStage.TEST, model, batch, batch_idx, loss_fn, metrics)
 
     def epoch_end(
-        self, stage: Union[str, RunningStage], output: List[BATCH_OUTPUT], metrics: Optional[METRIC]
+        self, stage: Union[str, RunningStage], output: list[BATCH_OUTPUT], metrics: Optional[METRIC]
     ) -> EPOCH_OUTPUT:
         return output
 
-    def train_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def train_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TRAIN, output, metrics)
 
-    def validation_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def validation_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.VALIDATION, output, metrics)
 
-    def test_epoch_end(self, output: List[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def test_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TEST, output, metrics)
 
     """
@@ -528,9 +523,9 @@ class Estimator:
         self,
         learning_rate: Optional[float] = None,
         optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]] = None,
+        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
         scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
+        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
     ) -> None:
         # parse optimizer args
         opt_kwargs = optimizer_kwargs or {}  # if None
@@ -723,10 +718,10 @@ class Estimator:
         validation_loader: Optional[DataLoader],
         learning_rate: Optional[float],
         optimizer: Optional[str],
-        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]],
+        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]],
         scheduler: Optional[str],
-        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]],
-    ) -> Tuple[_FabricModule, _FabricOptimizer, Optional[_LRScheduler], _FabricDataLoader, Optional[_FabricDataLoader]]:
+        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]],
+    ) -> tuple[_FabricModule, _FabricOptimizer, Optional[_LRScheduler], _FabricDataLoader, Optional[_FabricDataLoader]]:
         # configuration
         _train_loader = self.configure_dataloader(train_loader)
         _validation_loader = self.configure_dataloader(validation_loader)

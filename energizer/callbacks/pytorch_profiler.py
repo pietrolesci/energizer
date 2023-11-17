@@ -8,13 +8,7 @@ from energizer.callbacks.base import Callback
 
 class PytorchTensorboardProfiler(Callback):
     def __init__(
-        self,
-        dirpath: Union[str, Path],
-        wait: int = 1,
-        warmup: int = 1,
-        active: int = 1,
-        repeat: int = 2,
-        **kwargs,
+        self, dirpath: Union[str, Path], wait: int = 1, warmup: int = 1, active: int = 1, repeat: int = 2, **kwargs
     ) -> None:
         self.prof = torch.profiler.profile(
             schedule=torch.profiler.schedule(wait=wait, warmup=warmup, active=active, repeat=repeat),

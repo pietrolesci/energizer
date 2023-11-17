@@ -1,4 +1,3 @@
-from typing import List
 
 import numpy as np
 from numpy.random import RandomState
@@ -16,11 +15,11 @@ def _similarity(centers: np.ndarray, X: np.ndarray, normalized: bool) -> np.ndar
     return sim
 
 
-def _get_nearest_to_centers_batch(centers: np.ndarray, X: np.ndarray, normalized: bool) -> List[int]:
+def _get_nearest_to_centers_batch(centers: np.ndarray, X: np.ndarray, normalized: bool) -> list[int]:
     return _similarity(centers, X, normalized).argmax(axis=1).tolist()
 
 
-def _get_nearest_to_centers_iterative(centers: np.ndarray, X: np.ndarray, normalized: bool) -> List[int]:
+def _get_nearest_to_centers_iterative(centers: np.ndarray, X: np.ndarray, normalized: bool) -> list[int]:
     indices = np.empty(centers.shape[0], dtype=int)
     for i in range(centers.shape[0]):
         sim = _similarity(centers[None, i], X, normalized)
@@ -30,7 +29,7 @@ def _get_nearest_to_centers_iterative(centers: np.ndarray, X: np.ndarray, normal
     return indices.tolist()
 
 
-def _get_nearest_to_centers(centers: np.ndarray, X: np.ndarray, normalized: bool, num_clusters: int) -> List[int]:
+def _get_nearest_to_centers(centers: np.ndarray, X: np.ndarray, normalized: bool, num_clusters: int) -> list[int]:
     indices = _get_nearest_to_centers_batch(centers, X, normalized)
 
     # fall back to an iterative version if one or more vectors are most similar
@@ -59,7 +58,7 @@ def _silhouette_k_select(X: np.ndarray, max_k: int, rng: RandomState) -> int:
 
 def _kmeans(
     X: np.ndarray, num_clusters: int, rng: RandomState, use_silhouette: bool = False, normalize: bool = True
-) -> List[int]:
+) -> list[int]:
     if normalize:
         X = StandardScaler().fit_transform(X)
 
@@ -74,15 +73,15 @@ def _kmeans(
     return _get_nearest_to_centers(centers, X, normalize, num_clusters)
 
 
-def kmeans_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
+def kmeans_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> list[int]:
     return _kmeans(X, num_clusters, rng, False, normalize)
 
 
-def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
+def kmeans_silhouette_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> list[int]:
     return _kmeans(X, num_clusters, rng, True, normalize)
 
 
-def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> List[int]:
+def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args, **kwargs) -> list[int]:
     _, indices = kmeans_plusplus(X, num_clusters, random_state=rng)
 
     unique_ids = list(set(indices.tolist()))

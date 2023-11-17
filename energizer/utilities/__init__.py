@@ -4,8 +4,9 @@ import copy
 import os
 import random
 import re
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, Iterator, List, Literal, Union
+from typing import Any, Literal, Union
 
 import numpy as np
 import torch
@@ -22,7 +23,7 @@ from torch.nn.utils.rnn import pad_sequence
 class Args:
     """Dataclass which is subscriptable like a dict"""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         out = copy.deepcopy(self.__dict__)
         return out
 
@@ -36,7 +37,7 @@ class Args:
         return len(self.__dict__)
 
 
-def parse_locals(vars) -> Dict:
+def parse_locals(vars) -> dict:
     return {k: v for k, v in vars.items() if k not in ("self", "__class__")}
 
 
@@ -55,7 +56,7 @@ def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
     # return round(t.detach().cpu().item(), 6)
 
 
-def make_dict_json_serializable(d: Dict) -> Dict:
+def make_dict_json_serializable(d: dict) -> dict:
     return {k: round(v.item(), 6) if isinstance(v, (ndarray, generic)) else v for k, v in d.items()}
 
 
@@ -64,11 +65,11 @@ def move_to_cpu(output: Any) -> Any:
     return apply_to_collection(output, *args)
 
 
-def ld_to_dl(ld: List[Dict]) -> Dict[str, List]:
+def ld_to_dl(ld: list[dict]) -> dict[str, list]:
     return {k: [dic[k] for dic in ld] for k in ld[0]}
 
 
-def dl_to_ld(dl: Dict[str, list]) -> List[Dict]:
+def dl_to_ld(dl: dict[str, list]) -> list[dict]:
     return [dict(zip(dl, t)) for t in zip(*dl.values())]
 
 
@@ -118,22 +119,18 @@ def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
         torch.backends.cudnn.benchmark = False  # type: ignore
 
 
-def _pad(inputs: List[List[Union[int, float]]], padding_value: Union[int, float], max_length: int) -> Tensor:
+def _pad(inputs: list[list[Union[int, float]]], padding_value: Union[int, float], max_length: int) -> Tensor:
     # truncate -> convert to tensor -> pad
-    return pad_sequence(
-        [torch.tensor(t[:max_length]) for t in inputs],
-        batch_first=True,
-        padding_value=padding_value,
-    )
+    return pad_sequence([torch.tensor(t[:max_length]) for t in inputs], batch_first=True, padding_value=padding_value)
 
 
 def sample(
-    indices: List[int],
+    indices: list[int],
     size: int,
     random_state: RandomState,
     mode: Literal["uniform", "stratified"] = "uniform",
     **kwargs,
-) -> List[int]:
+) -> list[int]:
     """Makes sure to seed everything consistently."""
 
     if mode == "uniform":
@@ -142,11 +139,7 @@ def sample(
     elif mode == "stratified":
         assert "labels" in kwargs, ValueError("Must pass `labels` for stratified sampling.")
         sample = resample(
-            indices,
-            replace=False,
-            stratify=kwargs.get("labels"),
-            n_samples=size,
-            random_state=random_state,
+            indices, replace=False, stratify=kwargs.get("labels"), n_samples=size, random_state=random_state
         )
 
     else:
