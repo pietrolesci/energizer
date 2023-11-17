@@ -1,16 +1,17 @@
+from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, List, Optional, Union  # , Generator, Any
 
 from datasets import Dataset
+from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import PandasDatastoreWithIndex, Datastore, DataloaderArgs
+from energizer.datastores.base import DataloaderArgs, Datastore, PandasDatastoreWithIndex
 from energizer.datastores.mixins import TextMixin
 from energizer.enums import InputKeys, RunningStage
 from energizer.utilities import _pad, ld_to_dl
-from dataclasses import dataclass
-from lightning_utilities.core.rank_zero import rank_zero_info
+
 # from itertools import islice
 
 

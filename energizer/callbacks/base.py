@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Union, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer

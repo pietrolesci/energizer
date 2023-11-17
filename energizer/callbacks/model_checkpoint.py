@@ -1,17 +1,17 @@
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import srsly
 from lightning.fabric.wrappers import _FabricModule
+from lightning_utilities.core.rank_zero import rank_zero_info
 
 from energizer.callbacks.base import CallbackWithMonitor
 from energizer.enums import Interval, RunningStage
 from energizer.estimator import Estimator
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
 from energizer.utilities import make_dict_json_serializable
-from lightning_utilities.core.rank_zero import rank_zero_info
 
 
 class ModelCheckpoint(CallbackWithMonitor):

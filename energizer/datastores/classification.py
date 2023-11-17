@@ -1,19 +1,17 @@
 from collections import Counter
-from typing import Callable, Dict, List, Optional, Union
+from dataclasses import dataclass
 from functools import partial
-from energizer.utilities import _pad
+from typing import Callable, Dict, List, Optional, Union
 
 import torch
 from datasets import Dataset
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import PandasDatastoreWithIndex, Datastore
-from energizer.enums import InputKeys, RunningStage
-from energizer.utilities import ld_to_dl
+from energizer.datastores.base import DataloaderArgs, Datastore, PandasDatastoreWithIndex
 from energizer.datastores.mixins import TextMixin
-from energizer.datastores.base import DataloaderArgs
-from dataclasses import dataclass
+from energizer.enums import InputKeys, RunningStage
+from energizer.utilities import _pad, ld_to_dl
 
 
 def collate_fn_for_sequence_classification(

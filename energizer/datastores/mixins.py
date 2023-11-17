@@ -1,17 +1,17 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union, Tuple
-from lightning_utilities.core.rank_zero import rank_zero_warn
-from energizer.utilities import sequential_numbers
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
+import hnswlib as hb
+import numpy as np
+import srsly
 from datasets import Dataset, DatasetDict  # type: ignore
+from lightning_utilities.core.rank_zero import rank_zero_warn
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import Self
 
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
-import hnswlib as hb
-import numpy as np
-import srsly
+from energizer.utilities import sequential_numbers
 
 
 class TextMixin(ABC):

@@ -1,18 +1,18 @@
-from dataclasses import field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union, Set
-from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Set, Tuple, Union
 
+import bitsandbytes as bnb
 import numpy as np
 import torch
 from lightning.fabric import Fabric
 from lightning.fabric.accelerators.accelerator import Accelerator
-from lightning.fabric.loggers.logger import Logger
-from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
-from lightning_utilities.core.rank_zero import rank_zero_info
-from lightning.fabric.plugins.precision.bitsandbytes import BitsandbytesPrecision
 from lightning.fabric.connector import _PLUGIN_INPUT
+from lightning.fabric.loggers.logger import Logger
+from lightning.fabric.plugins.precision.bitsandbytes import BitsandbytesPrecision
+from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
+from lightning_utilities.core.rank_zero import rank_zero_info
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
@@ -21,9 +21,8 @@ from energizer.enums import OutputKeys, RunningStage
 from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
-from energizer.utilities import move_to_cpu, set_deterministic, Args
+from energizer.utilities import Args, move_to_cpu, set_deterministic
 from energizer.utilities.model_summary import summarize
-import bitsandbytes as bnb
 
 
 @dataclass

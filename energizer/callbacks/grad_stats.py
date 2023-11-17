@@ -1,10 +1,10 @@
-from typing import Dict, Union, List, Tuple, Iterable
-
-from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
-from energizer.callbacks import Callback
-from energizer.estimator import Estimator
+from typing import Dict, Iterable, List, Tuple, Union
 
 import torch
+from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
+
+from energizer.callbacks import Callback
+from energizer.estimator import Estimator
 
 
 def grad_norm(module: torch.nn.Module, norm_types: List[float], group_separator: str = "/") -> Dict[str, float]:

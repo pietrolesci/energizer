@@ -1,9 +1,11 @@
 # import inspect
 import contextlib
+import copy
 import os
 import random
 import re
-from typing import Any, Dict, Generator, List, Literal, Union, Iterator
+from dataclasses import dataclass
+from typing import Any, Dict, Generator, Iterator, List, Literal, Union
 
 import numpy as np
 import torch
@@ -14,8 +16,6 @@ from numpy.random import RandomState
 from sklearn.utils import resample
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
-import copy
-from dataclasses import dataclass
 
 
 @dataclass

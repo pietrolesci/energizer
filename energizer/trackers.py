@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from typing import Optional, Union
 
 import numpy as np
-from tqdm.auto import tqdm
 from lightning_utilities.core.rank_zero import rank_zero_info
+from tqdm.auto import tqdm
+
 from energizer.enums import Interval, RunningStage
 
 

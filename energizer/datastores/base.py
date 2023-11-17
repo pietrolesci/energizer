@@ -3,8 +3,8 @@ Here we define the classes that take care of loading the data.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, Union
 from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Union
 
 import pandas as pd
 import torch
@@ -13,9 +13,9 @@ from numpy.random import RandomState
 from sklearn.utils import check_random_state  # type: ignore
 from torch.utils.data import DataLoader, RandomSampler, Sampler, SequentialSampler
 
+from energizer.datastores.mixins import IndexMixin
 from energizer.enums import RunningStage, SpecialKeys
 from energizer.types import DATA_SOURCE, DATASET
-from energizer.datastores.mixins import IndexMixin
 from energizer.utilities import Args
 
 
