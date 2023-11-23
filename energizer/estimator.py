@@ -46,6 +46,8 @@ class OptimizationArgs(Args):
     norm_type: Union[float, int] = 2.0
     init_kwargs: Dict = field(default_factory=dict)
     scheduler_kwargs: SchedulerArgs = field(default_factory=lambda: SchedulerArgs())
+    backward_create_graph: bool = False
+    backward_retain_graph: Optional[bool] = None
 
 
 class Estimator:
@@ -363,8 +365,12 @@ class Estimator:
             output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
             loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
 
-            # compute gradients
-            self.fabric.backward(loss / self.tracker.gradient_accumulation_steps)  # instead of loss.backward()
+            # compute gradients  (instead of loss.backward())
+            self.fabric.backward(
+                loss / self.tracker.gradient_accumulation_steps,
+                create_graph=self.optimization_args.backward_create_graph,
+                retain_graph=self.optimization_args.backward_retain_graph,
+            )
 
         if not self.tracker.is_accumulating:
             # clip gradients
