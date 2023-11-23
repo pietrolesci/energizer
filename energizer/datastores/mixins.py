@@ -1,27 +1,28 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union, Tuple
-from lightning_utilities.core.rank_zero import rank_zero_warn
-from energizer.utilities import sequential_numbers
+from typing import Optional, Union
 
+import hnswlib as hb
+import numpy as np
+import srsly
 from datasets import Dataset, DatasetDict  # type: ignore
+from lightning_utilities.core.rank_zero import rank_zero_warn
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import Self
 
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
-import hnswlib as hb
-import numpy as np
-import srsly
+from energizer.utilities import sequential_numbers
 
 
 class TextMixin(ABC):
-    MANDATORY_INPUT_NAMES: List[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
-    OPTIONAL_INPUT_NAMES: List[str] = [InputKeys.TOKEN_TYPE_IDS]
+    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
+    OPTIONAL_INPUT_NAMES: list[str] = [InputKeys.TOKEN_TYPE_IDS]
     MANDATORY_TARGET_NAME: Optional[str] = None
 
     _tokenizer: PreTrainedTokenizerBase
-    input_names: List[str]
-    on_cpu: List[str]
+    input_names: list[str]
+    on_cpu: list[str]
 
     @abstractmethod
     def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
@@ -36,7 +37,7 @@ class TextMixin(ABC):
         cls,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
-        on_cpu: Optional[List[str]] = None,
+        on_cpu: Optional[list[str]] = None,
         seed: Optional[int] = 42,
         train_dataset: Optional[Dataset] = None,
         validation_dataset: Optional[Dataset] = None,
@@ -62,7 +63,7 @@ class TextMixin(ABC):
         dataset_dict: DatasetDict,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
-        on_cpu: Optional[List[str]] = None,
+        on_cpu: Optional[list[str]] = None,
         seed: Optional[int] = 42,
     ) -> Self:
         obj = cls(seed)  # type: ignore
@@ -81,12 +82,12 @@ class TextMixin(ABC):
 
     def load_datasets(
         self,
-        mandatory_input_names: List[str],
-        optional_input_names: List[str],
+        mandatory_input_names: list[str],
+        optional_input_names: list[str],
         mandatory_target_name: Optional[str],
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
-        on_cpu: Optional[List[str]] = None,
+        on_cpu: Optional[list[str]] = None,
         train_dataset: Optional[Dataset] = None,
         validation_dataset: Optional[Dataset] = None,
         test_dataset: Optional[Dataset] = None,
@@ -96,7 +97,7 @@ class TextMixin(ABC):
             RunningStage.VALIDATION: validation_dataset,
             RunningStage.TEST: test_dataset,
         }
-        datasets: Dict[RunningStage, Dataset] = {k: v for k, v in _datasets.items() if v is not None}
+        datasets: dict[RunningStage, Dataset] = {k: v for k, v in _datasets.items() if v is not None}
         if len(datasets) < 1:
             raise ValueError("You need to pass at least one dataset.")
 
@@ -122,9 +123,9 @@ class TextMixin(ABC):
 
     def _check_input_names(
         self,
-        dataset_dict: Dict[RunningStage, Dataset],
-        mandatory_input_names: List[str],
-        optional_input_names: List[str],
+        dataset_dict: dict[RunningStage, Dataset],
+        mandatory_input_names: list[str],
+        optional_input_names: list[str],
     ) -> None:
         input_names = []
         for name in mandatory_input_names:
@@ -141,7 +142,7 @@ class TextMixin(ABC):
 
         self.input_names = list(set(input_names))
 
-    def _check_on_cpu(self, dataset_dict: Dict[RunningStage, Dataset], on_cpu: Optional[List[str]]) -> None:
+    def _check_on_cpu(self, dataset_dict: dict[RunningStage, Dataset], on_cpu: Optional[list[str]]) -> None:
         _on_cpu = []
         if on_cpu is not None:
             for name in on_cpu:
@@ -151,8 +152,8 @@ class TextMixin(ABC):
         self.on_cpu = list(set(_on_cpu))
 
     def _check_uid(
-        self, dataset_dict: Dict[RunningStage, Dataset], uid_name: Optional[str]
-    ) -> Dict[RunningStage, Dataset]:
+        self, dataset_dict: dict[RunningStage, Dataset], uid_name: Optional[str]
+    ) -> dict[RunningStage, Dataset]:
         uid_generator = sequential_numbers()
         new_datasets = {}
         for k, d in dataset_dict.items():
@@ -174,19 +175,19 @@ class TextMixin(ABC):
 
         return new_datasets
 
-    def _check_labels(self, dataset_dict: Dict[RunningStage, Dataset], mandatory_target_name: str) -> None:
+    def _check_labels(self, dataset_dict: dict[RunningStage, Dataset], mandatory_target_name: str) -> None:
         for split, dataset in dataset_dict.items():
             assert (
                 mandatory_target_name in dataset.features
             ), f"Mandatory column {mandatory_target_name} not in dataset[{split}]."
 
-    def _format_datasets(self, dataset_dict: Dict[RunningStage, Dataset]) -> Dict[RunningStage, Dataset]:
+    def _format_datasets(self, dataset_dict: dict[RunningStage, Dataset]) -> dict[RunningStage, Dataset]:
         columns = self.input_names + self.on_cpu
         if self.MANDATORY_TARGET_NAME is not None:
             columns.append(self.MANDATORY_TARGET_NAME)
         return {k: v.with_format(columns=columns) for k, v in dataset_dict.items()}
 
-    def _set_attributes(self, dataset_dict: Dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
+    def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
         self._tokenizer = tokenizer
         self._train_data = dataset_dict.get(RunningStage.TRAIN)  # type: ignore
         self._validation_data = dataset_dict.get(RunningStage.VALIDATION)  # type: ignore
@@ -197,7 +198,7 @@ class IndexMixin:
     index: hb.Index = None
     embedding_name: str
 
-    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+    def search(self, query: np.ndarray, query_size: int, query_in_set: bool = True) -> tuple[np.ndarray, np.ndarray]:
         # retrieve one additional element if the query is in the set we are looking in
         # because the query itself is returned as the most similar element and we need to remove it
         query_size = query_size + 1 if query_in_set else query_size
@@ -208,7 +209,7 @@ class IndexMixin:
         return indices, distances
 
     def load_index(self, index_path: Union[str, Path], metadata_path: Union[str, Path]) -> None:
-        meta: Dict = srsly.read_json(metadata_path)  # type: ignore
+        meta: dict = srsly.read_json(metadata_path)  # type: ignore
         index = hb.Index(space=meta["metric"], dim=meta["dim"])
         index.load_index(str(index_path))
         self.index = index
@@ -226,13 +227,13 @@ class IndexMixin:
             missing_ids = set(index.get_ids_list()).difference(set(self._train_data[SpecialKeys.ID]))  # type: ignore
             self.mask_ids_from_index(list(missing_ids))
 
-    def mask_ids_from_index(self, ids: List[int]) -> None:
+    def mask_ids_from_index(self, ids: list[int]) -> None:
         for i in ids:
             self.index.mark_deleted(i)
 
-    def unmask_ids_from_index(self, ids: List[int]) -> None:
+    def unmask_ids_from_index(self, ids: list[int]) -> None:
         for i in ids:
             self.index.unmark_deleted(i)
 
-    def get_embeddings(self, ids: List[int]) -> np.ndarray:
+    def get_embeddings(self, ids: list[int]) -> np.ndarray:
         return np.stack(self.index.get_items(ids))

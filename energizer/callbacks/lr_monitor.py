@@ -1,4 +1,5 @@
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
+
 from energizer.callbacks import Callback
 from energizer.estimator import Estimator
 

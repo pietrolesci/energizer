@@ -1,13 +1,14 @@
-from typing import Dict, Union, List, Tuple, Iterable
+from collections.abc import Iterable
+from typing import Union
 
+import torch
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
+
 from energizer.callbacks import Callback
 from energizer.estimator import Estimator
 
-import torch
 
-
-def grad_norm(module: torch.nn.Module, norm_types: List[float], group_separator: str = "/") -> Dict[str, float]:
+def grad_norm(module: torch.nn.Module, norm_types: list[float], group_separator: str = "/") -> dict[str, float]:
     # compute on device
     return {
         f"grad_{norm_type}_norm{group_separator}{n}": torch.linalg.vector_norm(
@@ -20,8 +21,8 @@ def grad_norm(module: torch.nn.Module, norm_types: List[float], group_separator:
 
 
 def empirical_fim_norm(
-    module: torch.nn.Module, norm_types: List[float], group_separator: str = "/"
-) -> Dict[str, float]:
+    module: torch.nn.Module, norm_types: list[float], group_separator: str = "/"
+) -> dict[str, float]:
     # compute on device
     return {
         f"efim_{norm_type}_norm{group_separator}{n}": torch.linalg.vector_norm(
@@ -33,7 +34,7 @@ def empirical_fim_norm(
     }
 
 
-def empirical_fim_trace(module: torch.nn.Module, group_separator: str = "/") -> Dict[str, float]:
+def empirical_fim_trace(module: torch.nn.Module, group_separator: str = "/") -> dict[str, float]:
     # compute on device
     return {
         f"efim_trace{group_separator}{n}": torch.sum(p.grad.detach().data.flatten() ** 2).item()
@@ -43,10 +44,8 @@ def empirical_fim_trace(module: torch.nn.Module, group_separator: str = "/") -> 
 
 
 def update_size_norm(
-    differences: List[Tuple[str, torch.Tensor]],
-    norm_types: List[float],
-    group_separator: str = "/",
-) -> Dict[str, float]:
+    differences: list[tuple[str, torch.Tensor]], norm_types: list[float], group_separator: str = "/"
+) -> dict[str, float]:
     """Compute each parameter's gradient update (difference between after and before update) norm.
 
     Args:
@@ -73,10 +72,8 @@ def update_size_norm(
 
 
 def relative_stdlog10_update_size(
-    differences: List[Tuple[str, torch.Tensor]],
-    previous_params: List[torch.Tensor],
-    group_separator: str = "/",
-) -> Dict[str, float]:
+    differences: list[tuple[str, torch.Tensor]], previous_params: list[torch.Tensor], group_separator: str = "/"
+) -> dict[str, float]:
     # compute on device
     return {
         f"relative_stdlog10_update{group_separator}{n}": (diff.std() / p_before.std()).log10().item()
@@ -85,11 +82,11 @@ def relative_stdlog10_update_size(
 
 
 def relative_norm_update_size(
-    differences: List[Tuple[str, torch.Tensor]],
-    previous_params: List[torch.Tensor],
-    norm_types: List[float],
+    differences: list[tuple[str, torch.Tensor]],
+    previous_params: list[torch.Tensor],
+    norm_types: list[float],
     group_separator: str = "/",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     # compute on device
     return {
         f"relative_update_{norm_type}_norm{group_separator}{n}": torch.linalg.vector_norm(
@@ -103,7 +100,7 @@ def relative_norm_update_size(
 
 class GradNorm(Callback):
     def __init__(
-        self, norm_types: Union[float, int, str, List[Union[float, int, str]]], group_separator: str = "/"
+        self, norm_types: Union[float, int, str, list[Union[float, int, str]]], group_separator: str = "/"
     ) -> None:
         """Compute each parameter's gradient's norm and their overall norm.
 
@@ -149,11 +146,11 @@ class EmpiricalFIMTrace(Callback):
 
 
 class ParameterUpdateStats(GradNorm):
-    _previous_params: List[torch.Tensor] = []
+    _previous_params: list[torch.Tensor] = []
 
     def __init__(
         self,
-        norm_types: Union[float, int, str, List[Union[float, int, str]]],
+        norm_types: Union[float, int, str, list[Union[float, int, str]]],
         group_separator: str = "/",
         return_update_size_norm: bool = True,
         return_relative_std_update: bool = True,
@@ -195,9 +192,7 @@ class ParameterUpdateStats(GradNorm):
         logs = {}
         if self.return_update_size_norm:
             update_size_norms = update_size_norm(
-                differences=diffs,
-                norm_types=self.norm_types,
-                group_separator=self.group_separator,
+                differences=diffs, norm_types=self.norm_types, group_separator=self.group_separator
             )
             logs.update(update_size_norms)
 

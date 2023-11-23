@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, List, Union, Optional
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
@@ -25,7 +26,7 @@ class Callback:
     def on_fit_start(self, estimator: Estimator, model: _FabricModule) -> None:
         ...
 
-    def on_fit_end(self, estimator: Estimator, model: _FabricModule, output: List[FIT_OUTPUT]) -> None:
+    def on_fit_end(self, estimator: Estimator, model: _FabricModule, output: list[FIT_OUTPUT]) -> None:
         ...
 
     """
@@ -87,12 +88,7 @@ class Callback:
         ...
 
     def on_train_batch_start(
-        self,
-        estimator: Estimator,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        optimizer: Optimizer,
+        self, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, optimizer: Optimizer
     ) -> None:
         return self.on_batch_start(RunningStage.TRAIN, estimator, model, batch, batch_idx, optimizer=optimizer)
 
@@ -165,7 +161,7 @@ class CallbackWithMonitor(Callback):
         return self.reverse_optim_dict[self.mode]
 
     def _get_monitor(self, output: Optional[Union[BATCH_OUTPUT, EPOCH_OUTPUT]]) -> float:
-        if not isinstance(output, Dict) or output is None:
+        if not isinstance(output, dict) or output is None:
             raise RuntimeError(
                 "From `*_step` and `*_epoch_end` method you need to return dict to use ",
                 "monitoring Callbacks like EarlyStopping and ModelCheckpoint.",

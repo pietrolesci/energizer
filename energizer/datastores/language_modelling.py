@@ -1,28 +1,30 @@
+from collections.abc import Callable  # , Generator, Any
+from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Dict, List, Optional, Union  # , Generator, Any
+from typing import Optional, Union
 
 from datasets import Dataset
+from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import Tensor
 from transformers import PreTrainedTokenizerBase
 
-from energizer.datastores.base import PandasDatastoreWithIndex, Datastore, DataloaderArgs
+from energizer.datastores.base import DataloaderArgs, Datastore, PandasDatastoreWithIndex
 from energizer.datastores.mixins import TextMixin
 from energizer.enums import InputKeys, RunningStage
 from energizer.utilities import _pad, ld_to_dl
-from dataclasses import dataclass
-from lightning_utilities.core.rank_zero import rank_zero_info
+
 # from itertools import islice
 
 
 def collate_fn_for_language_modelling(
-    batch: List[Dict[str, Union[List[str], Tensor]]],
-    input_names: List[str],
-    on_cpu: List[str],
+    batch: list[dict[str, Union[list[str], Tensor]]],
+    input_names: list[str],
+    on_cpu: list[str],
     max_length: Optional[int],
     pad_token_id: Optional[int],
     pad_fn: Callable,
     return_labels: bool,
-) -> Dict[str, Union[List[str], Tensor]]:
+) -> dict[str, Union[list[str], Tensor]]:
     new_batch = ld_to_dl(batch)
 
     # remove string columns that cannot be transfered on gpu
@@ -31,14 +33,7 @@ def collate_fn_for_language_modelling(
     labels = new_batch.pop(InputKeys.LABELS, None)
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
-    new_batch = {
-        k: pad_fn(
-            inputs=new_batch[k],
-            padding_value=pad_token_id,
-            max_length=max_length,
-        )
-        for k in input_names
-    }
+    new_batch = {k: pad_fn(inputs=new_batch[k], padding_value=pad_token_id, max_length=max_length) for k in input_names}
 
     # labels substitute pad_token_id with -100
     if return_labels:
@@ -60,9 +55,9 @@ class LanguageModellingDataloaderArgs(DataloaderArgs):
 
 
 class LanguageModellingMixin(TextMixin):
-    MANDATORY_INPUT_NAMES: List[str] = [InputKeys.INPUT_IDS]
+    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS]
     MANDATORY_TARGET_NAME: Optional[str] = None
-    OPTIONAL_INPUT_NAMES: List[str] = []
+    OPTIONAL_INPUT_NAMES: list[str] = []
 
     _loading_params: Optional[LanguageModellingDataloaderArgs] = None
     _return_labels: bool = True
@@ -141,7 +136,7 @@ class DatastoreForLanguageModelling(LanguageModellingMixin, Datastore):
 
 
 class PandasDatastoreForLanguageModelling(LanguageModellingMixin, PandasDatastoreWithIndex):
-    def _set_attributes(self, dataset_dict: Dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
+    def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
         super()._set_attributes(dataset_dict, tokenizer)
         self._train_data = self._train_data.to_pandas()  # type: ignore
 

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Literal, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import torch
@@ -27,13 +28,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
         if embeddings_and_ids is None:
             return []
@@ -43,12 +38,8 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
 
     @abstractmethod
     def get_embeddings_and_ids(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
+    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
         # NOTE: Always need the ids because you might not return the entire pool
         ...
 
@@ -61,7 +52,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
         embeddings: np.ndarray,
         ids: np.ndarray,
         **kwargs,
-    ) -> List[int]:
+    ) -> list[int]:
         ...
 
 
@@ -69,12 +60,8 @@ class DiversityBasedStrategyWithPool(PoolBasedMixin, DiversityBasedStrategy):
     POOL_OUTPUT_KEY: OutputKeys = OutputKeys.EMBEDDINGS
 
     def get_embeddings_and_ids(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
+    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
         pool_loader = self.get_pool_loader(datastore, **kwargs)
         if pool_loader is not None and len(pool_loader.dataset or []) > query_size:  # type: ignore
             # enough instances
@@ -100,7 +87,7 @@ class ClusteringMixin:
         embeddings: np.ndarray,
         ids: np.ndarray,
         **kwargs,
-    ) -> List[int]:
+    ) -> list[int]:
         center_ids = self.clustering_fn(embeddings, query_size, rng=self.rng)  # type: ignore
         return ids[center_ids].tolist()
 

@@ -1,6 +1,7 @@
 import inspect
+from collections.abc import Callable, Generator
 from types import ModuleType
-from typing import Any, Callable, Generator, List, Optional, Tuple, Type
+from typing import Any, Optional
 
 import torch
 import torch_optimizer
@@ -18,11 +19,7 @@ class Registry(dict):
                 self[k.lower()] = v
 
     def register_classes(
-        self,
-        module: ModuleType,
-        base_cls: Type,
-        override: bool = False,
-        to_snake_case: bool = False,
+        self, module: ModuleType, base_cls: type, override: bool = False, to_snake_case: bool = False
     ) -> None:
         """This function is an utility to register all classes from a module."""
         for cls in self.get_members(module, base_cls):
@@ -31,7 +28,7 @@ class Registry(dict):
                 self[key.lower()] = cls
 
     @staticmethod
-    def get_members(module: ModuleType, base_cls: Type) -> Generator[Type, None, None]:
+    def get_members(module: ModuleType, base_cls: type) -> Generator[type, None, None]:
         return (
             cls
             for _, cls in inspect.getmembers(module, predicate=inspect.isclass)
@@ -39,12 +36,12 @@ class Registry(dict):
         )
 
     @property
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         """Returns the registered names."""
         return list(self.keys())
 
     @property
-    def classes(self) -> Tuple[Type, ...]:
+    def classes(self) -> tuple[type, ...]:
         """Returns the registered classes."""
         return tuple(self.values())
 

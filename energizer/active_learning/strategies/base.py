@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import torch
@@ -47,9 +48,9 @@ class ActiveEstimator(Estimator):
         gradient_accumulation_steps: Optional[int] = None,
         learning_rate: Optional[float] = None,
         optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[Dict, OptimizationArgs]] = None,
+        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
         scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[Dict, SchedulerArgs]] = None,
+        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
         limit_train_batches: Optional[int] = None,
@@ -102,11 +103,7 @@ class ActiveEstimator(Estimator):
         )
 
     def run_active_fit(
-        self,
-        datastore: ActiveDatastore,
-        reinit_model: bool,
-        model_cache_dir: Union[str, Path],
-        **kwargs,
+        self, datastore: ActiveDatastore, reinit_model: bool, model_cache_dir: Union[str, Path], **kwargs
     ) -> Any:
         if reinit_model:
             self.save_state_dict(model_cache_dir)
@@ -153,18 +150,14 @@ class ActiveEstimator(Estimator):
         datastore: ActiveDatastore,
         query_size: int,
         replay: bool,
-        fit_loop_kwargs: Dict,
-        fit_opt_kwargs: Dict,
-        test_kwargs: Dict,
-        query_kwargs: Dict,
-        label_kwargs: Dict,
+        fit_loop_kwargs: dict,
+        fit_opt_kwargs: dict,
+        test_kwargs: dict,
+        query_kwargs: dict,
+        label_kwargs: dict,
     ) -> ROUND_OUTPUT:
         model, optimizer, scheduler, train_loader, validation_loader, test_loader = self._setup_round(
-            datastore,
-            replay,
-            fit_loop_kwargs,
-            fit_opt_kwargs,
-            test_kwargs,
+            datastore, replay, fit_loop_kwargs, fit_opt_kwargs, test_kwargs
         )
 
         output = {}
@@ -194,12 +187,7 @@ class ActiveEstimator(Estimator):
         return output
 
     def run_annotation(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        query_kwargs: Dict,
-        label_kwargs: Dict,
+        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, query_kwargs: dict, label_kwargs: dict
     ) -> int:
         # === QUERY === #
         self.callback("on_query_start", model=model, datastore=datastore)
@@ -234,29 +222,18 @@ class ActiveEstimator(Estimator):
 
         return n_labelled
 
-    def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDatastore,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
+    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
         raise NotImplementedError
 
-    def active_fit_end(self, datastore: ActiveDatastore, output: List[ROUND_OUTPUT]) -> Any:
+    def active_fit_end(self, datastore: ActiveDatastore, output: list[ROUND_OUTPUT]) -> Any:
         return output
 
     def round_end(self, datastore: ActiveDatastore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
         return output
 
     def _setup_round(
-        self,
-        datastore: ActiveDatastore,
-        replay: bool,
-        fit_loop_kwargs: Dict,
-        fit_opt_kwargs: Dict,
-        test_kwargs: Dict,
-    ) -> Tuple[
+        self, datastore: ActiveDatastore, replay: bool, fit_loop_kwargs: dict, fit_opt_kwargs: dict, test_kwargs: dict
+    ) -> tuple[
         _FabricModule,
         _FabricOptimizer,
         Optional[_LRScheduler],
@@ -277,9 +254,7 @@ class ActiveEstimator(Estimator):
             **fit_loop_kwargs,
         )
         model, optimizer, scheduler, train_loader, validation_loader = self._setup_fit(
-            train_loader,
-            validation_loader,
-            **fit_opt_kwargs,
+            train_loader, validation_loader, **fit_opt_kwargs
         )
 
         # configuration test
@@ -296,8 +271,8 @@ class PoolBasedMixin(ABC):
 
     POOL_OUTPUT_KEY: OutputKeys
 
-    def run_pool_evaluation(self, model: _FabricModule, loader: _FabricDataLoader) -> Dict[str, np.ndarray]:
-        out: List[Dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
+    def run_pool_evaluation(self, model: _FabricModule, loader: _FabricDataLoader) -> dict[str, np.ndarray]:
+        out: list[dict] = self.run_evaluation(model, loader, RunningStage.POOL)  # type: ignore
         _out = ld_to_dl(out)
         return {k: np.concatenate(v) for k, v in _out.items()}
 
@@ -309,7 +284,7 @@ class PoolBasedMixin(ABC):
         loss_fn: Optional[Union[torch.nn.Module, Callable]],
         metrics: Optional[METRIC],
         stage: Union[str, RunningStage],
-    ) -> Union[Dict, BATCH_OUTPUT]:
+    ) -> Union[dict, BATCH_OUTPUT]:
         if stage != RunningStage.POOL:
             return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
 
@@ -333,7 +308,7 @@ class PoolBasedMixin(ABC):
     ) -> torch.Tensor:
         ...
 
-    def pool_epoch_end(self, output: List[Dict], metrics: Optional[METRIC]) -> List[Dict]:
+    def pool_epoch_end(self, output: list[dict], metrics: Optional[METRIC]) -> list[dict]:
         return output
 
     def get_pool_loader(self, datastore: ActiveDatastore, **kwargs) -> Optional[_FabricDataLoader]:

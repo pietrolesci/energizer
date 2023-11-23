@@ -1,5 +1,5 @@
 import time
-from typing import Any, List
+from typing import Any
 
 from lightning.fabric.wrappers import _FabricModule
 
@@ -50,7 +50,7 @@ class ActiveLearningCallback(Callback):
         ...
 
     def on_query_end(
-        self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore, indices: List[int]
+        self, estimator: ActiveEstimator, model: _FabricModule, datastore: Datastore, indices: list[int]
     ) -> None:
         ...
 

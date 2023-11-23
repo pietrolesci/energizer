@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Dict, List, Tuple, cast
+from typing import cast
 
 import numpy as np
 import torch
@@ -43,8 +43,8 @@ class Summary:
         self._precision_megabytes = (precision / 8.0) * 1e-6
 
     @property
-    def named_modules(self) -> List[Tuple[str, torch.nn.Module]]:
-        mods: List[Tuple[str, torch.nn.Module]]
+    def named_modules(self) -> list[tuple[str, torch.nn.Module]]:
+        mods: list[tuple[str, torch.nn.Module]]
         if self._max_depth == 0:
             mods = []
         elif self._max_depth == 1:
@@ -56,23 +56,23 @@ class Summary:
         return mods
 
     @property
-    def layer_names(self) -> List[str]:
+    def layer_names(self) -> list[str]:
         return list(self._layer_summary.keys())
 
     @property
-    def layer_types(self) -> List[str]:
+    def layer_types(self) -> list[str]:
         return [layer.layer_type for layer in self._layer_summary.values()]
 
     @property
-    def in_sizes(self) -> List:
+    def in_sizes(self) -> list:
         return [layer.in_size for layer in self._layer_summary.values()]  # type: ignore
 
     @property
-    def out_sizes(self) -> List:
+    def out_sizes(self) -> list:
         return [layer.out_size for layer in self._layer_summary.values()]  # type: ignore
 
     @property
-    def param_nums(self) -> List[int]:
+    def param_nums(self) -> list[int]:
         return [layer.num_parameters for layer in self._layer_summary.values()]
 
     @property
@@ -92,7 +92,7 @@ class Summary:
         # todo: seems it does not work with quantized models - it returns 0.0
         return self.total_parameters * self._precision_megabytes
 
-    def summarize(self) -> Dict[str, LayerSummary]:
+    def summarize(self) -> dict[str, LayerSummary]:
         summary = OrderedDict((name, LayerSummary(module)) for name, module in self.named_modules)
 
         if self._max_depth >= 1:
@@ -102,7 +102,7 @@ class Summary:
 
         return summary
 
-    def _get_summary_data(self) -> List[Tuple[str, List[str]]]:
+    def _get_summary_data(self) -> list[tuple[str, list[str]]]:
         """Makes a summary listing with:
 
         Layer Name, Layer Type, Number of Parameters, Input Sizes, Output Sizes, Model Size

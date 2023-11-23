@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
@@ -15,7 +15,7 @@ class ActivePandasDatastoreForSequenceClassification(SequenceClassificationMixin
         cls,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
-        on_cpu: Optional[List[str]] = None,
+        on_cpu: Optional[list[str]] = None,
         seed: Optional[int] = 42,
         train_dataset: Optional[Dataset] = None,
         validation_dataset: Optional[Dataset] = None,

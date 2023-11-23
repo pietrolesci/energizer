@@ -4,14 +4,11 @@ sources = energizer
 test: format lint unittest
 
 format:
-	isort $(sources) tests examples
-	black $(sources) tests examples
-	nbqa isort docs/examples
-	nbqa black docs/examples --line-length 85
+	ruff format $(sources)
 
 lint:
-	flake8 $(sources) tests
-	# mypy $(sources) tests
+	ruff check $(sources) --fix
+	torchfix $(sources) --fix
 
 unittest:
 	pytest
@@ -32,3 +29,6 @@ clean:
 
 serve_docs:
 	mkdocs serve --watch .
+
+clean-poetry-cache:
+	rm -rf ~/.cache/pypoetry/virtualenvs/
