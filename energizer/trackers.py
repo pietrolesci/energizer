@@ -220,9 +220,7 @@ class ProgressTracker:
     def is_done(self) -> bool:
         """Whether a stage is done."""
         return (
-            self.get_stage_tracker().max_reached()
-            or self.current_stage == RunningStage.TRAIN
-            and self.stop_training
+            self.get_stage_tracker().max_reached() or self.current_stage == RunningStage.TRAIN and self.stop_training
             # or (self.epoch_tracker.remaining() <= 1 and self.gradient_accumulation_steps > self.train_tracker.remaining())
         )
 

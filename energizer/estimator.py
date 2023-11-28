@@ -634,7 +634,6 @@ class Estimator:
         self.model.load_state_dict(self.fabric.load(cache_dir / name))
 
     def callback(self, hook: str, *args, **kwargs) -> Optional[Any]:
-
         # if estimator has the method
         method = getattr(self, hook, None)
         if method is not None and callable(method):

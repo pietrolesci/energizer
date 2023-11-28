@@ -84,7 +84,6 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDataStoreWithIndex, query_size: int, **kwargs
     ) -> List[int]:
-
         # SELECT QUERIES
         search_query_ids = self.select_search_query(model, datastore, query_size, **kwargs)
 

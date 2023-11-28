@@ -101,9 +101,7 @@ class ActiveProgressTracker(ProgressTracker):
         ), "At least one of `max_rounds` or `max_budget` must be not None."
         assert max_budget > initial_budget, ValueError(f"`{max_budget=}` must be bigger than `{initial_budget=}`.")
 
-        max_rounds = min(
-            int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf")
-        )  # type: ignore
+        max_rounds = min(int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf"))  # type: ignore
         max_budget = (query_size * max_rounds) + initial_budget  # type: ignore
 
         self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore
