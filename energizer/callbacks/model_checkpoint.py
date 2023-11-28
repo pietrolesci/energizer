@@ -87,7 +87,9 @@ class ModelCheckpoint(CallbackWithMonitor):
     """
 
     def should_checkpoint(self, stage: Union[str, RunningStage], interval: Interval, step_or_epoch: int) -> bool:
-        return stage == self.stage and interval == self.interval and (step_or_epoch + 1) % self.every_n == 0
+        # when we get to batch_end or epoch_end the step tracker has already been incremented!
+        step_or_epoch = step_or_epoch + 1 if interval == Interval.EPOCH else step_or_epoch
+        return stage == self.stage and interval == self.interval and step_or_epoch % self.every_n == 0
 
     def on_epoch_end(
         self,
