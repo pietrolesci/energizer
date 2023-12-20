@@ -193,7 +193,7 @@ class Datastore(BaseDatastore):
         # put everything together
         return DataLoader(
             dataset=dataset,
-            batch_size=self.loading_params.batch_size,
+            batch_size=batch_size,
             sampler=sampler,
             collate_fn=self.get_collate_fn(stage),
             drop_last=self.loading_params.drop_last,
