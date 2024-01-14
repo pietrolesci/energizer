@@ -1,7 +1,7 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any, Optional, Union
 
 import pandas as pd
 import torch.nn as nn
@@ -24,12 +24,13 @@ class WandbLogger(Logger):
         name: Optional[str] = None,
         dir: _PATH = ".",
         anonymous: Optional[bool] = None,
+        start_method: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__()
 
         # set wandb init arguments
-        self._wandb_init: Dict[str, Any] = {
+        self._wandb_init: dict[str, Any] = {
             "project": project or os.environ.get("WANDB_PROJECT", "energizer_logs"),
             "dir": os.fspath(dir) if dir is not None else dir,
             "name": name,
@@ -37,12 +38,14 @@ class WandbLogger(Logger):
             "anonymous": ("allow" if anonymous else None),
             **kwargs,
         }
+        if start_method is not None:
+            self._wandb_init["settings"] = wandb.Settings(start_method=start_method)
 
         # start wandb run (to create an attach_id for distributed modes)
         wandb.require("service")  # type: ignore
         _ = self.experiment
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         # args needed to reload correct experiment
         if self._experiment is not None:
@@ -124,17 +127,18 @@ class WandbLogger(Logger):
     @rank_zero_only
     def finalize(self, status: str) -> None:
         self.experiment.finish()
+        wandb.finish()
 
     @rank_zero_only
-    def log_hyperparams(self, params: Union[Dict[str, Any], Namespace]) -> None:
+    def log_hyperparams(self, params: Union[dict[str, Any], Namespace]) -> None:
         params = _convert_params(params)
         params = _sanitize_callable_params(params)
         self.experiment.config.update(params, allow_val_change=True)
 
     @rank_zero_only
-    def log_metrics(self, metrics: Mapping, step: int) -> None:
+    def log_metrics(self, metrics: dict, step: int) -> None:
         assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
-        self.experiment.log(dict(metrics, **{"step": step}))
+        self.experiment.log({**metrics, "step": step})
 
     def save_to_parquet(self, path: Union[str, Path]) -> None:
         run = wandb.Api().run(self.run_path)

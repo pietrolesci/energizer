@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 import numpy as np
 import torch
@@ -8,7 +9,7 @@ from sklearn.utils import check_random_state
 from torch.nn.functional import one_hot
 
 from energizer.active_learning.clustering_utilities import kmeans_pp_sampling
-from energizer.active_learning.datastores.base import ActiveDataStore, ActiveDataStoreWithIndex
+from energizer.active_learning.datastores.base import ActiveDatastore, ActiveDatastoreWithIndex
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
 from energizer.active_learning.strategies.diversity import DiversityBasedStrategy, DiversityBasedStrategyWithPool
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
@@ -42,7 +43,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         seed: int = 42,
         r_factor: int,
         clustering_algorithm: str = "kmeans",
-        clustering_kwargs: Optional[Dict] = None,
+        clustering_kwargs: Optional[dict] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, score_fn=score_fn, seed=seed, **kwargs)
@@ -60,13 +61,8 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         return self._clustering_fn
 
     def run_query(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
-        query_size: int,
-        **kwargs,
-    ) -> List[int]:
-
+        self, model: _FabricModule, datastore: ActiveDatastoreWithIndex, query_size: int, **kwargs
+    ) -> list[int]:
         # === DIVERSITY === #
         embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
         if embeddings_and_ids is None:
@@ -84,25 +80,20 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
         return self.compute_most_uncertain(model, pool_loader, query_size)
 
     def get_embeddings_and_ids(
-        self,
-        model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
-        query_size: int,
-        **kwargs,
-    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        self, model: _FabricModule, datastore: ActiveDatastoreWithIndex, query_size: int, **kwargs
+    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
         pool_ids = kwargs.get("subpool_ids", None) or datastore.get_pool_ids()
         return datastore.get_pool_embeddings(pool_ids), np.array(pool_ids)
 
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStoreWithIndex,
+        datastore: ActiveDatastoreWithIndex,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
         **kwargs,
-    ) -> List[int]:
-
+    ) -> list[int]:
         num_clusters = query_size * self.r_factor
 
         centers_ids = self.clustering_fn(embeddings, num_clusters, rng=self.clustering_rng, **self.clustering_kwargs)
@@ -114,12 +105,12 @@ class BADGE(DiversityBasedStrategyWithPool):
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
         **kwargs,
-    ) -> List[int]:
+    ) -> list[int]:
         # k-means++ sampling
         center_ids = kmeans_pp_sampling(embeddings, query_size, rng=self.rng)
         return ids[center_ids].tolist()

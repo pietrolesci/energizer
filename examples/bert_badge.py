@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import torch
@@ -9,7 +9,7 @@ from torchmetrics.classification import Accuracy, F1Score, Precision, Recall
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from energizer import seed_everything
-from energizer.active_learning.datastores.classification import ActivePandasDataStoreForSequenceClassification
+from energizer.active_learning.datastores.classification import ActivePandasDatastoreForSequenceClassification
 from energizer.active_learning.strategies.diversity import BADGE
 from energizer.enums import InputKeys, OutputKeys, RunningStage
 from energizer.utilities import move_to_cpu
@@ -29,13 +29,7 @@ class BADGEForSequenceClassification(BADGE):
         return model.classifier(penultimate_layer_out)
 
     def step(
-        self,
-        stage: RunningStage,
-        model,
-        batch: Dict,
-        batch_idx: int,
-        loss_fn,
-        metrics: MetricCollection,
+        self, stage: RunningStage, model, batch: dict, batch_idx: int, loss_fn, metrics: MetricCollection
     ) -> torch.Tensor:
         _ = batch.pop(InputKeys.ON_CPU, None)
         out = model(**batch)
@@ -47,7 +41,7 @@ class BADGEForSequenceClassification(BADGE):
 
         return out.loss
 
-    def epoch_end(self, stage: RunningStage, output: List[np.ndarray], metrics: MetricCollection) -> float:
+    def epoch_end(self, stage: RunningStage, output: list[np.ndarray], metrics: MetricCollection) -> float:
         # aggregate and log
         aggregated_metrics = move_to_cpu(metrics.compute())  # NOTE: metrics are still on device
         aggregated_loss = round(np.mean(output).item(), 6)
@@ -87,7 +81,7 @@ if __name__ == "__main__":
     dataset_dict = dataset_dict.map(lambda ex: tokenizer(ex["text"]), batched=True)
 
     # create datastore
-    datastore = ActivePandasDataStoreForSequenceClassification.from_dataset_dict(
+    datastore = ActivePandasDatastoreForSequenceClassification.from_dataset_dict(
         dataset_dict=dataset_dict,
         input_names=["input_ids", "attention_mask"],
         target_name="labels",
@@ -100,10 +94,7 @@ if __name__ == "__main__":
 
     # model
     model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME,
-        id2label=datastore.id2label,
-        label2id=datastore.label2id,
-        num_labels=len(datastore.labels),
+        MODEL_NAME, id2label=datastore.id2label, label2id=datastore.label2id, num_labels=len(datastore.labels)
     )
 
     # active learning loop

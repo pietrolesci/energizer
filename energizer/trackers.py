@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional, Union
 
 import numpy as np
+from lightning_utilities.core.rank_zero import rank_zero_info
 from tqdm.auto import tqdm
 
 from energizer.enums import Interval, RunningStage
@@ -53,23 +54,13 @@ class Tracker:
 @dataclass
 class EpochTracker(Tracker):
     def make_progress_bar(self) -> Optional[tqdm]:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Completed epochs",
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Completed epochs", dynamic_ncols=True, leave=True)
 
 
 @dataclass
 class StepTracker(Tracker):
     def make_progress_bar(self) -> Optional[tqdm]:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Optimisation steps",
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Optimisation steps", dynamic_ncols=True, leave=True)
 
 
 @dataclass
@@ -78,12 +69,7 @@ class StageTracker(Tracker):
 
     def make_progress_bar(self) -> Optional[tqdm]:
         desc = f"Epoch {self.total}".strip() if self.stage == RunningStage.TRAIN else f"{self.stage.title()}"
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc=desc,
-            dynamic_ncols=True,
-            leave=True,
-        )
+        self.progress_bar = tqdm(total=self.max, desc=desc, dynamic_ncols=True, leave=True)
 
 
 @dataclass
@@ -101,9 +87,14 @@ class ProgressTracker:
         self.log_interval: int = 1
         self.enable_progress_bar: bool = True
         self.current_stage: Optional[RunningStage] = None
+
+        # validation logic
         self.has_validation: bool = False
         self.validate_every_n: Optional[int] = None
         self.validation_interval: Optional[str] = None
+        self.validate_on_epoch_end: bool = False
+        self._last_epoch_num_steps: int = 0
+        self._xepoch_set: bool = False
 
     def setup(self, stage: Union[str, RunningStage], log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
         """Do all the math here and create progress bars for every stage."""
@@ -172,18 +163,36 @@ class ProgressTracker:
 
         # validation schedule
         if validation_freq is not None and max_validation_batches > 0:
-            every_n, interval = validation_freq.split(":")
-            every_n = int(every_n)
-            assert interval in list(Interval)
-            assert every_n > 0
+            if validation_freq.endswith("+"):
+                self.validate_on_epoch_end = True
+                validation_freq = validation_freq.removesuffix("+")
 
+            if "xepoch" in validation_freq:
+                # automatically compute number of times per epoch
+                times_per_epoch = int(validation_freq.split("x")[0])
+                assert times_per_epoch > 0
+                every_n = int(np.floor(np.ceil(total_steps / total_epochs) / times_per_epoch))
+                # print(f"{total_steps=}\n{total_epochs=}\n{every_n=}")
+                interval = Interval.STEP
+                self._xepoch_set = True
+                msg = f"Validating {times_per_epoch} times per epoch"
+            else:
+                every_n, interval = validation_freq.split(":")
+                every_n = int(every_n)
+                assert every_n > 0
+                assert interval in list(Interval)
+                msg = f"Validating every {every_n} {interval}"
+
+            if self.validate_on_epoch_end and interval != Interval.EPOCH:
+                msg += ". You passed `+` so will always validate on epoch end"
+
+            rank_zero_info(msg)
             self.has_validation = True
             self.validate_every_n = every_n
             self.validation_interval = interval
+            self.validation_tracker.max = max_validation_batches
         else:
             self.has_validation = False
-
-        self.validation_tracker.max = max_validation_batches
 
     def setup_eval(self, stage: Union[str, RunningStage], num_batches: int, limit_batches: Optional[int]) -> None:
         getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
@@ -220,9 +229,7 @@ class ProgressTracker:
     def is_done(self) -> bool:
         """Whether a stage is done."""
         return (
-            self.get_stage_tracker().max_reached()
-            or self.current_stage == RunningStage.TRAIN
-            and self.stop_training
+            self.get_stage_tracker().max_reached() or self.current_stage == RunningStage.TRAIN and self.stop_training
             # or (self.epoch_tracker.remaining() <= 1 and self.gradient_accumulation_steps > self.train_tracker.remaining())
         )
 
@@ -243,6 +250,7 @@ class ProgressTracker:
             return (iter + 1) % self.validate_every_n == 0  # type: ignore
 
         should_validate = False
+
         if self.validation_interval == Interval.EPOCH:
             should_validate = _check(self.global_epoch) and self.is_done
 
@@ -250,10 +258,21 @@ class ProgressTracker:
             should_validate = _check(self.global_batch) and not self.is_done  # type: ignore
 
         elif self.validation_interval == Interval.STEP:
-            should_validate = _check(self.global_step) and not self.is_done and not self.is_accumulating
+            # this makes sure that when we pass xepoch we exactly validate the same number of times per epoch
+            # if we use `self.global_step` some epochs mights have more validations
+            step = self.global_step - self._last_epoch_num_steps if self._xepoch_set else self.global_step
+            should_validate = (
+                (_check(step) and not self.is_done and not self.is_accumulating)
+                or (self.validate_on_epoch_end and self.is_done)
+                # this check avoids validating on epoch end when the steps happens to be at the end of the epoch
+                # not _check(self.global_step)
+            )
 
         else:
             raise NotImplementedError
+
+        if should_validate:
+            print(f"{self.global_epoch=} {self.global_step=} {self.is_done=}")
 
         return should_validate
 
@@ -262,6 +281,7 @@ class ProgressTracker:
     def start_fit(self) -> None:
         self.epoch_tracker.reset()
         self.step_tracker.reset()
+        self._last_epoch_num_steps = 0
 
     def start(self, stage: Union[str, RunningStage]) -> None:
         """Make progress bars and reset the counters of stage trackers."""
@@ -287,12 +307,16 @@ class ProgressTracker:
 
     def end(self) -> None:
         """Close progress bars of stage tracker when testing or re-attach training when validating."""
+
+        # NOTE: when testing we directly close the progress bar when we are done
         if not self.is_fitting:
             return self.get_stage_tracker().close_progress_bar()
 
         self.get_stage_tracker().terminate_progress_bar()
+
+        # NOTE: if this is the end of the validation stage we need to reattach the training tracker
         if self.current_stage == RunningStage.VALIDATION:
-            self.current_stage = RunningStage.TRAIN  # reattach training
+            self.current_stage = RunningStage.TRAIN
             if self.train_tracker.progress_bar is not None:
                 self.train_tracker.progress_bar.set_postfix_str("")
 
@@ -309,9 +333,12 @@ class ProgressTracker:
 
     def increment_epoch(self) -> None:
         self.epoch_tracker.increment()
+        self._last_epoch_num_steps += self.global_step
 
     def increment_step(self) -> None:
         self.step_tracker.increment()
+        if self.step_tracker.max_reached():
+            self.stop_training = True
 
     """Helpers"""
 

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from math import floor
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ from datasets import Dataset
 from numpy.random import RandomState
 from torch.utils.data import DataLoader
 
-from energizer.datastores.base import Datastore, IndexMixin, PandasDataStore
+from energizer.datastores.base import Datastore, IndexMixin, PandasDatastore
 from energizer.enums import InputKeys, RunningStage, SpecialKeys
 from energizer.utilities import sample
 
@@ -34,7 +34,7 @@ class ActiveLearningMixin(ABC):
     @abstractmethod
     def label(
         self,
-        indices: List[int],
+        indices: list[int],
         round: int,
         validation_perc: Optional[float] = None,
         validation_sampling: Optional[Literal["uniform", "stratified"]] = "uniform",
@@ -47,9 +47,9 @@ class ActiveLearningMixin(ABC):
         size: int,
         round: Optional[int] = None,
         random_state: Optional[RandomState] = None,
-        with_indices: Optional[List[int]] = None,
+        with_indices: Optional[list[int]] = None,
         **kwargs,
-    ) -> List[int]:
+    ) -> list[int]:
         ...
 
     @abstractmethod
@@ -64,23 +64,23 @@ class ActiveLearningMixin(ABC):
         ...
 
     @abstractmethod
-    def get_train_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_train_ids(self, round: Optional[int] = None) -> list[int]:
         ...
 
     @abstractmethod
-    def get_validation_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_validation_ids(self, round: Optional[int] = None) -> list[int]:
         ...
 
     @abstractmethod
-    def get_pool_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_pool_ids(self, round: Optional[int] = None) -> list[int]:
         ...
 
 
-class ActiveDataStore(ActiveLearningMixin, Datastore):
+class ActiveDatastore(ActiveLearningMixin, Datastore):
     ...
 
 
-class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
+class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
     _train_data: pd.DataFrame
     _test_data: Optional[Dataset]
 
@@ -108,7 +108,7 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         return self._train_data[SpecialKeys.LABELLING_ROUND].max()
 
     def train_dataset(
-        self, round: Optional[int] = None, passive: Optional[bool] = False, with_indices: Optional[List[int]] = None
+        self, round: Optional[int] = None, passive: Optional[bool] = False, with_indices: Optional[list[int]] = None
     ) -> Optional[Dataset]:
         if passive:
             return super().train_dataset()
@@ -127,7 +127,7 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         if mask.sum() > 0:
             return Dataset.from_pandas(self._train_data.loc[mask], preserve_index=False)
 
-    def pool_dataset(self, round: Optional[int] = None, with_indices: Optional[List[int]] = None) -> Optional[Dataset]:
+    def pool_dataset(self, round: Optional[int] = None, with_indices: Optional[list[int]] = None) -> Optional[Dataset]:
         mask = self._pool_mask(round)
         if with_indices is not None:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
@@ -137,7 +137,7 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
 
     def label(
         self,
-        indices: List[int],
+        indices: list[int],
         round: int,
         validation_perc: Optional[float] = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",
@@ -172,9 +172,9 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
         size: int,
         round: Optional[int] = None,
         random_state: Optional[RandomState] = None,
-        with_indices: Optional[List[int]] = None,
+        with_indices: Optional[list[int]] = None,
         **kwargs,
-    ) -> List[int]:
+    ) -> list[int]:
         """Performs `uniform` or `stratified` sampling from the pool."""
 
         mask = self._pool_mask(round)
@@ -217,21 +217,21 @@ class ActivePandasDataStore(ActiveLearningMixin, PandasDataStore):
             mask = mask | (self._train_data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
 
-    def get_train_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_train_ids(self, round: Optional[int] = None) -> list[int]:
         return self._train_data.loc[self._train_mask(round), SpecialKeys.ID].tolist()
 
-    def get_validation_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_validation_ids(self, round: Optional[int] = None) -> list[int]:
         return self._train_data.loc[self._validation_mask(round), SpecialKeys.ID].tolist()
 
-    def get_pool_ids(self, round: Optional[int] = None) -> List[int]:
+    def get_pool_ids(self, round: Optional[int] = None) -> list[int]:
         return self._train_data.loc[self._pool_mask(round), SpecialKeys.ID].tolist()
 
 
 class ActiveIndexMixin(IndexMixin):
-    def get_pool_embeddings(self, ids: List[int]) -> np.ndarray:
+    def get_pool_embeddings(self, ids: list[int]) -> np.ndarray:
         return np.stack(self.index.get_items(ids))
 
-    def get_train_embeddings(self, ids: List[int]) -> np.ndarray:
+    def get_train_embeddings(self, ids: list[int]) -> np.ndarray:
         # check all the ids are training ids
         train_ids = self.get_train_ids()  # type: ignore
         assert all(i in train_ids for i in ids), set(train_ids).difference(set(ids))
@@ -245,18 +245,18 @@ class ActiveIndexMixin(IndexMixin):
 
         return emb
 
-    def get_embeddings(self, ids: List[int]) -> None:
+    def get_embeddings(self, ids: list[int]) -> None:
         raise ValueError("Use `get_{train/pool}_embeddings` methods instead.")
 
 
-class ActiveDataStoreWithIndex(ActiveIndexMixin, ActiveDataStore):
+class ActiveDatastoreWithIndex(ActiveIndexMixin, ActiveDatastore):
     ...
 
 
-class ActivePandasDataStoreWithIndex(ActiveIndexMixin, ActivePandasDataStore):
+class ActivePandasDatastoreWithIndex(ActiveIndexMixin, ActivePandasDatastore):
     def label(
         self,
-        indices: List[int],
+        indices: list[int],
         round: int,
         validation_perc: Optional[float] = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",

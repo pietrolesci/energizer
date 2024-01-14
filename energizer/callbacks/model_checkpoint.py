@@ -1,52 +1,60 @@
 import os
+import shutil
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Any, Optional, Union
 
 import srsly
 from lightning.fabric.wrappers import _FabricModule
+from lightning_utilities.core.rank_zero import rank_zero_info
 
 from energizer.callbacks.base import CallbackWithMonitor
-from energizer.enums import RunningStage
+from energizer.enums import Interval, RunningStage
 from energizer.estimator import Estimator
-from energizer.types import EPOCH_OUTPUT, METRIC
+from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, METRIC
 from energizer.utilities import make_dict_json_serializable
 
 
 class ModelCheckpoint(CallbackWithMonitor):
-    _best_k_models: Dict[str, float] = {}
+    _best_k_models: dict[str, float] = {}
+    monitor: Optional[str] = None
+    mode: Optional[str] = "min"
 
     def __init__(
         self,
         dirpath: Union[Path, str],
-        monitor: str,
         stage: Union[str, RunningStage],
-        mode: str = "min",
-        save_last: Optional[bool] = None,
-        save_top_k: int = 1,
+        frequency: str = "1:epoch",
+        monitor: Optional[str] = None,
+        mode: Optional[str] = "min",
+        save_last: Optional[bool] = False,
+        save_top_k: Optional[int] = 1,
         verbose: bool = True,
     ) -> None:
         super().__init__()
         self.dirpath = Path(dirpath)
-        self.monitor = monitor
         self.stage = stage
+
+        # monitor
+        self.monitor = monitor
         self.mode = mode
         self.save_last = save_last
         self.save_top_k = save_top_k
         self.verbose = verbose
 
+        # frequency
+        self.frequency = frequency
+        every_n, interval = self.frequency.split(":")
+        every_n = int(every_n)
+        assert every_n > 0
+        assert interval in list(Interval)
+
+        rank_zero_info(f"Running ModelCheckpoint callback every {every_n} {interval}")
+        self.every_n = every_n
+        self.interval = interval
+
     @property
     def best_model_path(self) -> str:
         return self.optim_op(self._best_k_models, key=self._best_k_models.get)
-
-    def on_train_epoch_end(
-        self, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
-    ) -> None:
-        self.epoch_end(estimator, output, RunningStage.TRAIN)
-
-    def on_validation_epoch_end(
-        self, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
-    ) -> None:
-        self.epoch_end(estimator, output, RunningStage.VALIDATION)
 
     def on_fit_start(self, *args, **kwargs) -> None:
         # prepare directory
@@ -54,7 +62,6 @@ class ModelCheckpoint(CallbackWithMonitor):
             # during active learning we do not want to keep checkpoints from previous iterations
             for ckpt_path in self.dirpath.glob("*.pt"):
                 ckpt_path.unlink()
-                # shutil.rmtree(str(i))
         self.dirpath.mkdir(parents=True, exist_ok=True)
         self._best_k_models = {}
 
@@ -64,12 +71,9 @@ class ModelCheckpoint(CallbackWithMonitor):
             estimator.load_state_dict(self.dirpath, self.best_model_path)
 
             if self.verbose:
-                logs = {
-                    "selected": self.best_model_path,
-                    "step": estimator.tracker.safe_global_epoch,
-                }
+                logs = {"selected": self.best_model_path, "step": estimator.tracker.safe_global_epoch}
                 if hasattr(estimator.tracker, "global_round"):
-                    logs["round"] = getattr(estimator.tracker, "global_round")
+                    logs["round"] = estimator.tracker.global_round
 
                 srsly.write_jsonl(
                     self.dirpath / "checkpoint_logs.jsonl",
@@ -82,32 +86,59 @@ class ModelCheckpoint(CallbackWithMonitor):
     Helpers
     """
 
-    def epoch_end(self, estimator: Estimator, output: EPOCH_OUTPUT, stage: Union[str, RunningStage]) -> None:
-        if stage != self.stage:
-            return
+    def should_checkpoint(self, stage: Union[str, RunningStage], interval: Interval, step_or_epoch: int) -> bool:
+        # when we get to batch_end or epoch_end the step tracker has already been incremented!
+        step_or_epoch = step_or_epoch + 1 if interval == Interval.EPOCH else step_or_epoch
+        return stage == self.stage and interval == self.interval and step_or_epoch % self.every_n == 0
 
-        current = self._get_monitor(output)
+    def on_epoch_end(
+        self,
+        stage: Union[str, RunningStage],
+        estimator: Estimator,
+        model: _FabricModule,
+        output: EPOCH_OUTPUT,
+        metrics: METRIC,
+    ) -> None:
+        if self.should_checkpoint(stage, Interval.EPOCH, estimator.tracker.global_epoch):
+            self.checkpoint(stage, estimator, output)
 
-        if self._check_should_save(stage, current):
-            # checkpoint
-            name = self._get_name(estimator, current)
+    def on_batch_end(
+        self,
+        stage: Union[str, RunningStage],
+        estimator: Estimator,
+        model: _FabricModule,
+        output: BATCH_OUTPUT,
+        batch: Any,
+        batch_idx: int,
+    ) -> None:
+        if self.should_checkpoint(stage, Interval.STEP, estimator.tracker.global_step):
+            self.checkpoint(stage, estimator, output)
+
+    def checkpoint(
+        self, stage: Union[str, RunningStage], estimator: Estimator, output: Union[EPOCH_OUTPUT, BATCH_OUTPUT]
+    ) -> None:
+        if self.monitor is not None:
+            current = self._get_monitor(output)
+            if self._check_should_save(stage, current):
+                # checkpoint
+                name = self._get_name(estimator, current)
+                estimator.save_state_dict(self.dirpath, name)
+                self._update_best_models(name, current)
+
+                # log
+                if self.verbose:
+                    logs = {"step": estimator.tracker.global_step, **self._best_k_models}
+                    if hasattr(estimator.tracker, "global_round"):
+                        logs["round"] = getattr(estimator.tracker, "global_round", None)
+                    srsly.write_jsonl(
+                        self.dirpath / "checkpoint_logs.jsonl",
+                        [make_dict_json_serializable(logs)],
+                        append=True,
+                        append_new_line=False,
+                    )
+        else:
+            name = f"{self.interval}_{getattr(estimator.tracker, f'global_{self.interval}')}"
             estimator.save_state_dict(self.dirpath, name)
-            self._update_best_models(name, current)
-
-            # log
-            if self.verbose:
-                logs = {
-                    "step": estimator.tracker.global_step,
-                    **self._best_k_models,
-                }
-                if hasattr(estimator.tracker, "global_round"):
-                    logs["round"] = getattr(estimator.tracker, "global_round", None)
-                srsly.write_jsonl(
-                    self.dirpath / "checkpoint_logs.jsonl",
-                    [make_dict_json_serializable(logs)],
-                    append=True,
-                    append_new_line=False,
-                )
 
     def _check_should_save(self, stage: Union[str, RunningStage], current: Optional[float]) -> bool:
         should_save = False
@@ -142,5 +173,8 @@ class ModelCheckpoint(CallbackWithMonitor):
             if self.save_top_k is not None and len(self._best_k_models) >= self.save_top_k:
                 worst_ckpt = self.reverse_optim_op(self._best_k_models, key=self._best_k_models.get)
                 self._best_k_models.pop(worst_ckpt)
-                os.remove(self.dirpath / worst_ckpt)
+                if (self.dirpath / worst_ckpt).is_dir():
+                    shutil.rmtree(self.dirpath / worst_ckpt)
+                else:
+                    os.remove(self.dirpath / worst_ckpt)
             self._best_k_models[name] = current

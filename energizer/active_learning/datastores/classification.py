@@ -1,21 +1,21 @@
-from typing import List, Optional
+from typing import Optional
 
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import Self
 
-from energizer.active_learning.datastores.base import ActivePandasDataStoreWithIndex
+from energizer.active_learning.datastores.base import ActivePandasDatastoreWithIndex
 from energizer.datastores.classification import SequenceClassificationMixin, _from_datasets
 from energizer.enums import SpecialKeys
 
 
-class ActivePandasDataStoreForSequenceClassification(SequenceClassificationMixin, ActivePandasDataStoreWithIndex):
+class ActivePandasDatastoreForSequenceClassification(SequenceClassificationMixin, ActivePandasDatastoreWithIndex):
     @classmethod
     def from_datasets(
         cls,
         tokenizer: PreTrainedTokenizerBase,
         uid_name: Optional[str] = None,
-        on_cpu: Optional[List[str]] = None,
+        on_cpu: Optional[list[str]] = None,
         seed: Optional[int] = 42,
         train_dataset: Optional[Dataset] = None,
         validation_dataset: Optional[Dataset] = None,

@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from tqdm.auto import tqdm
 
-from energizer.active_learning.datastores.base import ActiveDataStore
+from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.enums import RunningStage
 from energizer.trackers import ProgressTracker, StageTracker, Tracker
 
@@ -17,11 +17,7 @@ class RoundTracker(Tracker):
 
     def make_progress_bar(self) -> None:
         self.progress_bar = tqdm(
-            total=self.max,
-            desc="Completed rounds",
-            dynamic_ncols=True,
-            leave=True,
-            colour="#32a852",
+            total=self.max, desc="Completed rounds", dynamic_ncols=True, leave=True, colour="#32a852"
         )
 
     def increment(self) -> None:
@@ -40,13 +36,7 @@ class BudgetTracker(Tracker):
         return super().reset()
 
     def make_progress_bar(self) -> None:
-        self.progress_bar = tqdm(
-            total=self.max,
-            desc="Labelled",
-            dynamic_ncols=True,
-            leave=True,
-            colour="#32a852",
-        )
+        self.progress_bar = tqdm(total=self.max, desc="Labelled", dynamic_ncols=True, leave=True, colour="#32a852")
         if self.current > 0:
             self.progress_bar.update(self.current)
 
@@ -80,7 +70,7 @@ class ActiveProgressTracker(ProgressTracker):
         max_rounds: Optional[int],
         max_budget: Optional[int],
         query_size: int,
-        datastore: ActiveDataStore,
+        datastore: ActiveDatastore,
         validation_perc: Optional[float],
         log_interval: int,
         enable_progress_bar: bool,
@@ -101,9 +91,7 @@ class ActiveProgressTracker(ProgressTracker):
         ), "At least one of `max_rounds` or `max_budget` must be not None."
         assert max_budget > initial_budget, ValueError(f"`{max_budget=}` must be bigger than `{initial_budget=}`.")
 
-        max_rounds = min(
-            int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf")
-        )  # type: ignore
+        max_rounds = min(int(np.ceil((max_budget - initial_budget) / query_size)), max_rounds or float("Inf"))  # type: ignore
         max_budget = (query_size * max_rounds) + initial_budget  # type: ignore
 
         self.has_test = datastore.test_size() is not None and datastore.test_size() > 0  # type: ignore

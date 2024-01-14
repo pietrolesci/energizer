@@ -1,3 +1,7 @@
+[build-system]
+requires      = [ "poetry-core" ]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name        = "energizer"
 version     = "0.1.0"
@@ -8,72 +12,98 @@ readme      = "README.md"
 packages    = [ { include = "energizer" } ]
 
 [tool.poetry.dependencies]
-python            = "^3.8"
-lightning         = "^2.0.6"
-transformers      = "^4.31.0"
-datasets          = "^2.14.1"
+python            = ">=3.9,<3.13"
+lightning         = "^2.1.0"
+transformers      = "^4.34.0"
+datasets          = "^2.14.5"
 torch-optimizer   = "^0.3.0"
-srsly             = "^2.4.5"
+srsly             = "^2.4.8"
 hnswlib           = { git = "https://github.com/nmslib/hnswlib.git" }
 torch-tb-profiler = "^0.4.1"
-tensorboard       = "^2.12.0"
+tensorboard       = "^2.14.1"
 tbparse           = "^0.0.7"
 wandb             = "^0.15.4"
-pandas            = "^2.0.3"
+pandas            = "^2.1.1"
 tabulate          = "^0.9.0"
-openpyxl          = "^3.1.1"
-tqdm              = "^4.65.0"
-scikit-learn      = "^1.3.0"
+openpyxl          = "^3.1.2"
+tqdm              = "^4.66.1"
+scikit-learn      = "^1.3.1"
+bitsandbytes      = "^0.41.1"
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black      = "^22.12.0"
 nbqa       = "^1.6.1"
 ipykernel  = "^6.20.2"
 ipywidgets = "7.7.1"
-isort      = "^5.11.4"
 pytest     = "^7.2.1"
 nvitop     = "^1.0.0"
-
-
-[tool.black]
-line-length = 120
-skip-string-normalization = false
-target-version = [ 'py38' ]
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+ruff       = "^0.1.3"
+torchfix   = "^0.1.1"
 
 [tool.ruff]
-line-length    = 120
-src            = [ "src", "test" ]
-target-version = "py38"
+# Exclude a variety of commonly ignored directories.
+exclude = [
+".bzr",
+".direnv",
+".eggs",
+".git",
+".git-rewrite",
+".hg",
+".mypy_cache",
+".nox",
+".pants.d",
+".pytype",
+".ruff_cache",
+".svn",
+".tox",
+".venv",
+"__pypackages__",
+"_build",
+"buck-out",
+"build",
+"dist",
+"node_modules",
+"venv",
+]
+
+extend-include = [ "*.ipynb" ]
+
+# Same as Black.
+line-length = 120
+
+# Assume Python 3.10
+target-version = "py310"
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
 
 
-[tool.isort]
-multi_line_output              = 3
-include_trailing_comma         = true
-force_grid_wrap                = 0
-use_parentheses                = true
-ensure_newline_before_comments = true
-line_length                    = 120
-skip_gitignore                 = true
+[tool.ruff.format]
+quote-style               = "double"
+indent-style              = "space"
+skip-magic-trailing-comma = true
 
 
-[build-system]
-requires      = [ "poetry-core" ]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.isort]
+combine-as-imports      = true
+split-on-trailing-comma = false
+
+
+[tool.ruff.lint]
+select = [
+# pycodestyle
+"E",
+# Pyflakes
+"F",
+# pyupgrade
+"UP",
+# flake8-bugbear
+"B",
+# flake8-simplify
+"SIM",
+# isort
+"I",
+]

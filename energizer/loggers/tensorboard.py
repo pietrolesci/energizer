@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from lightning.fabric.loggers.tensorboard import TensorBoardLogger as _TensorBoardLogger
 from tbparse import SummaryReader
@@ -7,6 +7,14 @@ from tbparse import SummaryReader
 
 class TensorBoardLogger(_TensorBoardLogger):
     LOGGER_NAME: str = "tensorboard"
+
+    def __init__(
+        self,
+        root_dir: Union[str, Path],
+        name: Optional[str] = "tensorboard_logs",
+        version: Optional[Union[int, str]] = None,
+    ) -> None:
+        super().__init__(root_dir, name, version)
 
     @property
     def logger_name(self) -> str:
