@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import srsly
 from lightning.fabric.wrappers import _FabricModule
@@ -16,18 +16,18 @@ from energizer.utilities import make_dict_json_serializable
 
 class ModelCheckpoint(CallbackWithMonitor):
     _best_k_models: dict[str, float] = {}
-    monitor: Optional[str] = None
-    mode: Optional[str] = "min"
+    monitor: str | None = None
+    mode: str | None = "min"
 
     def __init__(
         self,
-        dirpath: Union[Path, str],
-        stage: Union[str, RunningStage],
+        dirpath: Path | str,
+        stage: str | RunningStage,
         frequency: str = "1:epoch",
-        monitor: Optional[str] = None,
-        mode: Optional[str] = "min",
-        save_last: Optional[bool] = False,
-        save_top_k: Optional[int] = 1,
+        monitor: str | None = None,
+        mode: str | None = "min",
+        save_last: bool | None = False,
+        save_top_k: int | None = 1,
         verbose: bool = True,
     ) -> None:
         super().__init__()
@@ -86,14 +86,14 @@ class ModelCheckpoint(CallbackWithMonitor):
     Helpers
     """
 
-    def should_checkpoint(self, stage: Union[str, RunningStage], interval: Interval, step_or_epoch: int) -> bool:
+    def should_checkpoint(self, stage: str | RunningStage, interval: Interval, step_or_epoch: int) -> bool:
         # when we get to batch_end or epoch_end the step tracker has already been incremented!
         step_or_epoch = step_or_epoch + 1 if interval == Interval.EPOCH else step_or_epoch
         return stage == self.stage and interval == self.interval and step_or_epoch % self.every_n == 0
 
     def on_epoch_end(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         estimator: Estimator,
         model: _FabricModule,
         output: EPOCH_OUTPUT,
@@ -104,7 +104,7 @@ class ModelCheckpoint(CallbackWithMonitor):
 
     def on_batch_end(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         estimator: Estimator,
         model: _FabricModule,
         output: BATCH_OUTPUT,
@@ -114,9 +114,7 @@ class ModelCheckpoint(CallbackWithMonitor):
         if self.should_checkpoint(stage, Interval.STEP, estimator.tracker.global_step):
             self.checkpoint(stage, estimator, output)
 
-    def checkpoint(
-        self, stage: Union[str, RunningStage], estimator: Estimator, output: Union[EPOCH_OUTPUT, BATCH_OUTPUT]
-    ) -> None:
+    def checkpoint(self, stage: str | RunningStage, estimator: Estimator, output: EPOCH_OUTPUT | BATCH_OUTPUT) -> None:
         if self.monitor is not None:
             current = self._get_monitor(output)
             if self._check_should_save(stage, current):
@@ -140,7 +138,7 @@ class ModelCheckpoint(CallbackWithMonitor):
             name = f"{self.interval}_{getattr(estimator.tracker, f'global_{self.interval}')}"
             estimator.save_state_dict(self.dirpath, name)
 
-    def _check_should_save(self, stage: Union[str, RunningStage], current: Optional[float]) -> bool:
+    def _check_should_save(self, stage: str | RunningStage, current: float | None) -> bool:
         should_save = False
 
         # if you do not monitor it will save every time the stage is finished
@@ -159,7 +157,7 @@ class ModelCheckpoint(CallbackWithMonitor):
 
         return should_save
 
-    def _get_name(self, estimator: Estimator, current: Optional[float] = None) -> str:
+    def _get_name(self, estimator: Estimator, current: float | None = None) -> str:
         # build filename
         name = f"step{estimator.tracker.global_step}"
         if current is not None:
@@ -168,7 +166,7 @@ class ModelCheckpoint(CallbackWithMonitor):
 
         return name
 
-    def _update_best_models(self, name: str, current: Optional[float]) -> None:
+    def _update_best_models(self, name: str, current: float | None) -> None:
         if current is not None:
             if self.save_top_k is not None and len(self._best_k_models) >= self.save_top_k:
                 worst_ckpt = self.reverse_optim_op(self._best_k_models, key=self._best_k_models.get)

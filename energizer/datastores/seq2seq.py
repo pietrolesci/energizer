@@ -1,7 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Optional, Union
 
 from datasets import Dataset
 from torch import Tensor
@@ -14,14 +13,14 @@ from energizer.utilities import _pad, ld_to_dl
 
 
 def collate_fn_for_seq2seq(
-    batch: list[dict[str, Union[list[str], Tensor]]],
+    batch: list[dict[str, list[str] | Tensor]],
     input_names: list[str],
     on_cpu: list[str],
-    max_source_length: Optional[int],
-    max_target_length: Optional[int],
-    pad_token_id: Optional[int],
+    max_source_length: int | None,
+    max_target_length: int | None,
+    pad_token_id: int | None,
     pad_fn: Callable,
-) -> dict[str, Union[list[str], Tensor]]:
+) -> dict[str, list[str] | Tensor]:
     new_batch = ld_to_dl(batch)
 
     # remove string columns that cannot be transfered on gpu
@@ -52,10 +51,10 @@ class Seq2SeqDataloaderArgs(DataloaderArgs):
 
 
 class Seq2SeqMixin(TextMixin):
-    MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
+    MANDATORY_TARGET_NAME: str | None = InputKeys.LABELS
     OPTIONAL_INPUT_NAMES: list[str] = []
     BLOCK_SIZE: int = 1_000
-    _loading_params: Optional[Seq2SeqDataloaderArgs] = None
+    _loading_params: Seq2SeqDataloaderArgs | None = None
 
     def prepare_for_loading(
         self,
@@ -68,7 +67,7 @@ class Seq2SeqMixin(TextMixin):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
-        multiprocessing_context: Optional[str] = None,
+        multiprocessing_context: str | None = None,
         max_source_length: int = 512,
         max_target_length: int = 512,
     ) -> None:
@@ -87,7 +86,7 @@ class Seq2SeqMixin(TextMixin):
             max_target_length=max_target_length,
         )
 
-    def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
+    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
         return partial(
             collate_fn_for_seq2seq,
             input_names=self.input_names,

@@ -1,7 +1,6 @@
 from collections.abc import Callable  # , Generator, Any
 from dataclasses import dataclass
 from functools import partial
-from typing import Optional, Union
 
 from datasets import Dataset
 from lightning_utilities.core.rank_zero import rank_zero_info
@@ -17,14 +16,14 @@ from energizer.utilities import _pad, ld_to_dl
 
 
 def collate_fn_for_language_modelling(
-    batch: list[dict[str, Union[list[str], Tensor]]],
+    batch: list[dict[str, list[str] | Tensor]],
     input_names: list[str],
     on_cpu: list[str],
-    max_length: Optional[int],
-    pad_token_id: Optional[int],
+    max_length: int | None,
+    pad_token_id: int | None,
     pad_fn: Callable,
     return_labels: bool,
-) -> dict[str, Union[list[str], Tensor]]:
+) -> dict[str, list[str] | Tensor]:
     new_batch = ld_to_dl(batch)
 
     # remove string columns that cannot be transfered on gpu
@@ -56,10 +55,10 @@ class LanguageModellingDataloaderArgs(DataloaderArgs):
 
 class LanguageModellingMixin(TextMixin):
     MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS]
-    MANDATORY_TARGET_NAME: Optional[str] = None
+    MANDATORY_TARGET_NAME: str | None = None
     OPTIONAL_INPUT_NAMES: list[str] = []
 
-    _loading_params: Optional[LanguageModellingDataloaderArgs] = None
+    _loading_params: LanguageModellingDataloaderArgs | None = None
     _return_labels: bool = True
 
     def set_return_labels(self, mode: bool = True) -> None:
@@ -73,7 +72,7 @@ class LanguageModellingMixin(TextMixin):
     def return_labels(self) -> bool:
         return self._return_labels
 
-    def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
+    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
         return partial(
             collate_fn_for_language_modelling,
             input_names=self.input_names,
@@ -95,7 +94,7 @@ class LanguageModellingMixin(TextMixin):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
-        multiprocessing_context: Optional[str] = None,
+        multiprocessing_context: str | None = None,
         max_length: int = 512,
     ) -> None:
         self._loading_params = LanguageModellingDataloaderArgs(

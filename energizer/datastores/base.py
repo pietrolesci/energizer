@@ -5,7 +5,7 @@ Here we define the classes that take care of loading the data.
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any
 
 import pandas as pd
 import torch
@@ -26,9 +26,9 @@ class BaseDatastore(ABC):
     """
     Data sources
     """
-    _train_data: Optional[DATA_SOURCE]
-    _validation_data: Optional[DATA_SOURCE]
-    _test_data: Optional[DATA_SOURCE]
+    _train_data: DATA_SOURCE | None
+    _validation_data: DATA_SOURCE | None
+    _test_data: DATA_SOURCE | None
 
     def __init__(self) -> None:
         super().__init__()
@@ -38,15 +38,15 @@ class BaseDatastore(ABC):
     """
 
     @abstractmethod
-    def train_dataset(self, *args, **kwargs) -> Optional[DATASET]:
+    def train_dataset(self, *args, **kwargs) -> DATASET | None:
         ...
 
     @abstractmethod
-    def validation_dataset(self, *args, kwargs) -> Optional[DATASET]:
+    def validation_dataset(self, *args, kwargs) -> DATASET | None:
         ...
 
     @abstractmethod
-    def test_dataset(self, *args, kwargs) -> Optional[DATASET]:
+    def test_dataset(self, *args, kwargs) -> DATASET | None:
         ...
 
     """
@@ -54,15 +54,15 @@ class BaseDatastore(ABC):
     """
 
     @abstractmethod
-    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+    def train_loader(self, *args, **kwargs) -> DataLoader | None:
         ...
 
     @abstractmethod
-    def validation_loader(self, *args, kwargs) -> Optional[DataLoader]:
+    def validation_loader(self, *args, kwargs) -> DataLoader | None:
         ...
 
     @abstractmethod
-    def test_loader(self, *args, kwargs) -> Optional[DataLoader]:
+    def test_loader(self, *args, kwargs) -> DataLoader | None:
         ...
 
     """
@@ -90,15 +90,15 @@ class BaseDatastore(ABC):
     #     ...
 
     @abstractmethod
-    def train_size(self, *args, **kwargs) -> Optional[int]:
+    def train_size(self, *args, **kwargs) -> int | None:
         ...
 
     @abstractmethod
-    def validation_size(self, *args, **kwargs) -> Optional[int]:
+    def validation_size(self, *args, **kwargs) -> int | None:
         ...
 
     @abstractmethod
-    def test_size(self, *args, **kwargs) -> Optional[int]:
+    def test_size(self, *args, **kwargs) -> int | None:
         ...
 
 
@@ -113,17 +113,17 @@ class DataloaderArgs(Args):
     shuffle: bool
     replacement: bool
     data_seed: int
-    multiprocessing_context: Optional[str]
+    multiprocessing_context: str | None
 
 
 class Datastore(BaseDatastore):
     """Defines dataloading for training and evaluation."""
 
-    _collate_fn: Optional[Callable]
-    _loading_params: Optional[DataloaderArgs] = None
+    _collate_fn: Callable | None
+    _loading_params: DataloaderArgs | None = None
     _rng: RandomState
 
-    def __init__(self, seed: Optional[int] = 42) -> None:
+    def __init__(self, seed: int | None = 42) -> None:
         super().__init__()
         self.seed = seed
         self.reset_rng(seed)
@@ -139,7 +139,7 @@ class Datastore(BaseDatastore):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
-        multiprocessing_context: Optional[str] = None,
+        multiprocessing_context: str | None = None,
     ) -> None:
         self._loading_params = DataloaderArgs(
             batch_size=batch_size,
@@ -159,19 +159,19 @@ class Datastore(BaseDatastore):
         assert self._loading_params is not None, ValueError("You need to `prepare_for_loading`")
         return self._loading_params
 
-    def reset_rng(self, seed: Optional[int]) -> None:
+    def reset_rng(self, seed: int | None) -> None:
         self._rng = check_random_state(seed)
 
-    def get_collate_fn(self, stage: Optional[str] = None, show_batch: bool = False) -> Optional[Callable]:
+    def get_collate_fn(self, stage: str | None = None, show_batch: bool = False) -> Callable | None:
         return None
 
-    def show_batch(self, stage: Union[str, RunningStage] = RunningStage.TRAIN, *args, **kwargs) -> Optional[Any]:
+    def show_batch(self, stage: str | RunningStage = RunningStage.TRAIN, *args, **kwargs) -> Any | None:
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is not None:
             loader = DataLoader(dataset=dataset, batch_size=1, collate_fn=self.get_collate_fn(stage, show_batch=True))
             return next(iter(loader))
 
-    def get_loader(self, stage: str, *args, **kwargs) -> Optional[DataLoader]:
+    def get_loader(self, stage: str, *args, **kwargs) -> DataLoader | None:
         # get dataset
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is None:
@@ -203,50 +203,50 @@ class Datastore(BaseDatastore):
             multiprocessing_context=self.loading_params.multiprocessing_context,
         )
 
-    def _get_size(self, stage: RunningStage, *args, **kwargs) -> Optional[int]:
+    def _get_size(self, stage: RunningStage, *args, **kwargs) -> int | None:
         dataset = getattr(self, f"{stage}_dataset")(*args, **kwargs)
         if dataset is not None:
             return len(dataset)
 
     """Abstract methods implementation"""
 
-    def train_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+    def train_loader(self, *args, **kwargs) -> DataLoader | None:
         return self.get_loader(RunningStage.TRAIN, *args, **kwargs)
 
-    def validation_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+    def validation_loader(self, *args, **kwargs) -> DataLoader | None:
         return self.get_loader(RunningStage.VALIDATION, *args, **kwargs)
 
-    def test_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+    def test_loader(self, *args, **kwargs) -> DataLoader | None:
         return self.get_loader(RunningStage.TEST, *args, **kwargs)
 
-    def train_size(self, *args, **kwargs) -> Optional[int]:
+    def train_size(self, *args, **kwargs) -> int | None:
         return self._get_size(RunningStage.TRAIN, *args, **kwargs)
 
-    def validation_size(self, *args, **kwargs) -> Optional[int]:
+    def validation_size(self, *args, **kwargs) -> int | None:
         return self._get_size(RunningStage.VALIDATION, *args, **kwargs)
 
-    def test_size(self, *args, **kwargs) -> Optional[int]:
+    def test_size(self, *args, **kwargs) -> int | None:
         return self._get_size(RunningStage.TEST, *args, **kwargs)
 
-    def train_dataset(self) -> Optional[Dataset]:
+    def train_dataset(self) -> Dataset | None:
         if self._train_data is not None:
             return self._train_data
 
-    def validation_dataset(self) -> Optional[Dataset]:
+    def validation_dataset(self) -> Dataset | None:
         if self._validation_data is not None:
             return self._validation_data
 
-    def test_dataset(self) -> Optional[Dataset]:
+    def test_dataset(self) -> Dataset | None:
         if self._test_data is not None:
             return self._test_data
 
 
 class PandasDatastore(Datastore):
-    _train_data: Optional[pd.DataFrame]
-    _validation_data: Optional[Dataset]
-    _test_data: Optional[Dataset]
+    _train_data: pd.DataFrame | None
+    _validation_data: Dataset | None
+    _test_data: Dataset | None
 
-    def train_dataset(self) -> Optional[Dataset]:
+    def train_dataset(self) -> Dataset | None:
         if self._train_data is not None:
             return Dataset.from_pandas(self._train_data, preserve_index=False)
 

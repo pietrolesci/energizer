@@ -1,7 +1,7 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import pandas as pd
 import torch.nn as nn
@@ -15,16 +15,16 @@ from wandb.wandb_run import Run
 
 
 class WandbLogger(Logger):
-    _experiment: Optional[Union[Run, RunDisabled]] = None
+    _experiment: Run | RunDisabled | None = None
     LOGGER_NAME: str = "wandb"
 
     def __init__(
         self,
         project: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         dir: _PATH = ".",
-        anonymous: Optional[bool] = None,
-        start_method: Optional[str] = None,
+        anonymous: bool | None = None,
+        start_method: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__()
@@ -62,27 +62,27 @@ class WandbLogger(Logger):
         return self.LOGGER_NAME
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         return self._wandb_init.get("name")
 
     @property
-    def version(self) -> Optional[Union[int, str]]:
+    def version(self) -> int | str | None:
         return self._experiment.id if self._experiment else self._wandb_init.get("id")
 
     @property
-    def entity(self) -> Optional[Union[int, str]]:
+    def entity(self) -> int | str | None:
         return self._experiment.entity if self._experiment else self._wandb_init.get("entity")
 
     @property
-    def project(self) -> Optional[Union[int, str]]:
+    def project(self) -> int | str | None:
         return self._experiment.project if self._experiment else self._wandb_init.get("project")
 
     @property
-    def root_dir(self) -> Optional[str]:
+    def root_dir(self) -> str | None:
         return self._wandb_init.get("dir")
 
     @property
-    def run_id(self) -> Optional[Union[int, str]]:
+    def run_id(self) -> int | str | None:
         return self.version
 
     @property
@@ -91,7 +91,7 @@ class WandbLogger(Logger):
 
     @property
     @rank_zero_experiment
-    def experiment(self) -> Union[Run, RunDisabled]:
+    def experiment(self) -> Run | RunDisabled:
         if self._experiment is None:
             if self._wandb_init.get("mode", None) == "offline":
                 os.environ["WANDB_MODE"] = "dryrun"
@@ -112,13 +112,11 @@ class WandbLogger(Logger):
                 self._experiment = wandb.init(**self._wandb_init)
 
                 # define default x-axis
-                if isinstance(self._experiment, (Run, RunDisabled)) and getattr(
-                    self._experiment, "define_metric", None
-                ):
+                if isinstance(self._experiment, Run | RunDisabled) and getattr(self._experiment, "define_metric", None):
                     self._experiment.define_metric("step")
                     self._experiment.define_metric("*", step_metric="step", step_sync=True)
 
-        assert isinstance(self._experiment, (Run, RunDisabled))
+        assert isinstance(self._experiment, Run | RunDisabled)
         return self._experiment
 
     def watch(self, model: nn.Module, log: str = "gradients", log_freq: int = 100, log_graph: bool = True) -> None:
@@ -130,7 +128,7 @@ class WandbLogger(Logger):
         wandb.finish()
 
     @rank_zero_only
-    def log_hyperparams(self, params: Union[dict[str, Any], Namespace]) -> None:
+    def log_hyperparams(self, params: dict[str, Any] | Namespace) -> None:
         params = _convert_params(params)
         params = _sanitize_callable_params(params)
         self.experiment.config.update(params, allow_val_change=True)
@@ -140,7 +138,7 @@ class WandbLogger(Logger):
         assert rank_zero_only.rank == 0, "experiment tried to log from global_rank != 0"
         self.experiment.log({**metrics, "step": step})
 
-    def save_to_parquet(self, path: Union[str, Path]) -> None:
+    def save_to_parquet(self, path: str | Path) -> None:
         run = wandb.Api().run(self.run_path)
         df = pd.DataFrame(run.scan_history())
         df.to_parquet(path, index=False)

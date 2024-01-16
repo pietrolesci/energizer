@@ -1,7 +1,7 @@
 import inspect
 from collections.abc import Callable, Generator
 from types import ModuleType
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch_optimizer
@@ -12,7 +12,7 @@ from energizer.utilities import camel_to_snake
 
 
 class Registry(dict):
-    def register_functions(self, module: ModuleType, filter_fn: Optional[Callable] = None) -> None:
+    def register_functions(self, module: ModuleType, filter_fn: Callable | None = None) -> None:
         filter_fn = filter_fn if filter_fn is not None else lambda k, v: True
         for k, v in inspect.getmembers(module, inspect.isfunction):
             if filter_fn(k, v):

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -40,7 +39,7 @@ class BudgetTracker(Tracker):
         if self.current > 0:
             self.progress_bar.update(self.current)
 
-    def increment(self, n_labelled: Optional[int] = None) -> None:
+    def increment(self, n_labelled: int | None = None) -> None:
         n_labelled = n_labelled or self.query_size
         self.current += n_labelled
         self.total += n_labelled
@@ -67,11 +66,11 @@ class ActiveProgressTracker(ProgressTracker):
 
     def setup_active(
         self,
-        max_rounds: Optional[int],
-        max_budget: Optional[int],
+        max_rounds: int | None,
+        max_budget: int | None,
         query_size: int,
         datastore: ActiveDatastore,
-        validation_perc: Optional[float],
+        validation_perc: float | None,
         log_interval: int,
         enable_progress_bar: bool,
         run_on_pool: bool,
@@ -158,7 +157,7 @@ class ActiveProgressTracker(ProgressTracker):
     def increment_round(self) -> None:
         self.round_tracker.increment()
 
-    def increment_budget(self, n_labelled: Optional[int] = None) -> None:
+    def increment_budget(self, n_labelled: int | None = None) -> None:
         self.budget_tracker.increment(n_labelled)
 
     """Outer loops"""

@@ -2,7 +2,6 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Optional, Union
 
 import torch
 from datasets import Dataset
@@ -16,13 +15,13 @@ from energizer.utilities import _pad, ld_to_dl
 
 
 def collate_fn_for_sequence_classification(
-    batch: list[dict[str, Union[list[str], Tensor]]],
+    batch: list[dict[str, list[str] | Tensor]],
     input_names: list[str],
     on_cpu: list[str],
-    max_length: Optional[int],
-    pad_token_id: Optional[int],
+    max_length: int | None,
+    pad_token_id: int | None,
     pad_fn: Callable,
-) -> dict[str, Union[list[str], Tensor]]:
+) -> dict[str, list[str] | Tensor]:
     new_batch = ld_to_dl(batch)
 
     # remove string columns that cannot be transfered on gpu
@@ -49,8 +48,8 @@ class SequenceClassificationDataloaderArgs(DataloaderArgs):
 
 
 class SequenceClassificationMixin(TextMixin):
-    MANDATORY_TARGET_NAME: Optional[str] = InputKeys.LABELS
-    _loading_params: Optional[SequenceClassificationDataloaderArgs] = None
+    MANDATORY_TARGET_NAME: str | None = InputKeys.LABELS
+    _loading_params: SequenceClassificationDataloaderArgs | None = None
 
     _labels: list[str]
     _label_distribution: dict[str, dict[str, int]]
@@ -66,7 +65,7 @@ class SequenceClassificationMixin(TextMixin):
         shuffle: bool = True,
         replacement: bool = False,
         data_seed: int = 42,
-        multiprocessing_context: Optional[str] = None,
+        multiprocessing_context: str | None = None,
         max_length: int = 512,
     ) -> None:
         self._loading_params = SequenceClassificationDataloaderArgs(
@@ -126,7 +125,7 @@ class SequenceClassificationMixin(TextMixin):
         # check labels are consistent
         assert all(s == labels[0] for s in labels), "Labels are inconsistent across splits"
 
-    def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
+    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
         return partial(
             collate_fn_for_sequence_classification,
             input_names=self.input_names,

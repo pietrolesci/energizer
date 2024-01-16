@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional, Union
 
 import numpy as np
 from lightning_utilities.core.rank_zero import rank_zero_info
@@ -11,7 +10,7 @@ from energizer.enums import Interval, RunningStage
 @dataclass
 class Tracker:
     current: int
-    max: Optional[int]
+    max: int | None
 
     def __post_init__(self) -> None:
         self.total = self.current
@@ -36,7 +35,7 @@ class Tracker:
         if self.progress_bar is not None:
             self.progress_bar.reset(total=self.max)
 
-    def make_progress_bar(self) -> Optional[tqdm]:
+    def make_progress_bar(self) -> tqdm | None:
         pass
 
     def terminate_progress_bar(self) -> None:
@@ -53,13 +52,13 @@ class Tracker:
 
 @dataclass
 class EpochTracker(Tracker):
-    def make_progress_bar(self) -> Optional[tqdm]:
+    def make_progress_bar(self) -> tqdm | None:
         self.progress_bar = tqdm(total=self.max, desc="Completed epochs", dynamic_ncols=True, leave=True)
 
 
 @dataclass
 class StepTracker(Tracker):
-    def make_progress_bar(self) -> Optional[tqdm]:
+    def make_progress_bar(self) -> tqdm | None:
         self.progress_bar = tqdm(total=self.max, desc="Optimisation steps", dynamic_ncols=True, leave=True)
 
 
@@ -67,7 +66,7 @@ class StepTracker(Tracker):
 class StageTracker(Tracker):
     stage: str
 
-    def make_progress_bar(self) -> Optional[tqdm]:
+    def make_progress_bar(self) -> tqdm | None:
         desc = f"Epoch {self.total}".strip() if self.stage == RunningStage.TRAIN else f"{self.stage.title()}"
         self.progress_bar = tqdm(total=self.max, desc=desc, dynamic_ncols=True, leave=True)
 
@@ -86,17 +85,17 @@ class ProgressTracker:
         self.stop_training: bool = False
         self.log_interval: int = 1
         self.enable_progress_bar: bool = True
-        self.current_stage: Optional[RunningStage] = None
+        self.current_stage: RunningStage | None = None
 
         # validation logic
         self.has_validation: bool = False
-        self.validate_every_n: Optional[int] = None
-        self.validation_interval: Optional[str] = None
+        self.validate_every_n: int | None = None
+        self.validation_interval: str | None = None
         self.validate_on_epoch_end: bool = False
         self._last_epoch_num_steps: int = 0
         self._xepoch_set: bool = False
 
-    def setup(self, stage: Union[str, RunningStage], log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
+    def setup(self, stage: str | RunningStage, log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
         """Do all the math here and create progress bars for every stage."""
 
         self.log_interval = log_interval
@@ -111,16 +110,16 @@ class ProgressTracker:
 
     def setup_fit(
         self,
-        max_epochs: Optional[int],
-        min_epochs: Optional[int],
-        max_steps: Optional[int],
-        min_steps: Optional[int],
-        gradient_accumulation_steps: Optional[int],
-        validation_freq: Optional[str],
+        max_epochs: int | None,
+        min_epochs: int | None,
+        max_steps: int | None,
+        min_steps: int | None,
+        gradient_accumulation_steps: int | None,
+        validation_freq: str | None,
         num_train_batches: int,
         num_validation_batches: int,
-        limit_train_batches: Optional[int] = None,
-        limit_validation_batches: Optional[int] = None,
+        limit_train_batches: int | None = None,
+        limit_validation_batches: int | None = None,
     ) -> None:
         # checks
         assert max_epochs or max_steps, "`max_epochs` or `max_steps` must be specified."
@@ -194,7 +193,7 @@ class ProgressTracker:
         else:
             self.has_validation = False
 
-    def setup_eval(self, stage: Union[str, RunningStage], num_batches: int, limit_batches: Optional[int]) -> None:
+    def setup_eval(self, stage: str | RunningStage, num_batches: int, limit_batches: int | None) -> None:
         getattr(self, f"{stage}_tracker").max = int(min(num_batches, limit_batches or float("Inf")))
 
     """Properties"""
@@ -283,7 +282,7 @@ class ProgressTracker:
         self.step_tracker.reset()
         self._last_epoch_num_steps = 0
 
-    def start(self, stage: Union[str, RunningStage]) -> None:
+    def start(self, stage: str | RunningStage) -> None:
         """Make progress bars and reset the counters of stage trackers."""
         self.current_stage = stage  # type: ignore
 
@@ -348,7 +347,7 @@ class ProgressTracker:
     def get_stage_tracker(self) -> StageTracker:
         return getattr(self, f"{self.current_stage}_tracker")
 
-    def make_progress_bars(self, stage: Union[str, RunningStage]) -> None:
+    def make_progress_bars(self, stage: str | RunningStage) -> None:
         if not self.enable_progress_bar:
             return
 

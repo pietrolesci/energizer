@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from typing import Union
 
 import torch
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
@@ -77,7 +76,7 @@ def relative_stdlog10_update_size(
     # compute on device
     return {
         f"relative_stdlog10_update{group_separator}{n}": (diff.std() / p_before.std()).log10().item()
-        for (n, diff), p_before in zip(differences, previous_params)
+        for (n, diff), p_before in zip(differences, previous_params, strict=False)
     }
 
 
@@ -94,14 +93,12 @@ def relative_norm_update_size(
         ).item()
         / torch.linalg.vector_norm(p_before.flatten(), ord=norm_type).item()
         for norm_type in norm_types
-        for (n, diff), p_before in zip(differences, previous_params)
+        for (n, diff), p_before in zip(differences, previous_params, strict=False)
     }
 
 
 class GradNorm(Callback):
-    def __init__(
-        self, norm_types: Union[float, int, str, list[Union[float, int, str]]], group_separator: str = "/"
-    ) -> None:
+    def __init__(self, norm_types: float | int | str | list[float | int | str], group_separator: str = "/") -> None:
         """Compute each parameter's gradient's norm and their overall norm.
 
         The overall norm is computed over all gradients together, as if they
@@ -150,7 +147,7 @@ class ParameterUpdateStats(GradNorm):
 
     def __init__(
         self,
-        norm_types: Union[float, int, str, list[Union[float, int, str]]],
+        norm_types: float | int | str | list[float | int | str],
         group_separator: str = "/",
         return_update_size_norm: bool = True,
         return_relative_std_update: bool = True,
@@ -187,7 +184,10 @@ class ParameterUpdateStats(GradNorm):
             (n, p.data.clone().detach()) for n, p in model.named_parameters() if p.grad is not None and p.requires_grad
         )
 
-        diffs = [(n, p_after - p_before) for (n, p_after), p_before in zip(current_params, self._previous_params)]
+        diffs = [
+            (n, p_after - p_before)
+            for (n, p_after), p_before in zip(current_params, self._previous_params, strict=False)
+        ]
 
         logs = {}
         if self.return_update_size_norm:

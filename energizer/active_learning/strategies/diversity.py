@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -39,7 +39,7 @@ class DiversityBasedStrategy(ABC, ActiveEstimator):
     @abstractmethod
     def get_embeddings_and_ids(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         # NOTE: Always need the ids because you might not return the entire pool
         ...
 
@@ -61,7 +61,7 @@ class DiversityBasedStrategyWithPool(PoolBasedMixin, DiversityBasedStrategy):
 
     def get_embeddings_and_ids(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         pool_loader = self.get_pool_loader(datastore, **kwargs)
         if pool_loader is not None and len(pool_loader.dataset or []) > query_size:  # type: ignore
             # enough instances
@@ -103,8 +103,8 @@ class PoolBasedEmbeddingClustering(ClusteringMixin, DiversityBasedStrategyWithPo
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None,
     ) -> torch.Tensor:
         """This needs to return the embedded batch."""
         ...

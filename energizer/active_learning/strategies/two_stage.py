@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -70,7 +70,7 @@ class RandomSubsetStrategy(BaseSubsetStrategy):
 
 
 class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
-    def __init__(self, *args, num_neighbours: int, max_search_size: Optional[int] = None, **kwargs) -> None:
+    def __init__(self, *args, num_neighbours: int, max_search_size: int | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.num_neighbours = num_neighbours
         self.max_search_size = max_search_size

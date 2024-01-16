@@ -6,7 +6,7 @@ import random
 import re
 from collections.abc import Generator, Iterator
 from dataclasses import dataclass
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -46,7 +46,7 @@ def camel_to_snake(name: str) -> str:
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
 
 
-def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
+def tensor_to_python(t: Tensor, *_) -> ndarray | float | int:
     """Converts `torch.Tensor` to a `numpy.ndarray` or python scalar type."""
     # if t.numel() > 1:
     cpu_t = t.detach().cpu()
@@ -57,7 +57,7 @@ def tensor_to_python(t: Tensor, *_) -> Union[ndarray, float, int]:
 
 
 def make_dict_json_serializable(d: dict) -> dict:
-    return {k: round(v.item(), 6) if isinstance(v, (ndarray, generic)) else v for k, v in d.items()}
+    return {k: round(v.item(), 6) if isinstance(v, ndarray | generic) else v for k, v in d.items()}
 
 
 def move_to_cpu(output: Any) -> Any:
@@ -70,7 +70,7 @@ def ld_to_dl(ld: list[dict]) -> dict[str, list]:
 
 
 def dl_to_ld(dl: dict[str, list]) -> list[dict]:
-    return [dict(zip(dl, t)) for t in zip(*dl.values())]
+    return [dict(zip(dl, t, strict=False)) for t in zip(*dl.values(), strict=False)]
 
 
 @contextlib.contextmanager
@@ -97,7 +97,7 @@ def local_seed(seed: int) -> Generator[None, None, None]:
     _set_rng_states(states)
 
 
-def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
+def set_deterministic(deterministic: bool | Literal["warn_only"]) -> None:
     kwargs = {}
     if isinstance(deterministic, str):
         assert deterministic == "warn_only", "deterministic can be a bool or `warn_only`"
@@ -119,7 +119,7 @@ def set_deterministic(deterministic: Union[bool, Literal["warn_only"]]) -> None:
         torch.backends.cudnn.benchmark = False  # type: ignore
 
 
-def _pad(inputs: list[list[Union[int, float]]], padding_value: Union[int, float], max_length: int) -> Tensor:
+def _pad(inputs: list[list[int | float]], padding_value: int | float, max_length: int) -> Tensor:
     # truncate -> convert to tensor -> pad
     return pad_sequence([torch.tensor(t[:max_length]) for t in inputs], batch_first=True, padding_value=padding_value)
 

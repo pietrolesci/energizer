@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 from lightning.fabric.wrappers import _FabricModule, _FabricOptimizer
@@ -33,9 +33,7 @@ class Callback:
     Epoch
     """
 
-    def on_epoch_start(
-        self, stage: Union[str, RunningStage], estimator: Estimator, model: _FabricModule, **kwargs
-    ) -> None:
+    def on_epoch_start(self, stage: str | RunningStage, estimator: Estimator, model: _FabricModule, **kwargs) -> None:
         ...
 
     def on_train_epoch_start(self, estimator: Estimator, model: _FabricModule, optimizer: Optimizer) -> None:
@@ -49,7 +47,7 @@ class Callback:
 
     def on_epoch_end(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         estimator: Estimator,
         model: _FabricModule,
         output: EPOCH_OUTPUT,
@@ -78,7 +76,7 @@ class Callback:
 
     def on_batch_start(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         estimator: Estimator,
         model: _FabricModule,
         batch: Any,
@@ -100,7 +98,7 @@ class Callback:
 
     def on_batch_end(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         estimator: Estimator,
         model: _FabricModule,
         output: BATCH_OUTPUT,
@@ -160,7 +158,7 @@ class CallbackWithMonitor(Callback):
     def reverse_optim_op(self) -> Callable:
         return self.reverse_optim_dict[self.mode]
 
-    def _get_monitor(self, output: Optional[Union[BATCH_OUTPUT, EPOCH_OUTPUT]]) -> float:
+    def _get_monitor(self, output: BATCH_OUTPUT | EPOCH_OUTPUT | None) -> float:
         if not isinstance(output, dict) or output is None:
             raise RuntimeError(
                 "From `*_step` and `*_epoch_end` method you need to return dict to use ",

@@ -1,7 +1,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import bitsandbytes as bnb
 import numpy as np
@@ -28,26 +28,26 @@ from energizer.utilities.model_summary import summarize
 
 @dataclass
 class SchedulerArgs(Args):
-    name: Optional[str] = None
-    num_warmup_steps: Optional[int] = None
-    num_training_steps: Optional[int] = None
+    name: str | None = None
+    num_warmup_steps: int | None = None
+    num_training_steps: int | None = None
     init_kwargs: dict = field(default_factory=dict)
 
 
 @dataclass
 class OptimizationArgs(Args):
-    name: Optional[str] = None
-    lr: Optional[float] = None
-    weight_decay: Optional[float] = None
-    no_decay: Optional[list[str]] = None
+    name: str | None = None
+    lr: float | None = None
+    weight_decay: float | None = None
+    no_decay: list[str] | None = None
     set_to_none: bool = False
-    clip_val: Optional[Union[float, int]] = None
-    max_norm: Optional[Union[float, int]] = None
-    norm_type: Union[float, int] = 2.0
+    clip_val: float | int | None = None
+    max_norm: float | int | None = None
+    norm_type: float | int = 2.0
     init_kwargs: dict = field(default_factory=dict)
     scheduler_kwargs: SchedulerArgs = field(default_factory=lambda: SchedulerArgs())
     backward_create_graph: bool = False
-    backward_retain_graph: Optional[bool] = None
+    backward_retain_graph: bool | None = None
 
 
 class Estimator:
@@ -59,13 +59,13 @@ class Estimator:
     def __init__(
         self,
         model: Any,
-        accelerator: Union[str, Accelerator] = "cpu",
+        accelerator: str | Accelerator = "cpu",
         precision: _PRECISION_INPUT = 32,
-        callbacks: Optional[Union[list[Any], Any]] = None,
-        loggers: Optional[Union[Logger, list[Logger]]] = None,
-        deterministic: Union[bool, Literal["warn_only"]] = "warn_only",
+        callbacks: list[Any] | Any | None = None,
+        loggers: Logger | list[Logger] | None = None,
+        deterministic: bool | Literal["warn_only"] = "warn_only",
         tf32_mode: Literal["highest", "high", "medium"] = "highest",
-        plugins: Optional[Union[_PLUGIN_INPUT, list[_PLUGIN_INPUT]]] = None,
+        plugins: _PLUGIN_INPUT | list[_PLUGIN_INPUT] | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -109,8 +109,9 @@ class Estimator:
         # NOTE: doing this because model is not cast at __init__ but only when `self.fabric.setup` is called
         if self.is_quantized:
             rank_zero_info(
-                "Model is loaded with the `BitsandbytesPrecision` plugin thus it currently is not cast to the correct dtype. "
-                f"It will only be cast during `fit` or `test`. Furthermore, the linear layers will be cast to {self.quantization_mode}"
+                "Model is loaded with the `BitsandbytesPrecision` plugin thus it currently is not cast "
+                "to the correct dtype. It will only be cast during `fit` or `test`. Furthermore, the "
+                f"linear layers will be cast to {self.quantization_mode}"
             )
             dtype = self.fabric._precision.dtype  # type: ignore
             return "bf16-true" if dtype == torch.bfloat16 else "16-true"
@@ -122,7 +123,7 @@ class Estimator:
         return isinstance(self.fabric._precision, BitsandbytesPrecision)
 
     @property
-    def quantization_mode(self) -> Optional[str]:
+    def quantization_mode(self) -> str | None:
         # NOTE: look at the BitsandbytesPrecision class
         cls_to_mode = {
             "_NF4Linear": "nf4",
@@ -175,22 +176,22 @@ class Estimator:
     def fit(
         self,
         train_loader: DataLoader,
-        validation_loader: Optional[DataLoader] = None,
-        max_epochs: Optional[int] = None,
-        min_epochs: Optional[int] = None,
-        max_steps: Optional[int] = None,
-        min_steps: Optional[int] = None,
-        validation_freq: Optional[str] = "1:epoch",
-        gradient_accumulation_steps: Optional[int] = None,
-        learning_rate: Optional[float] = None,
-        optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
-        scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
+        validation_loader: DataLoader | None = None,
+        max_epochs: int | None = None,
+        min_epochs: int | None = None,
+        max_steps: int | None = None,
+        min_steps: int | None = None,
+        validation_freq: str | None = "1:epoch",
+        gradient_accumulation_steps: int | None = None,
+        learning_rate: float | None = None,
+        optimizer: str | None = None,
+        optimizer_kwargs: dict | OptimizationArgs | None = None,
+        scheduler: str | None = None,
+        scheduler_kwargs: dict | SchedulerArgs | None = None,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
-        limit_train_batches: Optional[int] = None,
-        limit_validation_batches: Optional[int] = None,
+        limit_train_batches: int | None = None,
+        limit_validation_batches: int | None = None,
     ) -> list[FIT_OUTPUT]:
         """Entry point for model training.
 
@@ -227,7 +228,7 @@ class Estimator:
         loader: DataLoader,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
-        limit_batches: Optional[int] = None,
+        limit_batches: int | None = None,
     ) -> EPOCH_OUTPUT:
         """This method is useful because validation can run in fit when model is already setup."""
         # self.fabric.launch()  # NOTE: do not support distributed yet
@@ -255,9 +256,9 @@ class Estimator:
         self,
         model: _FabricModule,
         optimizer: _FabricOptimizer,
-        scheduler: Optional[_LRScheduler],
+        scheduler: _LRScheduler | None,
         train_loader: _FabricDataLoader,
-        validation_loader: Optional[_FabricDataLoader],
+        validation_loader: _FabricDataLoader | None,
     ) -> list[FIT_OUTPUT]:
         self.tracker.start_fit()
 
@@ -280,9 +281,9 @@ class Estimator:
         self,
         model: _FabricModule,
         optimizer: _FabricOptimizer,
-        scheduler: Optional[_LRScheduler],
+        scheduler: _LRScheduler | None,
         train_loader: _FabricDataLoader,
-        validation_loader: Optional[_FabricDataLoader],
+        validation_loader: _FabricDataLoader | None,
     ) -> FIT_OUTPUT:
         """Runs a training epoch."""
 
@@ -346,11 +347,11 @@ class Estimator:
         self,
         model: _FabricModule,
         optimizer: _FabricOptimizer,
-        scheduler: Optional[_LRScheduler],
+        scheduler: _LRScheduler | None,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None,
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
 
@@ -397,7 +398,7 @@ class Estimator:
         return output
 
     def run_evaluation(
-        self, model: _FabricModule, loader: _FabricDataLoader, stage: Union[str, RunningStage]
+        self, model: _FabricModule, loader: _FabricDataLoader, stage: str | RunningStage
     ) -> EPOCH_OUTPUT:
         """Runs over an entire evaluation dataloader."""
 
@@ -455,9 +456,9 @@ class Estimator:
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
-        stage: Union[str, RunningStage],
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None,
+        stage: str | RunningStage,
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
         # this might seems redundant but it's useful for active learning to hook in
@@ -465,12 +466,12 @@ class Estimator:
 
     def step(
         self,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None = None,
     ) -> BATCH_OUTPUT:
         raise NotImplementedError
 
@@ -479,8 +480,8 @@ class Estimator:
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None = None,
     ) -> BATCH_OUTPUT:
         return self.step(RunningStage.TRAIN, model, batch, batch_idx, loss_fn, metrics)
 
@@ -489,9 +490,9 @@ class Estimator:
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
-    ) -> Optional[BATCH_OUTPUT]:
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None = None,
+    ) -> BATCH_OUTPUT | None:
         return self.step(RunningStage.VALIDATION, model, batch, batch_idx, loss_fn, metrics)
 
     def test_step(
@@ -499,23 +500,21 @@ class Estimator:
         model: _FabricModule,
         batch: Any,
         batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
-    ) -> Optional[BATCH_OUTPUT]:
+        loss_fn: torch.nn.Module | Callable | None,
+        metrics: METRIC | None = None,
+    ) -> BATCH_OUTPUT | None:
         return self.step(RunningStage.TEST, model, batch, batch_idx, loss_fn, metrics)
 
-    def epoch_end(
-        self, stage: Union[str, RunningStage], output: list[BATCH_OUTPUT], metrics: Optional[METRIC]
-    ) -> EPOCH_OUTPUT:
+    def epoch_end(self, stage: str | RunningStage, output: list[BATCH_OUTPUT], metrics: METRIC | None) -> EPOCH_OUTPUT:
         return output
 
-    def train_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def train_epoch_end(self, output: list[BATCH_OUTPUT], metrics: METRIC | None) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TRAIN, output, metrics)
 
-    def validation_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def validation_epoch_end(self, output: list[BATCH_OUTPUT], metrics: METRIC | None) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.VALIDATION, output, metrics)
 
-    def test_epoch_end(self, output: list[BATCH_OUTPUT], metrics: Optional[METRIC]) -> EPOCH_OUTPUT:
+    def test_epoch_end(self, output: list[BATCH_OUTPUT], metrics: METRIC | None) -> EPOCH_OUTPUT:
         return self.epoch_end(RunningStage.TEST, output, metrics)
 
     """
@@ -527,11 +526,11 @@ class Estimator:
 
     def configure_optimization_args(
         self,
-        learning_rate: Optional[float] = None,
-        optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
-        scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
+        learning_rate: float | None = None,
+        optimizer: str | None = None,
+        optimizer_kwargs: dict | OptimizationArgs | None = None,
+        scheduler: str | None = None,
+        scheduler_kwargs: dict | SchedulerArgs | None = None,
     ) -> None:
         # parse optimizer args
         opt_kwargs = optimizer_kwargs or {}  # if None
@@ -595,7 +594,7 @@ class Estimator:
 
         return OPTIMIZER_REGISTRY[opt_kw.name](params, lr=opt_kw.lr, **opt_kw.init_kwargs)  # type:ignore
 
-    def configure_scheduler(self, optimizer: Optimizer) -> Optional[_LRScheduler]:
+    def configure_scheduler(self, optimizer: Optimizer) -> _LRScheduler | None:
         assert self.optimization_args is not None
         sch_kw = self.optimization_args.scheduler_kwargs
         if sch_kw.name is not None:
@@ -606,14 +605,14 @@ class Estimator:
                 **sch_kw.init_kwargs,
             )
 
-    def configure_dataloader(self, loader: Optional[DataLoader]) -> Optional[_FabricDataLoader]:
+    def configure_dataloader(self, loader: DataLoader | None) -> _FabricDataLoader | None:
         if loader is not None:
             return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)  # type: ignore
 
-    def configure_loss_fn(self, stage: Union[str, RunningStage]) -> torch.nn.Module:
+    def configure_loss_fn(self, stage: str | RunningStage) -> torch.nn.Module:
         ...
 
-    def configure_metrics(self, stage: Optional[Union[str, RunningStage]] = None) -> Optional[METRIC]:
+    def configure_metrics(self, stage: str | RunningStage | None = None) -> METRIC | None:
         ...
 
     """
@@ -634,16 +633,16 @@ class Estimator:
         if self.tracker.should_log:
             self.fabric.log_dict(move_to_cpu(value_dict), step)
 
-    def save_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt", **kwargs) -> None:
+    def save_state_dict(self, cache_dir: str | Path, name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.fabric.save(state=self.model.state_dict(), path=cache_dir / name)
 
-    def load_state_dict(self, cache_dir: Union[str, Path], name: str = "state_dict.pt", **kwargs) -> None:
+    def load_state_dict(self, cache_dir: str | Path, name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
         self.model.load_state_dict(self.fabric.load(cache_dir / name))
 
-    def callback(self, hook: str, *args, **kwargs) -> Optional[Any]:
+    def callback(self, hook: str, *args, **kwargs) -> Any | None:
         # if estimator has the method
         method = getattr(self, hook, None)
         if method is not None and callable(method):
@@ -663,7 +662,7 @@ class Estimator:
         # `torch.backends.cudnn.allow_tf32 = True`
         torch.set_float32_matmul_precision(tf32_mode)
 
-    def set_deterministic(self, deterministic: Union[bool, Literal["warn_only"]]) -> None:
+    def set_deterministic(self, deterministic: bool | Literal["warn_only"]) -> None:
         # sets deterministic convolutions too
         set_deterministic(deterministic)
 
@@ -720,14 +719,14 @@ class Estimator:
 
     def _setup_fit(
         self,
-        train_loader: Optional[DataLoader],
-        validation_loader: Optional[DataLoader],
-        learning_rate: Optional[float],
-        optimizer: Optional[str],
-        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]],
-        scheduler: Optional[str],
-        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]],
-    ) -> tuple[_FabricModule, _FabricOptimizer, Optional[_LRScheduler], _FabricDataLoader, Optional[_FabricDataLoader]]:
+        train_loader: DataLoader | None,
+        validation_loader: DataLoader | None,
+        learning_rate: float | None,
+        optimizer: str | None,
+        optimizer_kwargs: dict | OptimizationArgs | None,
+        scheduler: str | None,
+        scheduler_kwargs: dict | SchedulerArgs | None,
+    ) -> tuple[_FabricModule, _FabricOptimizer, _LRScheduler | None, _FabricDataLoader, _FabricDataLoader | None]:
         # configuration
         _train_loader = self.configure_dataloader(train_loader)
         _validation_loader = self.configure_dataloader(validation_loader)
