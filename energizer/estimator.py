@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -24,7 +24,6 @@ from energizer.registries import OPTIMIZER_REGISTRY, SCHEDULER_REGISTRY
 from energizer.trackers import ProgressTracker
 from energizer.types import BATCH_OUTPUT, EPOCH_OUTPUT, FIT_OUTPUT, METRIC
 from energizer.utilities import Args, move_to_cpu, set_deterministic
-from energizer.utilities.model_summary import summarize
 
 
 @dataclass
@@ -159,7 +158,7 @@ class Estimator:
 
     @property
     def model_summary(self) -> str:
-        return summarize(self)
+        return self.model.summary
 
     @property
     def is_compiled(self) -> bool:
@@ -296,7 +295,6 @@ class Estimator:
 
         # define metrics
         metrics = self.configure_metrics(RunningStage.TRAIN)
-        loss_fn = self.configure_loss_fn(RunningStage.TRAIN)
 
         # train mode
         model.train()
@@ -314,7 +312,7 @@ class Estimator:
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
             # run model on batch
-            batch_out = self.run_training_step(model, optimizer, scheduler, batch, batch_idx, loss_fn, metrics)
+            batch_out = self.run_training_step(model, optimizer, scheduler, batch, batch_idx, metrics)
 
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
@@ -354,14 +352,13 @@ class Estimator:
         scheduler: _LRScheduler | None,
         batch: Any,
         batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
         metrics: METRIC | None,
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
 
         with self.fabric.no_backward_sync(model, enabled=self.tracker.is_accumulating):
             # compute loss
-            output = self.train_step(model, batch, batch_idx, loss_fn, metrics)
+            output = self.train_step(model, batch, batch_idx, metrics)
             loss = output if isinstance(output, torch.Tensor) else output[OutputKeys.LOSS]
 
             # compute gradients  (instead of loss.backward())
@@ -411,7 +408,6 @@ class Estimator:
 
         # configure metrics
         metrics = self.configure_metrics(stage)
-        loss_fn = self.configure_loss_fn(stage)
 
         # eval mode
         is_fitting = model.training
@@ -432,7 +428,7 @@ class Estimator:
                 self.callback(f"on_{stage}_batch_start", model=model, batch=batch, batch_idx=batch_idx)
 
                 # run model on batch
-                batch_out = self.evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)
+                batch_out = self.evaluation_step(model, batch, batch_idx, metrics, stage)
 
                 self.callback(f"on_{stage}_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
@@ -456,58 +452,31 @@ class Estimator:
         return move_to_cpu(output)
 
     def evaluation_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None,
-        stage: str | RunningStage,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None, stage: str | RunningStage
     ) -> BATCH_OUTPUT:
         """Runs over a single batch of data."""
         # this might seems redundant but it's useful for active learning to hook in
-        return getattr(self, f"{stage}_step")(model, batch, batch_idx, loss_fn, metrics)
+        return getattr(self, f"{stage}_step")(model, batch, batch_idx, metrics)
 
     def step(
-        self,
-        stage: str | RunningStage,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None = None,
+        self, stage: str | RunningStage, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> BATCH_OUTPUT:
         raise NotImplementedError
 
     def train_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None = None,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> BATCH_OUTPUT:
-        return self.step(RunningStage.TRAIN, model, batch, batch_idx, loss_fn, metrics)
+        return self.step(RunningStage.TRAIN, model, batch, batch_idx, metrics)
 
     def validation_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None = None,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> BATCH_OUTPUT | None:
-        return self.step(RunningStage.VALIDATION, model, batch, batch_idx, loss_fn, metrics)
+        return self.step(RunningStage.VALIDATION, model, batch, batch_idx, metrics)
 
     def test_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None = None,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> BATCH_OUTPUT | None:
-        return self.step(RunningStage.TEST, model, batch, batch_idx, loss_fn, metrics)
+        return self.step(RunningStage.TEST, model, batch, batch_idx, metrics)
 
     def epoch_end(self, stage: str | RunningStage, output: list[BATCH_OUTPUT], metrics: METRIC | None) -> EPOCH_OUTPUT:
         return output
@@ -527,7 +496,7 @@ class Estimator:
 
     def configure_model(self) -> None:
         with self.fabric.init_module():
-            self.model.model_instance.configure_model()
+            self.model.configure_model()
 
     def configure_optimization_args(
         self,
@@ -613,9 +582,6 @@ class Estimator:
     def configure_dataloader(self, loader: DataLoader | None) -> _FabricDataLoader | None:
         if loader is not None:
             return self.fabric.setup_dataloaders(loader, use_distributed_sampler=False, move_to_device=False)  # type: ignore
-
-    def configure_loss_fn(self, stage: str | RunningStage) -> torch.nn.Module:
-        ...
 
     def configure_metrics(self, stage: str | RunningStage | None = None) -> METRIC | None:
         ...

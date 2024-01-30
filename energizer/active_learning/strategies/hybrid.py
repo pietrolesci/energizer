@@ -115,14 +115,7 @@ class BADGE(DiversityBasedStrategyWithPool):
         center_ids = kmeans_pp_sampling(embeddings, query_size, rng=self.rng)
         return ids[center_ids].tolist()
 
-    def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None,
-    ) -> torch.Tensor:
+    def pool_step(self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None) -> torch.Tensor:
         r"""Return the loss gradient with respect to the penultimate layer of the model.
 
         Uses the analytical form from the paper

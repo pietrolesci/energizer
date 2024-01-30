@@ -73,7 +73,7 @@ class ModelCheckpoint(CallbackWithMonitor):
             if self.verbose:
                 logs = {"selected": self.best_model_path, "step": estimator.tracker.safe_global_epoch}
                 if hasattr(estimator.tracker, "global_round"):
-                    logs["round"] = estimator.tracker.global_round
+                    logs["round"] = estimator.tracker.global_round  # type: ignore
 
                 srsly.write_jsonl(
                     self.dirpath / "checkpoint_logs.jsonl",

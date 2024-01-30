@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from typing import Any, Literal
 
 import numpy as np
@@ -98,14 +97,7 @@ class EmbeddingClustering(ClusteringMixin, DiversityBasedStrategy):
 
 class PoolBasedEmbeddingClustering(ClusteringMixin, DiversityBasedStrategyWithPool):
     @abstractmethod
-    def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None,
-    ) -> torch.Tensor:
+    def pool_step(self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None) -> torch.Tensor:
         """This needs to return the embedded batch."""
         ...
 

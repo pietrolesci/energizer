@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -277,20 +276,14 @@ class PoolBasedMixin(ABC):
         return {k: np.concatenate(v) for k, v in _out.items()}
 
     def evaluation_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None,
-        stage: str | RunningStage,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None, stage: str | RunningStage
     ) -> dict | BATCH_OUTPUT:
         if stage != RunningStage.POOL:
-            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
+            return super().evaluation_step(model, batch, batch_idx, metrics, stage)  # type: ignore
 
         # keep IDs here in case user messes up in the function definition
         ids = batch[InputKeys.ON_CPU][SpecialKeys.ID]
-        pool_out = self.pool_step(model, batch, batch_idx, loss_fn, metrics)
+        pool_out = self.pool_step(model, batch, batch_idx, metrics)
 
         assert isinstance(pool_out, torch.Tensor), f"`{stage}_step` must return a tensor`."
 
@@ -299,12 +292,7 @@ class PoolBasedMixin(ABC):
 
     @abstractmethod
     def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: torch.nn.Module | Callable | None,
-        metrics: METRIC | None = None,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> torch.Tensor:
         ...
 
