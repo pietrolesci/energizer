@@ -99,10 +99,18 @@ class SequenceClassificationMixin(TextMixin):
             norm_label_distribution = {}
             for split, label_dist in self._label_distribution.items():
                 total = sum(label_dist.values())
-                norm_label_distribution[split] = {k: label_dist[k] / total for k in label_dist}
-            return norm_label_distribution
+                norm_label_distribution[split] = {k: round(label_dist[k] / total, ndigits=3) for k in label_dist}
+            lab_dist = norm_label_distribution
 
-        return self._label_distribution
+        else:
+            lab_dist = self._label_distribution
+
+        # sort by label_idx and add label in key
+        out = {}
+        for split, dist in lab_dist.items():
+            sorted_dist = dict(sorted(dist.items()))
+            out[split] = {f"{k}-({self.id2label[k]})": v for k, v in sorted_dist.items()}  # type: ignore
+        return out
 
     def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
         super()._set_attributes(dataset_dict, tokenizer)
