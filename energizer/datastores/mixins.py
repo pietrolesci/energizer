@@ -15,11 +15,11 @@ from energizer.utilities import sequential_numbers
 
 
 class TextMixin(ABC):
-    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
-    OPTIONAL_INPUT_NAMES: list[str] = [InputKeys.TOKEN_TYPE_IDS]
+    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS]
+    OPTIONAL_INPUT_NAMES: list[str] = [InputKeys.ATT_MASK, InputKeys.TOKEN_TYPE_IDS]
     MANDATORY_TARGET_NAME: str | None = None
 
-    _tokenizer: PreTrainedTokenizerBase
+    _tokenizer: PreTrainedTokenizerBase | None = None
     input_names: list[str]
     on_cpu: list[str]
 
@@ -28,13 +28,16 @@ class TextMixin(ABC):
         ...
 
     @property
-    def tokenizer(self) -> PreTrainedTokenizerBase:
+    def tokenizer(self) -> PreTrainedTokenizerBase | None:
         return self._tokenizer
+
+    def attach_tokenizer(self, tokenizer: PreTrainedTokenizerBase) -> None:
+        self._tokenizer = tokenizer
 
     @classmethod
     def from_datasets(
         cls,
-        tokenizer: PreTrainedTokenizerBase,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         uid_name: str | None = None,
         on_cpu: list[str] | None = None,
         seed: int | None = 42,
@@ -60,7 +63,7 @@ class TextMixin(ABC):
     def from_dataset_dict(
         cls,
         dataset_dict: DatasetDict,
-        tokenizer: PreTrainedTokenizerBase,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         uid_name: str | None = None,
         on_cpu: list[str] | None = None,
         seed: int | None = 42,
@@ -84,7 +87,7 @@ class TextMixin(ABC):
         mandatory_input_names: list[str],
         optional_input_names: list[str],
         mandatory_target_name: str | None,
-        tokenizer: PreTrainedTokenizerBase,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         uid_name: str | None = None,
         on_cpu: list[str] | None = None,
         train_dataset: Dataset | None = None,
@@ -186,7 +189,9 @@ class TextMixin(ABC):
             columns.append(self.MANDATORY_TARGET_NAME)
         return {k: v.with_format(columns=columns) for k, v in dataset_dict.items()}
 
-    def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
+    def _set_attributes(
+        self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase | None
+    ) -> None:
         self._tokenizer = tokenizer
         self._train_data = dataset_dict.get(RunningStage.TRAIN)  # type: ignore
         self._validation_data = dataset_dict.get(RunningStage.VALIDATION)  # type: ignore

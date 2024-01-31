@@ -19,8 +19,9 @@ def collate_fn_for_sequence_classification(
     input_names: list[str],
     on_cpu: list[str],
     max_length: int | None,
-    pad_token_id: int | None,
+    pad_token_id: int,
     pad_fn: Callable,
+    build_attention_mask: bool,
 ) -> dict[str, list[str] | Tensor]:
     new_batch = ld_to_dl(batch)
 
@@ -30,10 +31,18 @@ def collate_fn_for_sequence_classification(
     labels = new_batch.pop(InputKeys.LABELS, None)
 
     # input_ids and attention_mask to tensor: truncate -> convert to tensor -> pad
-    new_batch = {k: pad_fn(inputs=new_batch[k], padding_value=pad_token_id, max_length=max_length) for k in input_names}
+    new_batch = {
+        k: pad_fn(inputs=new_batch[k], padding_value=pad_token_id, max_length=max_length).contiguous()
+        for k in input_names
+    }
+
+    if build_attention_mask:
+        inp_ids = new_batch[InputKeys.INPUT_IDS]
+        att_mask = torch.ones_like(inp_ids, device=inp_ids.device, dtype=torch.long).contiguous()
+        new_batch[InputKeys.ATT_MASK] = att_mask.masked_fill(inp_ids == pad_token_id, pad_token_id)
 
     if labels is not None:
-        new_batch[InputKeys.LABELS] = torch.tensor(labels, dtype=torch.long)
+        new_batch[InputKeys.LABELS] = torch.tensor(labels, dtype=torch.long).contiguous()
 
     # add things that need to remain on cpu
     if len(values_on_cpu) > 0:
@@ -68,6 +77,7 @@ class SequenceClassificationMixin(TextMixin):
         multiprocessing_context: str | None = None,
         max_length: int = 512,
     ) -> None:
+        assert self.tokenizer is not None, "Before being able to load data you need to attach a tokenizer"
         self._loading_params = SequenceClassificationDataloaderArgs(
             batch_size=batch_size,
             eval_batch_size=eval_batch_size,
@@ -134,6 +144,7 @@ class SequenceClassificationMixin(TextMixin):
         assert all(s == labels[0] for s in labels), "Labels are inconsistent across splits"
 
     def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
+        assert self.tokenizer.pad_token_id is not None, "You need to set the `pad_token_id` in the tokenizer"
         return partial(
             collate_fn_for_sequence_classification,
             input_names=self.input_names,
@@ -141,6 +152,7 @@ class SequenceClassificationMixin(TextMixin):
             max_length=None if show_batch else self.loading_params.max_length,  # type: ignore
             pad_token_id=self.tokenizer.pad_token_id,
             pad_fn=_pad,
+            build_attention_mask=InputKeys.ATT_MASK not in self.input_names,
         )
 
 

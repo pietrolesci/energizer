@@ -53,6 +53,7 @@ class HFModel(Model):
     _model: PreTrainedModel | PeftModel
     _config: PretrainedConfig | None = None
     _tokenizer: PreTrainedTokenizerBase | None = None
+    _model_kwargs: dict | None = None
 
     def __init__(
         self,
@@ -65,29 +66,36 @@ class HFModel(Model):
         convert_to_bettertransformer: bool = False,
     ) -> None:
         super().__init__()
-        self._model_name_or_config = model_name_or_config
         if isinstance(model_name_or_config, PretrainedConfig):
             rank_zero_info(
                 "You passed a `PretrainedConfig` which means the model will be re-initialised from scratch."
                 "The tokenizer is not created automatically in this case: remember to `attach_tokenizer`."
             )
+            self._config = model_name_or_config
         else:
             rank_zero_info(
                 "You passed a model name (`str`) which means the model will be initialised from "
                 f"the {model_name_or_config} pre-trained checkpoint."
             )
+            if revision is not None and subfolder is not None:
+                revision += "/" + subfolder
+            self._model_kwargs = {
+                "pretrained_model_name_or_path": model_name_or_config,
+                "revision": revision,
+                "cache_dir": cache_dir,
+            }
 
-        if revision is not None and subfolder is not None:
-            revision += "/" + subfolder
-        self._revision = revision
         self._adapters = adapters
         self._seed = seed
-        self._cache_dir = cache_dir
         self._convert_to_bettertransformer = convert_to_bettertransformer
 
     @property
     def config(self) -> PretrainedConfig | None:
         return self._config
+
+    @property
+    def model_kwargs(self) -> dict | None:
+        return self._model_kwargs
 
     @property
     def adapters(self) -> dict[str, PeftConfig] | None:
@@ -112,20 +120,15 @@ class HFModel(Model):
         )
         return summarize(self, max_depth)
 
-
     def configure_model(self) -> None:
         with local_seed(self._seed):
-            if isinstance(self._model_name_or_config, PretrainedConfig):
-                self._model_instance = self.AUTO_MODEL_CLASS.from_config(self._model_name_or_config)
+            if self.model_kwargs is None:
+                self._model_instance = self.AUTO_MODEL_CLASS.from_config(self.config)
             else:
-                self._model_instance = self.AUTO_MODEL_CLASS.from_pretrained(
-                    self._model_name_or_config, revision=self._revision, cache_dir=self._cache_dir
-                )
-                self._config = self.AUTO_CONFIG_CLASS.from_pretrained(
-                    self._model_name_or_config, revision=self._revision, cache_dir=self._cache_dir
-                )
+                self._model_instance = self.AUTO_MODEL_CLASS.from_pretrained(**self.model_kwargs)
+                self._config = self.AUTO_CONFIG_CLASS.from_pretrained(**self.model_kwargs)
                 self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
-                    self._model_name_or_config, revision=self._revision
+                    self.model_kwargs["pretrained_model_name_or_path"], revision=self.model_kwargs["revision"]
                 )
 
             if self.adapters is not None:
@@ -157,6 +160,23 @@ class HFModelForSequenceClassification(HFModel):
     """Instantiates language models with Classification head"""
 
     AUTO_MODEL_CLASS: type[AutoModelForSequenceClassification] = AutoModelForSequenceClassification
+
+    def __init__(
+        self,
+        model_name_or_config: str | PretrainedConfig,
+        num_classes: int,
+        revision: str | None = None,
+        subfolder: str | None = None,
+        adapters: dict[str, PeftConfig] | None = None,
+        seed: int = 42,
+        cache_dir: str | Path | None = None,
+        convert_to_bettertransformer: bool = False,
+    ) -> None:
+        super().__init__(
+            model_name_or_config, revision, subfolder, adapters, seed, cache_dir, convert_to_bettertransformer
+        )
+        if self._model_kwargs is not None:
+            self._model_kwargs["num_labels"] = num_classes
 
 
 # class HFModelForGeneration(HFModel):
