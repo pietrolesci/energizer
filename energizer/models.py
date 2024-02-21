@@ -14,7 +14,6 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.tokenization_utils import PreTrainedTokenizerBase
 
 from energizer.utilities import local_seed
-from energizer.utilities.model_summary import summarize
 
 
 class Model(ABC):
@@ -27,7 +26,7 @@ class Model(ABC):
 
     @property
     def summary(self) -> str:
-        return summarize(self.model_instance)
+        return ""
 
     @abstractmethod
     def configure_model(self, *args, **kwargs) -> None:
@@ -50,7 +49,7 @@ class HFModel(Model):
     AUTO_MODEL_CLASS: type[AutoModel] = AutoModel
     AUTO_TOKENIZER_CLASS: type[AutoTokenizer] = AutoTokenizer
 
-    _model: PreTrainedModel | PeftModel
+    _model_instance: PreTrainedModel | PeftModel
     _config: PretrainedConfig | None = None
     _tokenizer: PreTrainedTokenizerBase | None = None
     _model_kwargs: dict | None = None
@@ -111,14 +110,12 @@ class HFModel(Model):
 
     @property
     def summary(self) -> str:
-        max_depth = 1 if self.adapters is None else 2
-        rank_zero_info(
-            f"Total num params: {self._model.num_parameters(only_trainable=False) / 1e6:.01f}M\n"
-            f"Of which trainable: {self._model.num_parameters(only_trainable=True) / 1e6:.01f}M\n"
-            f"With a memory footprint of {self._model.get_memory_footprint() / 1e9:.02f}GB\n"
+        return (
+            f"Total num params: {self._model_instance.num_parameters(only_trainable=False) / 1e6:.01f}M\n"
+            f"Of which trainable: {self._model_instance.num_parameters(only_trainable=True) / 1e6:.01f}M\n"
+            f"With a memory footprint of {self._model_instance.get_memory_footprint() / 1e9:.02f}GB\n"
             f"Total memory allocated {torch.cuda.max_memory_allocated() / 1e9:.02f}GB"
         )
-        return summarize(self, max_depth)
 
     def configure_model(self) -> None:
         with local_seed(self._seed):
@@ -177,6 +174,12 @@ class HFModelForSequenceClassification(HFModel):
         )
         if self._model_kwargs is not None:
             self._model_kwargs["num_labels"] = num_classes
+
+    @property
+    def num_classes(self) -> int:
+        if self._model_kwargs is not None:
+            return self._model_kwargs["num_labels"]
+        return self.config["num_labels"]  # type: ignore
 
 
 # class HFModelForGeneration(HFModel):

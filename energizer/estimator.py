@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -571,13 +572,19 @@ class Estimator:
     def configure_scheduler(self, optimizer: Optimizer) -> _LRScheduler | None:
         assert self.optimization_args is not None
         sch_kw = self.optimization_args.scheduler_kwargs
-        if sch_kw.name is not None:
-            return SCHEDULER_REGISTRY[sch_kw.name](
-                optimizer,
-                num_training_steps=sch_kw.num_training_steps,
-                num_warmup_steps=sch_kw.num_warmup_steps,
-                **sch_kw.init_kwargs,
-            )
+        if sch_kw.name is None:
+            return
+
+        sch_fn = SCHEDULER_REGISTRY[sch_kw.name]
+        scheduler_fn_args = inspect.getfullargspec(sch_fn).args
+
+        kwargs = {**sch_kw.init_kwargs}
+        if "num_training_steps" in scheduler_fn_args:
+            kwargs["num_training_steps"] = sch_kw.num_training_steps
+        if "num_warmup_steps" in scheduler_fn_args:
+            kwargs["num_warmup_steps"] = sch_kw.num_warmup_steps
+
+        return sch_fn(optimizer, **kwargs, **sch_kw.init_kwargs)
 
     def configure_dataloader(self, loader: DataLoader | None) -> _FabricDataLoader | None:
         if loader is not None:
