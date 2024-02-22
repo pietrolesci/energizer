@@ -12,7 +12,7 @@ class Timer(Callback):
     def epoch_end(self, estimator: Estimator, stage: str | RunningStage) -> None:
         setattr(self, f"{stage}_epoch_end_time", time.perf_counter())
         runtime = getattr(self, f"{stage}_epoch_end_time") - getattr(self, f"{stage}_epoch_start_time")
-        estimator.log(f"timer/{stage}_epoch_time", runtime, step=estimator.tracker.safe_global_epoch)
+        estimator.log(f"timer/{stage}_epoch_time", runtime, step=estimator.tracker.safe_global_epoch_idx)
 
     def batch_start(self, stage: str | RunningStage) -> None:
         setattr(self, f"{stage}_batch_start_time", time.perf_counter())

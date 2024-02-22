@@ -82,7 +82,11 @@ class EarlyStopping(CallbackWithMonitor):
         self, estimator: Estimator, output: BATCH_OUTPUT | EPOCH_OUTPUT, stage: str | RunningStage, interval: Interval
     ) -> None:
         if (self.stage == stage and self.interval == interval) and estimator.tracker.is_fitting:
-            step = estimator.tracker.safe_global_epoch if interval == Interval.EPOCH else estimator.tracker.global_batch
+            step = (
+                estimator.tracker.safe_global_epoch_idx
+                if interval == Interval.EPOCH
+                else estimator.tracker.global_batch
+            )
             should_stop, reason = self._check_stopping_criteria(output, step)
             if should_stop:
                 estimator.tracker.set_stop_training(True)

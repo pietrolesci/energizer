@@ -273,7 +273,7 @@ class Estimator:
             out = self.run_epoch(model, optimizer, scheduler, train_loader, validation_loader)
             output.append(out)
 
-            self.tracker.increment_epoch()
+            self.tracker.increment_epoch_idx()
 
         self.callback("on_fit_end", model=model, output=output)
 
@@ -310,11 +310,13 @@ class Estimator:
             # put batch on correct device
             batch = self.transfer_to_device(batch)
 
+            # here global_step == batch_idx
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
             # run model on batch
             batch_out = self.run_training_step(model, optimizer, scheduler, batch, batch_idx, metrics)
 
+            # here globa_step == batch_idx + 1
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
             # record output
@@ -328,6 +330,7 @@ class Estimator:
                     validation_out.append(out)
 
             # update progress tracker
+            # here train_batch_counter.current == batch_idx + 1
             self.tracker.increment()
 
         # method to possibly aggregate
@@ -528,7 +531,7 @@ class Estimator:
         # defaults to constant schedule
         sch_kwargs["name"] = scheduler or sch_kwargs.get("name")
 
-        num_train_steps = self.tracker.step_tracker.max
+        num_train_steps = self.tracker.step_counter.max
         num_warmup_steps = sch_kwargs.get("num_warmup_steps")
         if num_warmup_steps is not None and num_train_steps is not None:
             num_warmup_steps = (

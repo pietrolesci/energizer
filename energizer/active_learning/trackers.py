@@ -131,11 +131,11 @@ class ActiveProgressTracker(ProgressTracker):
         return self.budget_tracker.total
 
     @property
-    def safe_global_epoch(self) -> int:
+    def safe_global_epoch_idx(self) -> int:
         return (
             self.global_round
             if self.current_stage in (RunningStage.TEST, RunningStage.POOL)
-            else super().safe_global_epoch
+            else super().safe_global_epoch_idx
         )
 
     @property
@@ -147,11 +147,11 @@ class ActiveProgressTracker(ProgressTracker):
     def end_active_fit(self) -> None:
         self.round_tracker.close_progress_bar()
         self.budget_tracker.close_progress_bar()
-        self.step_tracker.close_progress_bar()
-        self.epoch_tracker.close_progress_bar()
-        self.train_tracker.close_progress_bar()
-        self.validation_tracker.close_progress_bar()
-        self.test_tracker.close_progress_bar()
+        self.step_counter.close_progress_bar()
+        self.epoch_idx_tracker.close_progress_bar()
+        self.train_batch_counter.close_progress_bar()
+        self.validation_batch_counter.close_progress_bar()
+        self.test_batch_counter.close_progress_bar()
         self.pool_tracker.close_progress_bar()
 
     def increment_round(self) -> None:
@@ -164,21 +164,21 @@ class ActiveProgressTracker(ProgressTracker):
 
     def start_fit(self) -> None:
         super().start_fit()
-        if self.enable_progress_bar and self.epoch_tracker.progress_bar is not None:
-            self.epoch_tracker.progress_bar.set_postfix_str("")
-        if self.enable_progress_bar and self.step_tracker.progress_bar is not None:
-            self.step_tracker.progress_bar.set_postfix_str("")
+        if self.enable_progress_bar and self.epoch_idx_tracker.progress_bar is not None:
+            self.epoch_idx_tracker.progress_bar.set_postfix_str("")
+        if self.enable_progress_bar and self.step_counter.progress_bar is not None:
+            self.step_counter.progress_bar.set_postfix_str("")
 
     def end_fit(self) -> None:
-        self.step_tracker.terminate_progress_bar()
-        self.epoch_tracker.terminate_progress_bar()
-        self.train_tracker.terminate_progress_bar()
-        self.validation_tracker.terminate_progress_bar()
+        self.step_counter.terminate_progress_bar()
+        self.epoch_idx_tracker.terminate_progress_bar()
+        self.train_batch_counter.terminate_progress_bar()
+        self.validation_batch_counter.terminate_progress_bar()
 
     """Stage trackers"""
 
     def end(self) -> None:
-        self.get_stage_tracker().terminate_progress_bar()
+        self.get_batch_counter().terminate_progress_bar()
         if self.current_stage == RunningStage.VALIDATION:
             self.current_stage = RunningStage.TRAIN  # reattach training
 
@@ -186,12 +186,12 @@ class ActiveProgressTracker(ProgressTracker):
         if self.enable_progress_bar:
             self.round_tracker.make_progress_bar()
             self.budget_tracker.make_progress_bar()
-            self.step_tracker.make_progress_bar()
-            self.epoch_tracker.make_progress_bar()
-            self.train_tracker.make_progress_bar()
+            self.step_counter.make_progress_bar()
+            self.epoch_idx_tracker.make_progress_bar()
+            self.train_batch_counter.make_progress_bar()
             if self.has_validation:
-                self.validation_tracker.make_progress_bar()
+                self.validation_batch_counter.make_progress_bar()
             if self.has_test:
-                self.test_tracker.make_progress_bar()
+                self.test_batch_counter.make_progress_bar()
             if self.run_on_pool:
                 self.pool_tracker.make_progress_bar()

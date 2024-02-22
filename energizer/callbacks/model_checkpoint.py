@@ -71,7 +71,7 @@ class ModelCheckpoint(CallbackWithMonitor):
             estimator.load_state_dict(self.dirpath, self.best_model_path)
 
             if self.verbose:
-                logs = {"selected": self.best_model_path, "step": estimator.tracker.safe_global_epoch}
+                logs = {"selected": self.best_model_path, "step": estimator.tracker.safe_global_epoch_idx}
                 if hasattr(estimator.tracker, "global_round"):
                     logs["round"] = estimator.tracker.global_round  # type: ignore
 
@@ -99,7 +99,9 @@ class ModelCheckpoint(CallbackWithMonitor):
         output: EPOCH_OUTPUT,
         metrics: METRIC,
     ) -> None:
-        if self.should_checkpoint(stage, Interval.EPOCH, estimator.tracker.global_epoch):
+        # here we have NOT updated the epoch idx yet. This is because we want it to be an index
+        # rather than a counter. So we can say that the first epoch is epoch==0
+        if self.should_checkpoint(stage, Interval.EPOCH, estimator.tracker.global_epoch_idx):
             self.checkpoint(stage, estimator, output)
 
     def on_batch_end(
@@ -111,6 +113,10 @@ class ModelCheckpoint(CallbackWithMonitor):
         batch: Any,
         batch_idx: int,
     ) -> None:
+        # here we have already updated the step counter: for batch_idx==0 we will have step==1
+        # which makes sense because batch_idx is an index while update steps is a counter and
+        # does not make sense to say step==0
+        # for example, step==500 has seen batch_idx==(0, 499)
         if self.should_checkpoint(stage, Interval.STEP, estimator.tracker.global_step):
             self.checkpoint(stage, estimator, output)
 
