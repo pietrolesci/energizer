@@ -1,3 +1,8 @@
+UPDATE: Energizer is currently undergoing a major refactor. Most of the examples will not work and the documentation is not up to date. New API will be available soon.
+
+----
+
+
 [![pypi](https://img.shields.io/pypi/v/energizer.svg)](https://pypi.org/project/energizer/)
 [![python](https://img.shields.io/pypi/pyversions/energizer.svg)](https://pypi.org/project/energizer/)
 [![Build Status](https://github.com/pietrolesci/energizer/actions/workflows/dev.yml/badge.svg)](https://github.com/pietrolesci/energizer/actions/workflows/dev.yml)
