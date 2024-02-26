@@ -280,8 +280,10 @@ class ProgressTracker:
         else:
             raise NotImplementedError
 
-        if should_validate:
-            print(f"{self.global_epoch_idx=} {self.global_step=} {self.is_done=}")
+        # if should_validate and self.train_batch_counter.progress_bar is not None:
+        #     self.train_batch_counter.progress_bar.set_postfix_str(
+        #         f"{self.global_epoch_idx=} {self.global_step=} {self.is_done=}"
+        #     )
 
         return should_validate
 
