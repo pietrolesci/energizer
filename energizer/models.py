@@ -63,6 +63,7 @@ class HFModel(Model):
         seed: int = 42,
         cache_dir: str | Path | None = None,
         convert_to_bettertransformer: bool = False,
+        load_tokenizer: bool = True,
     ) -> None:
         super().__init__()
         if isinstance(model_name_or_config, PretrainedConfig):
@@ -87,6 +88,7 @@ class HFModel(Model):
         self._adapters = adapters
         self._seed = seed
         self._convert_to_bettertransformer = convert_to_bettertransformer
+        self._load_tokenizer = load_tokenizer
 
     @property
     def config(self) -> PretrainedConfig | None:
@@ -124,16 +126,17 @@ class HFModel(Model):
             else:
                 self._model_instance = self.AUTO_MODEL_CLASS.from_pretrained(**self.model_kwargs)
                 self._config = self.AUTO_CONFIG_CLASS.from_pretrained(**self.model_kwargs)
-                self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
-                    self.model_kwargs["pretrained_model_name_or_path"], revision=self.model_kwargs["revision"]
-                )
+                if self._load_tokenizer:
+                    self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
+                        self.model_kwargs["pretrained_model_name_or_path"], revision=self.model_kwargs["revision"]
+                    )
 
             if self.adapters is not None:
                 for adapter_name, peft_config in self.adapters.items():
                     if isinstance(self._model_instance, PeftModel):
                         self._model_instance.add_adapter(adapter_name=adapter_name, peft_config=peft_config)
                     else:
-                        self._model_instance = get_peft_model(
+                        self._model_instance = get_peft_model(  # type: ignore
                             self._model_instance,  # type: ignore
                             adapter_name=adapter_name,
                             peft_config=peft_config,
@@ -168,9 +171,17 @@ class HFModelForSequenceClassification(HFModel):
         seed: int = 42,
         cache_dir: str | Path | None = None,
         convert_to_bettertransformer: bool = False,
+        load_tokenizer: bool = True,
     ) -> None:
         super().__init__(
-            model_name_or_config, revision, subfolder, adapters, seed, cache_dir, convert_to_bettertransformer
+            model_name_or_config,
+            revision,
+            subfolder,
+            adapters,
+            seed,
+            cache_dir,
+            convert_to_bettertransformer,
+            load_tokenizer,
         )
         if self._model_kwargs is not None:
             self._model_kwargs["num_labels"] = num_classes
