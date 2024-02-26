@@ -141,7 +141,8 @@ class ModelCheckpoint(CallbackWithMonitor):
                         append_new_line=False,
                     )
         else:
-            name = f"{self.interval}_{getattr(estimator.tracker, f'global_{self.interval}')}"
+            attr = "epoch_idx" if self.interval == "epoch" else self.interval
+            name = f"{self.interval}_{getattr(estimator.tracker, f'global_{attr}')}"
             estimator.save_state_dict(self.dirpath, name)
 
     def _check_should_save(self, stage: str | RunningStage, current: float | None) -> bool:
