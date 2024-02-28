@@ -499,8 +499,9 @@ class Estimator:
     """
 
     def configure_model(self) -> None:
-        with self.fabric.init_module():
-            self.model.configure_model()
+        if not self.model.is_configured:
+            with self.fabric.init_module():
+                self.model.configure_model()
 
     def configure_optimization_args(
         self,

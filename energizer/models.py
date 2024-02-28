@@ -18,6 +18,7 @@ from energizer.utilities import local_seed
 
 class Model(ABC):
     _model_instance: torch.nn.Module | None = None
+    _is_configured: bool = False
 
     @property
     def model_instance(self) -> torch.nn.Module:
@@ -32,6 +33,10 @@ class Model(ABC):
     def configure_model(self, *args, **kwargs) -> None:
         ...
 
+    @property
+    def is_configured(self) -> bool:
+        return self._is_configured
+
 
 class TorchModel(Model):
     def __init__(self, model: torch.nn.Module) -> None:
@@ -39,7 +44,7 @@ class TorchModel(Model):
         self._model_instance = model
 
     def configure_model(self, *args, **kwargs) -> None:
-        pass
+        self._is_configured = True
 
 
 class HFModel(Model):
@@ -146,6 +151,8 @@ class HFModel(Model):
 
             if self._convert_to_bettertransformer:
                 self.convert_to_bettertransformer()
+
+        self._is_configured = True
 
     def convert_to_bettertransformer(self) -> None:
         assert self._model_instance is not None
