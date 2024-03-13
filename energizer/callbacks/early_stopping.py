@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 import srsly
@@ -18,13 +18,13 @@ class EarlyStopping(CallbackWithMonitor):
     def __init__(
         self,
         monitor: str,
-        stage: Union[str, RunningStage],
+        stage: str | RunningStage,
         interval: Interval = Interval.EPOCH,
         mode: str = "min",
         min_delta=0.00,
         patience=3,
-        stopping_threshold: Optional[float] = None,
-        divergence_threshold: Optional[float] = None,
+        stopping_threshold: float | None = None,
+        divergence_threshold: float | None = None,
         verbose: bool = True,
     ) -> None:
         super().__init__()
@@ -39,9 +39,7 @@ class EarlyStopping(CallbackWithMonitor):
         self.verbose = verbose
         self.dirpath = Path("./.early_stopping.jsonl")
 
-    def _check_stopping_criteria(
-        self, output: Union[BATCH_OUTPUT, EPOCH_OUTPUT], step: int
-    ) -> tuple[bool, Union[str, None]]:
+    def _check_stopping_criteria(self, output: BATCH_OUTPUT | EPOCH_OUTPUT, step: int) -> tuple[bool, str | None]:
         current = self._get_monitor(output)
 
         should_stop = False
@@ -81,14 +79,14 @@ class EarlyStopping(CallbackWithMonitor):
         return should_stop, reason
 
     def check(
-        self,
-        estimator: Estimator,
-        output: Union[BATCH_OUTPUT, EPOCH_OUTPUT],
-        stage: Union[str, RunningStage],
-        interval: Interval,
+        self, estimator: Estimator, output: BATCH_OUTPUT | EPOCH_OUTPUT, stage: str | RunningStage, interval: Interval
     ) -> None:
         if (self.stage == stage and self.interval == interval) and estimator.tracker.is_fitting:
-            step = estimator.tracker.safe_global_epoch if interval == Interval.EPOCH else estimator.tracker.global_batch
+            step = (
+                estimator.tracker.safe_global_epoch_idx
+                if interval == Interval.EPOCH
+                else estimator.tracker.global_batch
+            )
             should_stop, reason = self._check_stopping_criteria(output, step)
             if should_stop:
                 estimator.tracker.set_stop_training(True)

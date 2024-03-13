@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from typing import Union
 
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule
 from numpy.random import RandomState
@@ -17,7 +16,7 @@ class UncertaintyBasedStrategy(PoolBasedMixin, ActiveEstimator):
     _score_fn: Callable
     POOL_OUTPUT_KEY: OutputKeys = OutputKeys.SCORES
 
-    def __init__(self, *args, score_fn: Union[str, Callable], seed: int = 42, **kwargs) -> None:
+    def __init__(self, *args, score_fn: str | Callable, seed: int = 42, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility

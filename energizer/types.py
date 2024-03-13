@@ -1,16 +1,16 @@
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import Any, TypeAlias
 
 from torch import Tensor
 from torchmetrics import Metric
 
-METRIC = Union[Metric, Any]
-DATASET = list[Mapping]
-DATA_SOURCE = Any
+METRIC: TypeAlias = Metric | Any
+DATASET: TypeAlias = list[Mapping]
+DATA_SOURCE: TypeAlias = Any
 
-BATCH_OUTPUT = Union[Tensor, dict]
+BATCH_OUTPUT: TypeAlias = Tensor | dict
 
-EPOCH_OUTPUT = Union[list[BATCH_OUTPUT], Any]
-FIT_OUTPUT = tuple[EPOCH_OUTPUT, EPOCH_OUTPUT]
+EPOCH_OUTPUT: TypeAlias = list[BATCH_OUTPUT] | Any
+FIT_OUTPUT: TypeAlias = tuple[EPOCH_OUTPUT, EPOCH_OUTPUT]
 
-ROUND_OUTPUT = Union[Mapping[str, Any], Any]
+ROUND_OUTPUT: TypeAlias = Mapping[str, Any] | Any

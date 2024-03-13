@@ -29,18 +29,14 @@ class LayerSummary:
 
 
 class Summary:
-    def __init__(self, estimator, max_depth: int = 1) -> None:
-        self._estimator = estimator
+    def __init__(self, model, max_depth: int = 1) -> None:
+        self._model = model
 
         if not isinstance(max_depth, int) or max_depth < -1:
             raise ValueError(f"`max_depth` can be -1, 0 or > 0, got {max_depth}.")
 
         self._max_depth = max_depth
         self._layer_summary = self.summarize()
-        # 1 byte -> 8 bits
-        # TODO: how do we compute precision_megabytes in case of mixed precision?
-        precision = self._estimator.fabric._precision if isinstance(self._estimator.fabric._precision, int) else 32
-        self._precision_megabytes = (precision / 8.0) * 1e-6
 
     @property
     def named_modules(self) -> list[tuple[str, torch.nn.Module]]:
@@ -49,9 +45,9 @@ class Summary:
             mods = []
         elif self._max_depth == 1:
             # the children are the top-level modules
-            mods = list(self._estimator.model.named_children())
+            mods = list(self._model.model_instance.named_children())
         else:
-            mods = self._estimator.model.named_modules()
+            mods = self._model.model_instance.named_modules()
             mods = list(mods)[1:]  # do not include root module (LightningModule)
         return mods
 
@@ -77,20 +73,15 @@ class Summary:
 
     @property
     def total_parameters(self) -> int:
-        return sum(p.numel() if not _is_lazy_weight_tensor(p) else 0 for p in self._estimator.model.parameters())
+        return sum(p.numel() if not _is_lazy_weight_tensor(p) else 0 for p in self._model.model_instance.parameters())
 
     @property
     def trainable_parameters(self) -> int:
         return sum(
             p.numel() if not _is_lazy_weight_tensor(p) else 0
-            for p in self._estimator.model.parameters()
+            for p in self._model.model_instance.parameters()
             if p.requires_grad
         )
-
-    @property
-    def model_size(self) -> float:
-        # todo: seems it does not work with quantized models - it returns 0.0
-        return self.total_parameters * self._precision_megabytes
 
     def summarize(self) -> dict[str, LayerSummary]:
         summary = OrderedDict((name, LayerSummary(module)) for name, module in self.named_modules)
@@ -121,7 +112,6 @@ class Summary:
 
         total_parameters = self.total_parameters
         trainable_parameters = self.trainable_parameters
-        model_size = self.model_size
 
         return _format_summary_table(total_parameters, trainable_parameters, model_size, *arrays)
 
@@ -129,15 +119,14 @@ class Summary:
         return str(self)
 
 
-def summarize(estimator, max_depth: int = 1) -> str:
-    model_summary = Summary(estimator, max_depth)
+def summarize(model, max_depth: int = 1) -> str:
+    model_summary = Summary(model, max_depth)
     summary_data = model_summary._get_summary_data()
     total_parameters = model_summary.total_parameters
     trainable_parameters = model_summary.trainable_parameters
-    model_size = model_summary.model_size
 
     summary = _format_summary_table(total_parameters, trainable_parameters, model_size, *summary_data)
-    if estimator.fabric.device.type == "cuda":
+    if model.device == "cuda":
         s = "{:<{}}"
         summary += "\n" + s.format(f"{torch.cuda.max_memory_allocated() / 1e9:.02f} GB", 10)
         summary += "CUDA Memory used"

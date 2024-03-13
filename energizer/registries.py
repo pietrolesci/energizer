@@ -1,7 +1,7 @@
 import inspect
 from collections.abc import Callable, Generator
 from types import ModuleType
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch_optimizer
@@ -12,7 +12,7 @@ from energizer.utilities import camel_to_snake
 
 
 class Registry(dict):
-    def register_functions(self, module: ModuleType, filter_fn: Optional[Callable] = None) -> None:
+    def register_functions(self, module: ModuleType, filter_fn: Callable | None = None) -> None:
         filter_fn = filter_fn if filter_fn is not None else lambda k, v: True
         for k, v in inspect.getmembers(module, inspect.isfunction):
             if filter_fn(k, v):
@@ -63,13 +63,3 @@ OPTIMIZER_REGISTRY.register_classes(torch.optim, torch.optim.Optimizer, override
 SCHEDULER_REGISTRY = Registry()
 SCHEDULER_REGISTRY.register_classes(torch.optim.lr_scheduler, torch.optim.lr_scheduler._LRScheduler)
 SCHEDULER_REGISTRY.update({v.__name__[4:]: v for v in TYPE_TO_SCHEDULER_FUNCTION.values()})
-
-
-def filter_fn(k: str, v: Any) -> bool:
-    signature = inspect.signature(v).parameters
-    return not k.startswith("_") and all(i in signature for i in ["input", "target"])
-
-
-LOSS_FUNCTIONS_REGISTRY = Registry()
-LOSS_FUNCTIONS_REGISTRY.register_functions(torch.nn.functional, filter_fn)
-LOSS_FUNCTIONS_REGISTRY.register_classes(torch.nn.modules.loss, torch.nn.modules.loss._Loss, to_snake_case=True)

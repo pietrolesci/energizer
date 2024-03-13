@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from math import floor
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -16,15 +16,15 @@ from energizer.utilities import sample
 
 class ActiveLearningMixin(ABC):
     @abstractmethod
-    def pool_size(self, round: Optional[int] = None) -> int:
+    def pool_size(self, round: int | None = None) -> int:
         ...
 
     @abstractmethod
-    def labelled_size(self, round: Optional[int] = None) -> int:
+    def labelled_size(self, round: int | None = None) -> int:
         ...
 
     @abstractmethod
-    def query_size(self, round: Optional[int] = None) -> int:
+    def query_size(self, round: int | None = None) -> int:
         ...
 
     @abstractmethod
@@ -36,8 +36,8 @@ class ActiveLearningMixin(ABC):
         self,
         indices: list[int],
         round: int,
-        validation_perc: Optional[float] = None,
-        validation_sampling: Optional[Literal["uniform", "stratified"]] = "uniform",
+        validation_perc: float | None = None,
+        validation_sampling: Literal["uniform", "stratified"] | None = "uniform",
     ) -> int:
         ...
 
@@ -45,18 +45,18 @@ class ActiveLearningMixin(ABC):
     def sample_from_pool(
         self,
         size: int,
-        round: Optional[int] = None,
-        random_state: Optional[RandomState] = None,
-        with_indices: Optional[list[int]] = None,
+        round: int | None = None,
+        random_state: RandomState | None = None,
+        with_indices: list[int] | None = None,
         **kwargs,
     ) -> list[int]:
         ...
 
     @abstractmethod
-    def save_labelled_dataset(self, save_dir: Union[str, Path]) -> None:
+    def save_labelled_dataset(self, save_dir: str | Path) -> None:
         ...
 
-    def pool_loader(self, *args, **kwargs) -> Optional[DataLoader]:
+    def pool_loader(self, *args, **kwargs) -> DataLoader | None:
         return self.get_loader(RunningStage.POOL, *args, **kwargs)  # type: ignore
 
     @abstractmethod
@@ -64,15 +64,15 @@ class ActiveLearningMixin(ABC):
         ...
 
     @abstractmethod
-    def get_train_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_train_ids(self, round: int | None = None) -> list[int]:
         ...
 
     @abstractmethod
-    def get_validation_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_validation_ids(self, round: int | None = None) -> list[int]:
         ...
 
     @abstractmethod
-    def get_pool_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_pool_ids(self, round: int | None = None) -> list[int]:
         ...
 
 
@@ -82,23 +82,23 @@ class ActiveDatastore(ActiveLearningMixin, Datastore):
 
 class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
     _train_data: pd.DataFrame
-    _test_data: Optional[Dataset]
+    _test_data: Dataset | None
 
-    def train_size(self, round: Optional[int] = None) -> int:
+    def train_size(self, round: int | None = None) -> int:
         return self._train_mask(round).sum()
 
-    def validation_size(self, round: Optional[int] = None) -> int:
+    def validation_size(self, round: int | None = None) -> int:
         if self._validation_data is not None:
             return len(self._validation_data)
         return self._validation_mask(round).sum()
 
-    def pool_size(self, round: Optional[int] = None) -> int:
+    def pool_size(self, round: int | None = None) -> int:
         return self._pool_mask(round).sum()
 
-    def labelled_size(self, round: Optional[int] = None) -> int:
+    def labelled_size(self, round: int | None = None) -> int:
         return self._labelled_mask(round).sum()
 
-    def query_size(self, round: Optional[int] = None) -> int:
+    def query_size(self, round: int | None = None) -> int:
         last_round = round or self._train_data[SpecialKeys.LABELLING_ROUND].max()
         if last_round < 0:
             return self.labelled_size(last_round)
@@ -108,8 +108,8 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
         return self._train_data[SpecialKeys.LABELLING_ROUND].max()
 
     def train_dataset(
-        self, round: Optional[int] = None, passive: Optional[bool] = False, with_indices: Optional[list[int]] = None
-    ) -> Optional[Dataset]:
+        self, round: int | None = None, passive: bool | None = False, with_indices: list[int] | None = None
+    ) -> Dataset | None:
         if passive:
             return super().train_dataset()
 
@@ -119,7 +119,7 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
                 mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
             return Dataset.from_pandas(self._train_data.loc[mask], preserve_index=False)
 
-    def validation_dataset(self, round: Optional[int] = None) -> Optional[Dataset]:
+    def validation_dataset(self, round: int | None = None) -> Dataset | None:
         if self._validation_data is not None:
             return self._validation_data
 
@@ -127,7 +127,7 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
         if mask.sum() > 0:
             return Dataset.from_pandas(self._train_data.loc[mask], preserve_index=False)
 
-    def pool_dataset(self, round: Optional[int] = None, with_indices: Optional[list[int]] = None) -> Optional[Dataset]:
+    def pool_dataset(self, round: int | None = None, with_indices: list[int] | None = None) -> Dataset | None:
         mask = self._pool_mask(round)
         if with_indices is not None:
             mask = mask & self._train_data[SpecialKeys.ID].isin(with_indices)
@@ -139,7 +139,7 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
         self,
         indices: list[int],
         round: int,
-        validation_perc: Optional[float] = None,
+        validation_perc: float | None = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",
     ) -> int:
         assert isinstance(indices, list), ValueError(f"`indices` must be of type `List[int]`, not {type(indices)}.")
@@ -170,9 +170,9 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
     def sample_from_pool(
         self,
         size: int,
-        round: Optional[int] = None,
-        random_state: Optional[RandomState] = None,
-        with_indices: Optional[list[int]] = None,
+        round: int | None = None,
+        random_state: RandomState | None = None,
+        with_indices: list[int] | None = None,
         **kwargs,
     ) -> list[int]:
         """Performs `uniform` or `stratified` sampling from the pool."""
@@ -190,7 +190,7 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
             **kwargs,
         )
 
-    def save_labelled_dataset(self, save_dir: Union[str, Path]) -> None:
+    def save_labelled_dataset(self, save_dir: str | Path) -> None:
         path = Path(save_dir)
         path.mkdir(parents=True, exist_ok=True)
         self._train_data.loc[self._labelled_mask()].to_parquet(path / "labelled_dataset.parquet", index=False)
@@ -199,31 +199,31 @@ class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
     Utilities
     """
 
-    def _labelled_mask(self, round: Optional[int] = None) -> pd.Series:
+    def _labelled_mask(self, round: int | None = None) -> pd.Series:
         mask = self._train_data[SpecialKeys.IS_LABELLED] == True  # noqa: E712
         if round is not None:
             mask = mask & (self._train_data[SpecialKeys.LABELLING_ROUND] <= round)
         return mask
 
-    def _train_mask(self, round: Optional[int] = None) -> pd.Series:
+    def _train_mask(self, round: int | None = None) -> pd.Series:
         return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == False)  # noqa: E712
 
-    def _validation_mask(self, round: Optional[int] = None) -> pd.Series:
+    def _validation_mask(self, round: int | None = None) -> pd.Series:
         return self._labelled_mask(round) & (self._train_data[SpecialKeys.IS_VALIDATION] == True)  # noqa: E712
 
-    def _pool_mask(self, round: Optional[int] = None) -> pd.Series:
+    def _pool_mask(self, round: int | None = None) -> pd.Series:
         mask = self._train_data[SpecialKeys.IS_LABELLED] == False  # noqa: E712
         if round is not None:
             mask = mask | (self._train_data[SpecialKeys.LABELLING_ROUND] > round)
         return mask
 
-    def get_train_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_train_ids(self, round: int | None = None) -> list[int]:
         return self._train_data.loc[self._train_mask(round), SpecialKeys.ID].tolist()
 
-    def get_validation_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_validation_ids(self, round: int | None = None) -> list[int]:
         return self._train_data.loc[self._validation_mask(round), SpecialKeys.ID].tolist()
 
-    def get_pool_ids(self, round: Optional[int] = None) -> list[int]:
+    def get_pool_ids(self, round: int | None = None) -> list[int]:
         return self._train_data.loc[self._pool_mask(round), SpecialKeys.ID].tolist()
 
 
@@ -258,7 +258,7 @@ class ActivePandasDatastoreWithIndex(ActiveIndexMixin, ActivePandasDatastore):
         self,
         indices: list[int],
         round: int,
-        validation_perc: Optional[float] = None,
+        validation_perc: float | None = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",
     ) -> int:
         n_labelled = super().label(indices, round, validation_perc, validation_sampling)

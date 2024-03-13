@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -34,29 +33,29 @@ class ActiveEstimator(Estimator):
         self,
         datastore: ActiveDatastore,
         query_size: int,
-        max_rounds: Optional[int] = None,
-        max_budget: Optional[int] = None,
-        validation_perc: Optional[float] = None,
+        max_rounds: int | None = None,
+        max_budget: int | None = None,
+        validation_perc: float | None = None,
         validation_sampling: Literal["uniform", "stratified"] = "uniform",
         reinit_model: bool = True,
-        model_cache_dir: Union[str, Path] = ".model_cache",
-        max_epochs: Optional[int] = 3,
-        min_epochs: Optional[int] = None,
-        max_steps: Optional[int] = None,
-        min_steps: Optional[int] = None,
-        validation_freq: Optional[str] = "1:epoch",
-        gradient_accumulation_steps: Optional[int] = None,
-        learning_rate: Optional[float] = None,
-        optimizer: Optional[str] = None,
-        optimizer_kwargs: Optional[Union[dict, OptimizationArgs]] = None,
-        scheduler: Optional[str] = None,
-        scheduler_kwargs: Optional[Union[dict, SchedulerArgs]] = None,
+        model_cache_dir: str | Path = ".model_cache",
+        max_epochs: int | None = 3,
+        min_epochs: int | None = None,
+        max_steps: int | None = None,
+        min_steps: int | None = None,
+        validation_freq: str | None = "1:epoch",
+        gradient_accumulation_steps: int | None = None,
+        learning_rate: float | None = None,
+        optimizer: str | None = None,
+        optimizer_kwargs: dict | OptimizationArgs | None = None,
+        scheduler: str | None = None,
+        scheduler_kwargs: dict | SchedulerArgs | None = None,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
-        limit_train_batches: Optional[int] = None,
-        limit_validation_batches: Optional[int] = None,
-        limit_test_batches: Optional[int] = None,
-        limit_pool_batches: Optional[int] = None,
+        limit_train_batches: int | None = None,
+        limit_validation_batches: int | None = None,
+        limit_test_batches: int | None = None,
+        limit_pool_batches: int | None = None,
     ) -> Any:
         assert not reinit_model or (
             reinit_model and model_cache_dir
@@ -103,7 +102,7 @@ class ActiveEstimator(Estimator):
         )
 
     def run_active_fit(
-        self, datastore: ActiveDatastore, reinit_model: bool, model_cache_dir: Union[str, Path], **kwargs
+        self, datastore: ActiveDatastore, reinit_model: bool, model_cache_dir: str | Path, **kwargs
     ) -> Any:
         if reinit_model:
             self.save_state_dict(model_cache_dir)
@@ -236,10 +235,10 @@ class ActiveEstimator(Estimator):
     ) -> tuple[
         _FabricModule,
         _FabricOptimizer,
-        Optional[_LRScheduler],
-        Optional[_FabricDataLoader],
-        Optional[_FabricDataLoader],
-        Optional[_FabricDataLoader],
+        _LRScheduler | None,
+        _FabricDataLoader | None,
+        _FabricDataLoader | None,
+        _FabricDataLoader | None,
     ]:
         """Start progress tracking."""
 
@@ -277,20 +276,14 @@ class PoolBasedMixin(ABC):
         return {k: np.concatenate(v) for k, v in _out.items()}
 
     def evaluation_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
-        stage: Union[str, RunningStage],
-    ) -> Union[dict, BATCH_OUTPUT]:
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None, stage: str | RunningStage
+    ) -> dict | BATCH_OUTPUT:
         if stage != RunningStage.POOL:
-            return super().evaluation_step(model, batch, batch_idx, loss_fn, metrics, stage)  # type: ignore
+            return super().evaluation_step(model, batch, batch_idx, metrics, stage)  # type: ignore
 
         # keep IDs here in case user messes up in the function definition
         ids = batch[InputKeys.ON_CPU][SpecialKeys.ID]
-        pool_out = self.pool_step(model, batch, batch_idx, loss_fn, metrics)
+        pool_out = self.pool_step(model, batch, batch_idx, metrics)
 
         assert isinstance(pool_out, torch.Tensor), f"`{stage}_step` must return a tensor`."
 
@@ -299,19 +292,14 @@ class PoolBasedMixin(ABC):
 
     @abstractmethod
     def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC] = None,
+        self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> torch.Tensor:
         ...
 
-    def pool_epoch_end(self, output: list[dict], metrics: Optional[METRIC]) -> list[dict]:
+    def pool_epoch_end(self, output: list[dict], metrics: METRIC | None) -> list[dict]:
         return output
 
-    def get_pool_loader(self, datastore: ActiveDatastore, **kwargs) -> Optional[_FabricDataLoader]:
+    def get_pool_loader(self, datastore: ActiveDatastore, **kwargs) -> _FabricDataLoader | None:
         subpool_ids = kwargs.get("subpool_ids", None)
         loader = datastore.pool_loader(with_indices=subpool_ids) if subpool_ids is not None else datastore.pool_loader()
 
@@ -324,7 +312,7 @@ class PoolBasedMixin(ABC):
             )
             return pool_loader
 
-    def get_train_loader(self, datastore: ActiveDatastore, **kwargs) -> Optional[_FabricDataLoader]:
+    def get_train_loader(self, datastore: ActiveDatastore, **kwargs) -> _FabricDataLoader | None:
         # NOTE: hack -- load train dataloader with the evaluation batch size
         assert datastore._loading_params is not None
         batch_size = datastore.loading_params.batch_size

@@ -2,7 +2,6 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Optional, Union
 
 import colorlog
 from hydra.core.hydra_config import HydraConfig
@@ -25,11 +24,7 @@ Define the logger
 
 
 def get_logger(
-    name: str,
-    log_level: str = "debug",
-    color: bool = True,
-    stream: bool = True,
-    filepath: Optional[Union[str, Path]] = None,
+    name: str, log_level: str = "debug", color: bool = True, stream: bool = True, filepath: str | Path | None = None
 ) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.handlers = []

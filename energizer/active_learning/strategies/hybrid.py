@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 import torch
@@ -39,11 +39,11 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
     def __init__(
         self,
         *args,
-        score_fn: Union[str, Callable],
+        score_fn: str | Callable,
         seed: int = 42,
         r_factor: int,
         clustering_algorithm: str = "kmeans",
-        clustering_kwargs: Optional[dict] = None,
+        clustering_kwargs: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, score_fn=score_fn, seed=seed, **kwargs)
@@ -81,7 +81,7 @@ class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):
 
     def get_embeddings_and_ids(
         self, model: _FabricModule, datastore: ActiveDatastoreWithIndex, query_size: int, **kwargs
-    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         pool_ids = kwargs.get("subpool_ids", None) or datastore.get_pool_ids()
         return datastore.get_pool_embeddings(pool_ids), np.array(pool_ids)
 
@@ -115,14 +115,7 @@ class BADGE(DiversityBasedStrategyWithPool):
         center_ids = kmeans_pp_sampling(embeddings, query_size, rng=self.rng)
         return ids[center_ids].tolist()
 
-    def pool_step(
-        self,
-        model: _FabricModule,
-        batch: Any,
-        batch_idx: int,
-        loss_fn: Optional[Union[torch.nn.Module, Callable]],
-        metrics: Optional[METRIC],
-    ) -> torch.Tensor:
+    def pool_step(self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None) -> torch.Tensor:
         r"""Return the loss gradient with respect to the penultimate layer of the model.
 
         Uses the analytical form from the paper

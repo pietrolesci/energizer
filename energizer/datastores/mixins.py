@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Union
 
 import hnswlib as hb
 import numpy as np
@@ -16,32 +15,35 @@ from energizer.utilities import sequential_numbers
 
 
 class TextMixin(ABC):
-    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS, InputKeys.ATT_MASK]
-    OPTIONAL_INPUT_NAMES: list[str] = [InputKeys.TOKEN_TYPE_IDS]
-    MANDATORY_TARGET_NAME: Optional[str] = None
+    MANDATORY_INPUT_NAMES: list[str] = [InputKeys.INPUT_IDS]
+    OPTIONAL_INPUT_NAMES: list[str] = [InputKeys.ATT_MASK, InputKeys.TOKEN_TYPE_IDS]
+    MANDATORY_TARGET_NAME: str | None = None
 
-    _tokenizer: PreTrainedTokenizerBase
+    _tokenizer: PreTrainedTokenizerBase | None = None
     input_names: list[str]
     on_cpu: list[str]
 
     @abstractmethod
-    def get_collate_fn(self, stage: Optional[RunningStage] = None, show_batch: bool = False) -> Optional[Callable]:
+    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
         ...
 
     @property
-    def tokenizer(self) -> PreTrainedTokenizerBase:
+    def tokenizer(self) -> PreTrainedTokenizerBase | None:
         return self._tokenizer
+
+    def attach_tokenizer(self, tokenizer: PreTrainedTokenizerBase) -> None:
+        self._tokenizer = tokenizer
 
     @classmethod
     def from_datasets(
         cls,
-        tokenizer: PreTrainedTokenizerBase,
-        uid_name: Optional[str] = None,
-        on_cpu: Optional[list[str]] = None,
-        seed: Optional[int] = 42,
-        train_dataset: Optional[Dataset] = None,
-        validation_dataset: Optional[Dataset] = None,
-        test_dataset: Optional[Dataset] = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        uid_name: str | None = None,
+        on_cpu: list[str] | None = None,
+        seed: int | None = 42,
+        train_dataset: Dataset | None = None,
+        validation_dataset: Dataset | None = None,
+        test_dataset: Dataset | None = None,
     ) -> Self:
         obj = cls(seed)  # type: ignore
         obj.load_datasets(
@@ -61,10 +63,10 @@ class TextMixin(ABC):
     def from_dataset_dict(
         cls,
         dataset_dict: DatasetDict,
-        tokenizer: PreTrainedTokenizerBase,
-        uid_name: Optional[str] = None,
-        on_cpu: Optional[list[str]] = None,
-        seed: Optional[int] = 42,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        uid_name: str | None = None,
+        on_cpu: list[str] | None = None,
+        seed: int | None = 42,
     ) -> Self:
         obj = cls(seed)  # type: ignore
         obj.load_datasets(
@@ -84,13 +86,13 @@ class TextMixin(ABC):
         self,
         mandatory_input_names: list[str],
         optional_input_names: list[str],
-        mandatory_target_name: Optional[str],
-        tokenizer: PreTrainedTokenizerBase,
-        uid_name: Optional[str] = None,
-        on_cpu: Optional[list[str]] = None,
-        train_dataset: Optional[Dataset] = None,
-        validation_dataset: Optional[Dataset] = None,
-        test_dataset: Optional[Dataset] = None,
+        mandatory_target_name: str | None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        uid_name: str | None = None,
+        on_cpu: list[str] | None = None,
+        train_dataset: Dataset | None = None,
+        validation_dataset: Dataset | None = None,
+        test_dataset: Dataset | None = None,
     ) -> None:
         _datasets = {
             RunningStage.TRAIN: train_dataset,
@@ -142,7 +144,7 @@ class TextMixin(ABC):
 
         self.input_names = list(set(input_names))
 
-    def _check_on_cpu(self, dataset_dict: dict[RunningStage, Dataset], on_cpu: Optional[list[str]]) -> None:
+    def _check_on_cpu(self, dataset_dict: dict[RunningStage, Dataset], on_cpu: list[str] | None) -> None:
         _on_cpu = []
         if on_cpu is not None:
             for name in on_cpu:
@@ -152,7 +154,7 @@ class TextMixin(ABC):
         self.on_cpu = list(set(_on_cpu))
 
     def _check_uid(
-        self, dataset_dict: dict[RunningStage, Dataset], uid_name: Optional[str]
+        self, dataset_dict: dict[RunningStage, Dataset], uid_name: str | None
     ) -> dict[RunningStage, Dataset]:
         uid_generator = sequential_numbers()
         new_datasets = {}
@@ -187,7 +189,9 @@ class TextMixin(ABC):
             columns.append(self.MANDATORY_TARGET_NAME)
         return {k: v.with_format(columns=columns) for k, v in dataset_dict.items()}
 
-    def _set_attributes(self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase) -> None:
+    def _set_attributes(
+        self, dataset_dict: dict[RunningStage, Dataset], tokenizer: PreTrainedTokenizerBase | None
+    ) -> None:
         self._tokenizer = tokenizer
         self._train_data = dataset_dict.get(RunningStage.TRAIN)  # type: ignore
         self._validation_data = dataset_dict.get(RunningStage.VALIDATION)  # type: ignore
@@ -208,7 +212,7 @@ class IndexMixin:
             indices, distances = indices[:, 1:], distances[:, 1:]
         return indices, distances
 
-    def load_index(self, index_path: Union[str, Path], metadata_path: Union[str, Path]) -> None:
+    def load_index(self, index_path: str | Path, metadata_path: str | Path) -> None:
         meta: dict = srsly.read_json(metadata_path)  # type: ignore
         index = hb.Index(space=meta["metric"], dim=meta["dim"])
         index.load_index(str(index_path))

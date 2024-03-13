@@ -1,5 +1,3 @@
-from typing import Optional
-
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import Self
@@ -14,12 +12,12 @@ class ActivePandasDatastoreForSequenceClassification(SequenceClassificationMixin
     def from_datasets(
         cls,
         tokenizer: PreTrainedTokenizerBase,
-        uid_name: Optional[str] = None,
-        on_cpu: Optional[list[str]] = None,
-        seed: Optional[int] = 42,
-        train_dataset: Optional[Dataset] = None,
-        validation_dataset: Optional[Dataset] = None,
-        test_dataset: Optional[Dataset] = None,
+        uid_name: str | None = None,
+        on_cpu: list[str] | None = None,
+        seed: int | None = 42,
+        train_dataset: Dataset | None = None,
+        validation_dataset: Dataset | None = None,
+        test_dataset: Dataset | None = None,
     ) -> Self:
         obj = cls(seed)  # type: ignore
         obj = _from_datasets(
