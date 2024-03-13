@@ -239,7 +239,7 @@ class ProgressTracker:
         """Whether a stage is done."""
         return (
             self.get_batch_counter().max_reached() or self.current_stage == RunningStage.TRAIN and self.stop_training
-            # or (self.epoch_idx_tracker.remaining() <= 1 and self.gradient_accumulation_steps > self.train_batch_counter.remaining())
+            # or (self.epoch_idx_tracker.remaining() <= 1 and self.gradient_accumulation_steps > self.train_batch_counter.remaining())  # noqa: E501
         )
 
     @property
@@ -302,8 +302,8 @@ class ProgressTracker:
 
         # TODO: take a look at this
         # # last epoch is shorter if not enough batches to make an update ("drop last")
-        # if stage == RunningStage.TRAIN and self.gradient_accumulation_steps > 1 and self.epoch_idx_tracker.remaining() <= 1:
-        #     tracker.max = int(np.floor(tracker.max / self.gradient_accumulation_steps)) * self.gradient_accumulation_steps   # type: ignore
+        # if stage == RunningStage.TRAIN and self.gradient_accumulation_steps > 1 and self.epoch_idx_tracker.remaining() <= 1:  # noqa: E501
+        #     tracker.max = int(np.floor(tracker.max / self.gradient_accumulation_steps)) * self.gradient_accumulation_steps   # noqa: E501
 
         tracker.reset()
 

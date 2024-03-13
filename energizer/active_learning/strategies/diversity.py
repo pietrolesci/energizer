@@ -100,11 +100,3 @@ class PoolBasedEmbeddingClustering(ClusteringMixin, DiversityBasedStrategyWithPo
     def pool_step(self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None) -> torch.Tensor:
         """This needs to return the embedded batch."""
         ...
-
-
-# class GreedyCoreset(DiversityBasedStrategyWithPool):
-#     def __init__(self, *args, distance_metric: Literal["euclidean", "cosine"], normalize: bool = True, batch_size: int = 100, **kwargs) -> None:
-#         super().__init__(*args, **kwargs)
-#         self.distance_metric = distance_metric
-#         self.normalize = normalize
-#         self.batch_size = batch_size

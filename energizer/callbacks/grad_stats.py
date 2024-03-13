@@ -177,7 +177,7 @@ class ParameterUpdateStats(GradNorm):
 
     def on_after_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
         # assert len(current_params) == len(previous_params), ValueError(
-        #     f"Current and previous parameter lists are not the same: {len(current_params)=} and {len(previous_params)=}"
+        #     f"Current and previous parameter lists are not the same: {len(current_params)=} and {len(previous_params)=}"  # noqa: E501
         # )
 
         current_params = (
