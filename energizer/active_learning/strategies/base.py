@@ -258,7 +258,7 @@ class ActiveEstimator(Estimator):
 
         # configuration test
         test_loader = datastore.test_loader()
-        limit_test_batches = test_kwargs.get("limit_test_batches", None)
+        limit_test_batches = test_kwargs.get("limit_test_batches")
         self.tracker.setup_eval(RunningStage.TEST, num_batches=len(test_loader or []), limit_batches=limit_test_batches)
         test_loader = self.configure_dataloader(test_loader)
 
