@@ -90,35 +90,3 @@ def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, *args
         print(f"Kmeans++ returned duplicates. {X.shape=} {num_clusters=}")
 
     return unique_ids
-
-
-# def kmeans_pp_sampling(X: np.ndarray, num_clusters: int, rng: RandomState, normalize: bool = True) -> List[int]:
-#     """kmeans++ seeding algorithm.
-
-#     k-means++ seeding selects centroids by iteratively sampling points in proportion to their squared
-#     distances from the nearest centroid that has already been chosen, which, like a k-DPP, tends to
-#     select a diverse batch of high-magnitude samples.
-
-#     Note: DPP is the determinantal point process.
-
-#     Source: https://github.com/forest-snow/alps/blob/3c7ef2c98249fc975a897b27f275695f97d5b7a9/src/cluster.py#L14
-#     """
-
-#     if normalize:
-#         X = StandardScaler().fit_transform(X)
-
-#     # randomly choose first center
-#     centers_ids = [rng.choice(X.shape[0])]
-
-#     # Choose center candidates by sampling with probability proportional
-#     # to the squared distance to the closest existing center
-#     for _ in range(num_clusters - 1):
-#         dist = cdist(X, X[centers_ids, :], metric="euclidean").min(axis=1) ** 2
-#         total = dist.sum()
-#         # if total > 0:
-#         print(len(centers_ids), dist.shape, dist)
-#         prob = dist / total
-#         new_center_id = rng.choice(X.shape[0], p=prob)
-#         centers_ids.append(new_center_id)
-
-#     return centers_ids

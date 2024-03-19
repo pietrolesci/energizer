@@ -8,7 +8,7 @@ import torch_optimizer
 import transformers
 from transformers.optimization import TYPE_TO_SCHEDULER_FUNCTION
 
-from energizer.utilities import camel_to_snake
+from energizer.utilities import acquisition_functions, camel_to_snake, clustering
 
 
 class Registry(dict):
@@ -58,8 +58,13 @@ OPTIMIZER_REGISTRY.register_classes(torch_optimizer, torch.optim.Optimizer)
 OPTIMIZER_REGISTRY.register_classes(transformers.optimization, torch.optim.Optimizer, override=True)
 OPTIMIZER_REGISTRY.register_classes(torch.optim, torch.optim.Optimizer, override=True)
 
-
 # add trasformers convenience functions
 SCHEDULER_REGISTRY = Registry()
 SCHEDULER_REGISTRY.register_classes(torch.optim.lr_scheduler, torch.optim.lr_scheduler._LRScheduler)
 SCHEDULER_REGISTRY.update({v.__name__[4:]: v for v in TYPE_TO_SCHEDULER_FUNCTION.values()})
+
+SCORING_FUNCTIONS = Registry()
+SCORING_FUNCTIONS.register_functions(acquisition_functions)
+
+CLUSTERING_FUNCTIONS = Registry()
+CLUSTERING_FUNCTIONS.register_functions(clustering, filter_fn=lambda k, _: not k.startswith("_"))
