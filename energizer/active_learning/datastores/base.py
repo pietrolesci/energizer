@@ -16,20 +16,16 @@ from energizer.utilities import sample
 
 class ActiveLearningMixin(ABC):
     @abstractmethod
-    def pool_size(self, round: int | None = None) -> int:
-        ...
+    def pool_size(self, round: int | None = None) -> int: ...
 
     @abstractmethod
-    def labelled_size(self, round: int | None = None) -> int:
-        ...
+    def labelled_size(self, round: int | None = None) -> int: ...
 
     @abstractmethod
-    def query_size(self, round: int | None = None) -> int:
-        ...
+    def query_size(self, round: int | None = None) -> int: ...
 
     @abstractmethod
-    def total_rounds(self) -> int:
-        ...
+    def total_rounds(self) -> int: ...
 
     @abstractmethod
     def label(
@@ -38,8 +34,7 @@ class ActiveLearningMixin(ABC):
         round: int,
         validation_perc: float | None = None,
         validation_sampling: Literal["uniform", "stratified"] | None = "uniform",
-    ) -> int:
-        ...
+    ) -> int: ...
 
     @abstractmethod
     def sample_from_pool(
@@ -49,35 +44,28 @@ class ActiveLearningMixin(ABC):
         random_state: RandomState | None = None,
         with_indices: list[int] | None = None,
         **kwargs,
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
     @abstractmethod
-    def save_labelled_dataset(self, save_dir: str | Path) -> None:
-        ...
+    def save_labelled_dataset(self, save_dir: str | Path) -> None: ...
 
     def pool_loader(self, *args, **kwargs) -> DataLoader | None:
         return self.get_loader(RunningStage.POOL, *args, **kwargs)  # type: ignore
 
     @abstractmethod
-    def reset(self) -> None:
-        ...
+    def reset(self) -> None: ...
 
     @abstractmethod
-    def get_train_ids(self, round: int | None = None) -> list[int]:
-        ...
+    def get_train_ids(self, round: int | None = None) -> list[int]: ...
 
     @abstractmethod
-    def get_validation_ids(self, round: int | None = None) -> list[int]:
-        ...
+    def get_validation_ids(self, round: int | None = None) -> list[int]: ...
 
     @abstractmethod
-    def get_pool_ids(self, round: int | None = None) -> list[int]:
-        ...
+    def get_pool_ids(self, round: int | None = None) -> list[int]: ...
 
 
-class ActiveDatastore(ActiveLearningMixin, Datastore):
-    ...
+class ActiveDatastore(ActiveLearningMixin, Datastore): ...
 
 
 class ActivePandasDatastore(ActiveLearningMixin, PandasDatastore):
@@ -249,8 +237,7 @@ class ActiveIndexMixin(IndexMixin):
         raise ValueError("Use `get_{train/pool}_embeddings` methods instead.")
 
 
-class ActiveDatastoreWithIndex(ActiveIndexMixin, ActiveDatastore):
-    ...
+class ActiveDatastoreWithIndex(ActiveIndexMixin, ActiveDatastore): ...
 
 
 class ActivePandasDatastoreWithIndex(ActiveIndexMixin, ActivePandasDatastore):

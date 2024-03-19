@@ -156,8 +156,7 @@ class SequenceClassificationMixin(TextMixin):
         )
 
 
-class DatastoreForSequenceClassification(SequenceClassificationMixin, Datastore):
-    ...
+class DatastoreForSequenceClassification(SequenceClassificationMixin, Datastore): ...
 
 
 class PandasDatastoreForSequenceClassification(SequenceClassificationMixin, PandasDatastoreWithIndex):

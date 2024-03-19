@@ -30,8 +30,7 @@ class Model(ABC):
         return ""
 
     @abstractmethod
-    def configure_model(self, *args, **kwargs) -> None:
-        ...
+    def configure_model(self, *args, **kwargs) -> None: ...
 
     @property
     def is_configured(self) -> bool:

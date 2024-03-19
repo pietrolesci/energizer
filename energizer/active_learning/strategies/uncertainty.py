@@ -5,9 +5,9 @@ from numpy.random import RandomState
 from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDatastore
-from energizer.active_learning.registries import SCORING_FUNCTIONS
 from energizer.active_learning.strategies.base import ActiveLearningStrategy, PoolBasedMixin
 from energizer.enums import OutputKeys, SpecialKeys
+from energizer.registries import SCORING_FUNCTIONS
 
 
 class UncertaintyBasedStrategy(PoolBasedMixin, ActiveLearningStrategy):

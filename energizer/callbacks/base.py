@@ -23,18 +23,17 @@ class Callback:
     Fit
     """
 
-    def on_fit_start(self, estimator: Estimator, model: _FabricModule) -> None:
-        ...
+    def on_fit_start(self, estimator: Estimator, model: _FabricModule) -> None: ...
 
-    def on_fit_end(self, estimator: Estimator, model: _FabricModule, output: list[FIT_OUTPUT]) -> None:
-        ...
+    def on_fit_end(self, estimator: Estimator, model: _FabricModule, output: list[FIT_OUTPUT]) -> None: ...
 
     """
     Epoch
     """
 
-    def on_epoch_start(self, stage: str | RunningStage, estimator: Estimator, model: _FabricModule, **kwargs) -> None:
-        ...
+    def on_epoch_start(
+        self, stage: str | RunningStage, estimator: Estimator, model: _FabricModule, **kwargs
+    ) -> None: ...
 
     def on_train_epoch_start(self, estimator: Estimator, model: _FabricModule, optimizer: Optimizer) -> None:
         return self.on_epoch_start(RunningStage.TRAIN, estimator, model, optimizer=optimizer)
@@ -52,8 +51,7 @@ class Callback:
         model: _FabricModule,
         output: EPOCH_OUTPUT,
         metrics: METRIC,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def on_train_epoch_end(
         self, estimator: Estimator, model: _FabricModule, output: EPOCH_OUTPUT, metrics: METRIC
@@ -82,8 +80,7 @@ class Callback:
         batch: Any,
         batch_idx: int,
         **kwargs,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def on_train_batch_start(
         self, estimator: Estimator, model: _FabricModule, batch: Any, batch_idx: int, optimizer: Optimizer
@@ -104,8 +101,7 @@ class Callback:
         output: BATCH_OUTPUT,
         batch: Any,
         batch_idx: int,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def on_train_batch_end(
         self, estimator: Estimator, model: _FabricModule, output: BATCH_OUTPUT, batch: Any, batch_idx: int
@@ -122,21 +118,17 @@ class Callback:
     ) -> None:
         return self.on_batch_end(RunningStage.TEST, estimator, model, output, batch, batch_idx)
 
-    def on_before_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
-        ...
+    def on_before_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None: ...
 
-    def on_after_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None:
-        ...
+    def on_after_optimizer(self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer) -> None: ...
 
     def on_before_scheduler(
         self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer, scheduler: _LRScheduler
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def on_after_scheduler(
         self, estimator: Estimator, model: _FabricModule, optimizer: _FabricOptimizer, scheduler: _LRScheduler
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class CallbackWithMonitor(Callback):

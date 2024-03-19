@@ -52,8 +52,7 @@ class BaseSubsetStrategy(ABC, ActiveLearningStrategy):
     @abstractmethod
     def select_pool_subset(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
     def __getattr__(self, attr: str) -> Any:
         if attr not in self.__dict__:
@@ -117,18 +116,15 @@ class BaseSubsetWithSearchStrategy(BaseSubsetStrategy):
     @abstractmethod
     def select_search_query(
         self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
     @abstractmethod
-    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: list[int]) -> np.ndarray:
-        ...
+    def get_query_embeddings(self, datastore: ActiveDatastoreWithIndex, search_query_ids: list[int]) -> np.ndarray: ...
 
     @abstractmethod
     def get_subpool_ids_from_search_results(
         self, candidate_df: pd.DataFrame, datastore: ActiveDatastoreWithIndex
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
 
 class SEALSStrategy(BaseSubsetWithSearchStrategy):

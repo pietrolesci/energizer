@@ -8,12 +8,12 @@ from numpy.random import RandomState
 from sklearn.utils import check_random_state
 from torch.nn.functional import one_hot
 
-from energizer.active_learning.clustering_utilities import kmeans_pp_sampling
 from energizer.active_learning.datastores.base import ActiveDatastore, ActiveDatastoreWithIndex
-from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
 from energizer.active_learning.strategies.diversity import DiversityBasedStrategy, DiversityBasedStrategyWithPool
 from energizer.active_learning.strategies.uncertainty import UncertaintyBasedStrategy
+from energizer.registries import CLUSTERING_FUNCTIONS
 from energizer.types import METRIC
+from energizer.utilities.clustering import kmeans_pp_sampling
 
 
 class Tyrogue(DiversityBasedStrategy, UncertaintyBasedStrategy):

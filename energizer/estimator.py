@@ -195,12 +195,13 @@ class Estimator:
         limit_validation_batches: int | None = None,
     ) -> list[FIT_OUTPUT]:
         """Entry point for model training.
-
-        Calls `fit -> run_fit -> run_epoch -> run_training_step`.
-
         Data ordering: at each epoch the loader will have different order.
         """
         # self.fabric.launch()  # NOTE: do not support distributed yet
+
+        # setup dataloaders
+        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
+        _validation_loader = self.configure_dataloader(validation_loader)
 
         # setup tracking
         self.tracker.setup(
@@ -211,17 +212,13 @@ class Estimator:
             min_epochs=min_epochs,
             max_steps=max_steps,
             min_steps=min_steps,
-            gradient_accumulation_steps=gradient_accumulation_steps,
             validation_freq=validation_freq,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
         )
-
-        # setup dataloaders
-        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
-        _validation_loader = self.configure_dataloader(validation_loader)
 
         # setup optimization arguments
         _optim_kwargs = (
@@ -324,12 +321,12 @@ class Estimator:
         train_out, validation_out = [], []
         iterable = enumerate(train_loader)
         while not self.tracker.is_done:
+            # TRACKING: here global_step == batch_idx
             batch_idx, batch = next(iterable)
 
             # put batch on correct device
             batch = self.transfer_to_device(batch)
 
-            # here global_step == batch_idx
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
             # run model on batch
@@ -337,7 +334,7 @@ class Estimator:
                 model, optimizer, scheduler, optimization_args, batch, batch_idx, metrics
             )
 
-            # here globa_step == batch_idx + 1
+            # TRACKING: here global_step == batch_idx + 1
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
 
             # record output
@@ -350,9 +347,8 @@ class Estimator:
                 if out is not None:
                     validation_out.append(out)
 
-            # update progress tracker
-            # here train_batch_counter.current == batch_idx + 1
-            self.tracker.increment()
+            # TRACKING: here train_batch_counter.current == batch_idx + 1
+            self.tracker.increment_batch_counter()
 
         # method to possibly aggregate
         train_out = self.train_epoch_end(train_out, metrics)
@@ -420,7 +416,7 @@ class Estimator:
                 self.callback("on_after_scheduler", model=model, optimizer=optimizer, scheduler=scheduler)
 
             # update tracker
-            self.tracker.increment_step()
+            self.tracker.increment_step_counter()
 
         return output
 
@@ -463,7 +459,7 @@ class Estimator:
                     output.append(move_to_cpu(batch_out))
 
                 # update progress tracker
-                self.tracker.increment()
+                self.tracker.increment_batch_counter()
 
         # method to possibly aggregate
         output = getattr(self, f"{stage}_epoch_end")(output, metrics)

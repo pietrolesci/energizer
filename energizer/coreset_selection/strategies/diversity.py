@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import numpy as np
@@ -6,14 +7,13 @@ from lightning.fabric.wrappers import _FabricModule
 from numpy.random import RandomState
 from sklearn.utils.validation import check_random_state
 
-from energizer.active_learning.datastores.base import ActiveDatastore
-from energizer.active_learning.strategies.base import ActiveLearningStrategy, PoolBasedMixin
+from energizer.coreset_selection.strategies.base import ActiveLearningStrategy, PoolBasedMixin
 from energizer.enums import OutputKeys, SpecialKeys
 from energizer.registries import CLUSTERING_FUNCTIONS
 from energizer.types import METRIC
 
 
-class DiversityBasedStrategy(ActiveLearningStrategy):
+class DiversityBasedStrategy(ABC, ActiveLearningStrategy):
     """This does not run on pool.
 
     Here for now, but usually even diversity-based require running on the pool.
@@ -26,7 +26,7 @@ class DiversityBasedStrategy(ActiveLearningStrategy):
         self.seed = seed
         self.rng = check_random_state(seed)  # reproducibility
 
-    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
+    def run_query(self, model: _FabricModule, datastore: Datastore, query_size: int, **kwargs) -> list[int]:
         embeddings_and_ids = self.get_embeddings_and_ids(model, datastore, query_size, **kwargs)
         if embeddings_and_ids is None:
             return []
@@ -34,29 +34,30 @@ class DiversityBasedStrategy(ActiveLearningStrategy):
             embeddings, ids = embeddings_and_ids
         return self.select_from_embeddings(model, datastore, query_size, embeddings, ids, **kwargs)
 
+    @abstractmethod
     def get_embeddings_and_ids(
-        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
+        self, model: _FabricModule, datastore: Datastore, query_size: int, **kwargs
     ) -> tuple[np.ndarray, np.ndarray] | None:
         # NOTE: Always need the ids because you might not return the entire pool
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDatastore,
+        datastore: Datastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
         **kwargs,
-    ) -> list[int]:
-        raise NotImplementedError
+    ) -> list[int]: ...
 
 
 class DiversityBasedStrategyWithPool(PoolBasedMixin, DiversityBasedStrategy):
     POOL_OUTPUT_KEY: OutputKeys = OutputKeys.EMBEDDINGS
 
     def get_embeddings_and_ids(
-        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs
+        self, model: _FabricModule, datastore: Datastore, query_size: int, **kwargs
     ) -> tuple[np.ndarray, np.ndarray] | None:
         pool_loader = self.get_pool_loader(datastore, **kwargs)
         if pool_loader is not None and len(pool_loader.dataset or []) > query_size:  # type: ignore
@@ -78,7 +79,7 @@ class ClusteringMixin:
     def select_from_embeddings(
         self,
         model: _FabricModule,
-        datastore: ActiveDatastore,
+        datastore: Datastore,
         query_size: int,
         embeddings: np.ndarray,
         ids: np.ndarray,
@@ -92,6 +93,7 @@ class EmbeddingClustering(ClusteringMixin, DiversityBasedStrategy): ...
 
 
 class PoolBasedEmbeddingClustering(ClusteringMixin, DiversityBasedStrategyWithPool):
+    @abstractmethod
     def pool_step(self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None) -> torch.Tensor:
         """This needs to return the embedded batch."""
-        raise NotImplementedError
+        ...

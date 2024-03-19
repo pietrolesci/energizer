@@ -28,7 +28,7 @@ class ActiveLearningStrategy(Estimator):
     Active learning loop
     """
 
-    def active_fit(
+    def fit(
         self,
         datastore: ActiveDatastore,
         query_size: int,
@@ -69,7 +69,7 @@ class ActiveLearningStrategy(Estimator):
             validation_perc=validation_perc,
         )
 
-        return self.run_active_fit(
+        return self.run_active_learning(
             datastore,
             reinit_model,
             model_cache_dir,
@@ -91,7 +91,7 @@ class ActiveLearningStrategy(Estimator):
             label_kwargs=dict(validation_perc=validation_perc, validation_sampling=validation_sampling),
         )
 
-    def run_active_fit(
+    def run_active_learning(
         self, datastore: ActiveDatastore, reinit_model: bool, model_cache_dir: str | Path, **kwargs
     ) -> Any:
         if reinit_model:

@@ -98,8 +98,7 @@ class Seq2SeqMixin(TextMixin):
         )
 
 
-class DatastoreForSeq2Seq(Seq2SeqMixin, Datastore):
-    ...
+class DatastoreForSeq2Seq(Seq2SeqMixin, Datastore): ...
 
 
 class PandasDatastoreForSeq2Seq(Seq2SeqMixin, PandasDatastoreWithIndex):

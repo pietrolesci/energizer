@@ -130,8 +130,7 @@ class LanguageModellingMixin(TextMixin):
     #         return self._test_data
 
 
-class DatastoreForLanguageModelling(LanguageModellingMixin, Datastore):
-    ...
+class DatastoreForLanguageModelling(LanguageModellingMixin, Datastore): ...
 
 
 class PandasDatastoreForLanguageModelling(LanguageModellingMixin, PandasDatastoreWithIndex):

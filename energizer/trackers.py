@@ -106,8 +106,6 @@ class ProgressTracker:
         self._xepoch_set: bool = False
 
     def setup(self, stage: str | RunningStage, log_interval: int, enable_progress_bar: bool, **kwargs) -> None:
-        """Do all the math here and create progress bars for every stage."""
-
         self.log_interval = log_interval
         self.enable_progress_bar = enable_progress_bar
 
@@ -338,7 +336,7 @@ class ProgressTracker:
         self.train_batch_counter.close_progress_bar()
         self.validation_batch_counter.close_progress_bar()
 
-    def increment(self) -> None:
+    def increment_batch_counter(self) -> None:
         """Increment stage trackers."""
         self.get_batch_counter().increment()
 
@@ -346,7 +344,7 @@ class ProgressTracker:
         self.epoch_idx_tracker.increment()
         self._last_epoch_num_steps += self.global_step
 
-    def increment_step(self) -> None:
+    def increment_step_counter(self) -> None:
         self.step_counter.increment()
         if self.step_counter.max_reached():
             self.stop_training = True

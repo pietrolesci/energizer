@@ -24,8 +24,7 @@ class TextMixin(ABC):
     on_cpu: list[str]
 
     @abstractmethod
-    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None:
-        ...
+    def get_collate_fn(self, stage: RunningStage | None = None, show_batch: bool = False) -> Callable | None: ...
 
     @property
     def tokenizer(self) -> PreTrainedTokenizerBase | None:
