@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,7 +9,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.active_learning.trackers import ActiveProgressTracker
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
-from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
+from energizer.estimator import DEFAULT_OPTIM, DEFAULT_SCHED, Estimator, OptimizerArgs, SchedulerArgs
 from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
 from energizer.utilities import ld_to_dl
 
@@ -45,11 +44,8 @@ class ActiveLearningStrategy(Estimator):
         min_steps: int | None = None,
         validation_freq: str | None = "1:epoch",
         gradient_accumulation_steps: int | None = None,
-        learning_rate: float | None = None,
-        optimizer: str | None = None,
-        optimizer_kwargs: dict | OptimizationArgs | None = None,
-        scheduler: str | None = None,
-        scheduler_kwargs: dict | SchedulerArgs | None = None,
+        optimizer_kwargs: OptimizerArgs | dict | None = DEFAULT_OPTIM,
+        scheduler_kwargs: SchedulerArgs | dict | None = DEFAULT_SCHED,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
         limit_train_batches: int | None = None,
@@ -61,7 +57,7 @@ class ActiveLearningStrategy(Estimator):
             reinit_model and model_cache_dir
         ), "If `reinit_model` is True then you must specify `model_cache_dir`."
 
-        # configure progress tracking
+        # setup tracking
         self.tracker.setup_active(
             log_interval=log_interval,
             enable_progress_bar=enable_progress_bar,
@@ -79,7 +75,7 @@ class ActiveLearningStrategy(Estimator):
             model_cache_dir,
             query_size=query_size,
             replay=False,
-            fit_loop_kwargs=dict(
+            fit_kwargs=dict(
                 max_epochs=max_epochs,
                 min_epochs=min_epochs,
                 max_steps=max_steps,
@@ -89,13 +85,7 @@ class ActiveLearningStrategy(Estimator):
                 limit_train_batches=limit_train_batches,
                 limit_validation_batches=limit_validation_batches,
             ),
-            fit_opt_kwargs=dict(
-                learning_rate=learning_rate,
-                optimizer=optimizer,
-                optimizer_kwargs=optimizer_kwargs,
-                scheduler=scheduler,
-                scheduler_kwargs=scheduler_kwargs,
-            ),
+            fit_optim_kwargs=dict(optimizer_kwargs=optimizer_kwargs, scheduler_kwargs=scheduler_kwargs),
             test_kwargs=dict(limit_test_batches=limit_test_batches),
             query_kwargs=dict(limit_pool_batches=limit_pool_batches),
             label_kwargs=dict(validation_perc=validation_perc, validation_sampling=validation_sampling),
@@ -126,15 +116,12 @@ class ActiveLearningStrategy(Estimator):
 
             self.tracker.increment_round()
             self.tracker.increment_budget()
-            # ================= #
 
             # check
             if not self.tracker.is_last_round:
                 datastore_budget = datastore.labelled_size(self.tracker.global_round)
                 tracker_budget = self.tracker.budget_tracker.current
                 assert datastore_budget == tracker_budget, f"{datastore_budget=} and {tracker_budget=}"
-
-            # print(f"END -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
 
         output = self.active_fit_end(datastore, output)
 
@@ -149,34 +136,35 @@ class ActiveLearningStrategy(Estimator):
         datastore: ActiveDatastore,
         query_size: int,
         replay: bool,
-        fit_loop_kwargs: dict,
-        fit_opt_kwargs: dict,
+        fit_kwargs: dict,
+        fit_optim_kwargs: dict,
         test_kwargs: dict,
         query_kwargs: dict,
         label_kwargs: dict,
     ) -> ROUND_OUTPUT:
-        model, optimizer, scheduler, train_loader, validation_loader, test_loader = self._setup_round(
-            datastore, replay, fit_loop_kwargs, fit_opt_kwargs, test_kwargs
+        _model, _optim, _scheduler, _optim_kwargs, _train_loader, _validation_loader, _test_loader = self._setup_round(
+            datastore, replay, fit_kwargs, fit_optim_kwargs, test_kwargs
         )
 
         output = {}
 
         # ============== FIT AND TEST ============== #
-        if train_loader is not None:
-            output[RunningStage.TRAIN] = self.run_fit(model, optimizer, scheduler, train_loader, validation_loader)
+        if _train_loader is not None:
+            output[RunningStage.TRAIN] = self.run_fit(
+                _model, _optim, _scheduler, _optim_kwargs, _train_loader, _validation_loader
+            )
 
-        if test_loader is not None:
+        if _test_loader is not None:
             # print(f"TEST -- Round: {self.tracker.round_tracker}; Budget: {self.tracker.budget_tracker}")
-            output[RunningStage.TEST] = self.run_evaluation(model, test_loader, RunningStage.TEST)
+            output[RunningStage.TEST] = self.run_evaluation(_model, _test_loader, RunningStage.TEST)
 
         # ============== QUERY AND LABEL ==============#
-
         n_labelled = 0
         if (
             not replay  # do not annotate in replay
             and not self.tracker.is_last_round  # last round is used only to test
         ):
-            n_labelled = self.run_annotation(model, datastore, query_size, query_kwargs, label_kwargs)
+            n_labelled = self.run_annotation(_model, datastore, query_size, query_kwargs, label_kwargs)
         elif replay:
             n_labelled = datastore.query_size(self.tracker.global_round)
 
@@ -201,13 +189,11 @@ class ActiveLearningStrategy(Estimator):
 
         self.callback("on_query_end", model=model, datastore=datastore, indices=indices)
 
-        # ============= #
-
-        # if no indices are returned, no need to annotated
+        # === LABEL === #
+        # if no indices are returned, no need to annotate
         if len(indices) == 0:
             return 0
 
-        # === LABEL === #
         self.callback("on_label_start", datastore=datastore)
 
         n_labelled = datastore.label(
@@ -217,7 +203,6 @@ class ActiveLearningStrategy(Estimator):
         )
 
         self.callback("on_label_end", datastore=datastore)
-        # ============= #
 
         return n_labelled
 
@@ -231,11 +216,12 @@ class ActiveLearningStrategy(Estimator):
         return output
 
     def _setup_round(
-        self, datastore: ActiveDatastore, replay: bool, fit_loop_kwargs: dict, fit_opt_kwargs: dict, test_kwargs: dict
+        self, datastore: ActiveDatastore, replay: bool, fit_kwargs: dict, fit_optim_kwargs: dict, test_kwargs: dict
     ) -> tuple[
         _FabricModule,
         _FabricOptimizer,
         _LRScheduler | None,
+        OptimizerArgs | None,
         _FabricDataLoader | None,
         _FabricDataLoader | None,
         _FabricDataLoader | None,
@@ -244,28 +230,40 @@ class ActiveLearningStrategy(Estimator):
 
         num_round = self.tracker.global_round if replay else None
 
-        # configuration fit
-        train_loader = datastore.train_loader(round=num_round)
-        validation_loader = datastore.validation_loader(round=num_round)
+        # setup dataloaders
+        _train_loader: _FabricDataLoader = self.configure_dataloader(datastore.train_loader(round=num_round))  # type: ignore
+        _validation_loader = self.configure_dataloader(datastore.validation_loader(round=num_round))
+        _test_loader = self.configure_dataloader(datastore.test_loader())
+
+        # setup tracking
         self.tracker.setup_fit(
-            num_train_batches=len(train_loader or []),
-            num_validation_batches=len(validation_loader or []),
-            **fit_loop_kwargs,
+            num_train_batches=len(_train_loader or []),
+            num_validation_batches=len(_validation_loader or []),
+            **fit_kwargs,
         )
-        model, optimizer, scheduler, train_loader, validation_loader = self._setup_fit(
-            train_loader, validation_loader, **fit_opt_kwargs
+        self.tracker.setup_eval(
+            RunningStage.TEST, num_batches=len(_test_loader or []), limit_batches=test_kwargs["limit_test_batches"]
         )
 
-        # configuration test
-        test_loader = datastore.test_loader()
-        limit_test_batches = test_kwargs.get("limit_test_batches")
-        self.tracker.setup_eval(RunningStage.TEST, num_batches=len(test_loader or []), limit_batches=limit_test_batches)
-        test_loader = self.configure_dataloader(test_loader)
+        # setup optimization arguments
+        _optim_kwargs = fit_optim_kwargs["optimizer_kwargs"]
+        _optim_kwargs = (
+            _optim_kwargs if isinstance(_optim_kwargs, OptimizerArgs | None) else OptimizerArgs(**_optim_kwargs)
+        )
+        _sched_kwargs = fit_optim_kwargs["scheduler_kwargs"]
+        _sched_kwargs = (
+            _sched_kwargs if isinstance(_sched_kwargs, SchedulerArgs | None) else SchedulerArgs(**_sched_kwargs)
+        )
 
-        return model, optimizer, scheduler, train_loader, validation_loader, test_loader
+        # setup optimization
+        _optim = self.configure_optimizer(_optim_kwargs)
+        _scheduler = self.configure_scheduler(_optim, _sched_kwargs)
+        _model, _optim = self.fabric.setup(self.model_instance, _optim)  # type: ignore
+
+        return _model, _optim, _scheduler, _optim_kwargs, _train_loader, _validation_loader, _test_loader
 
 
-class PoolBasedMixin(ABC):
+class PoolBasedMixin:
     """Allows strategy to use the pool and/or the training set during the query process."""
 
     POOL_OUTPUT_KEY: OutputKeys
@@ -290,11 +288,10 @@ class PoolBasedMixin(ABC):
         # enforce that we always return a dict here
         return {self.POOL_OUTPUT_KEY: pool_out, SpecialKeys.ID: ids}
 
-    @abstractmethod
     def pool_step(
         self, model: _FabricModule, batch: Any, batch_idx: int, metrics: METRIC | None = None
     ) -> torch.Tensor:
-        ...
+        raise NotImplementedError
 
     def pool_epoch_end(self, output: list[dict], metrics: METRIC | None) -> list[dict]:
         return output

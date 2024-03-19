@@ -202,10 +202,6 @@ class Estimator:
         """
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
-        # setup dataloaders
-        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
-        _validation_loader = self.configure_dataloader(validation_loader)
-
         # setup tracking
         self.tracker.setup(
             stage=RunningStage.TRAIN,
@@ -222,6 +218,10 @@ class Estimator:
             limit_train_batches=limit_train_batches,
             limit_validation_batches=limit_validation_batches,
         )
+
+        # setup dataloaders
+        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
+        _validation_loader = self.configure_dataloader(validation_loader)
 
         # setup optimization arguments
         _optim_kwargs = (
