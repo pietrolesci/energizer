@@ -219,7 +219,9 @@ class Estimator:
         _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
         _validation_loader = self.configure_dataloader(validation_loader)
 
-        _opt_args = self.configure_opt_args(learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs)
+        _opt_args = self.configure_optimization_args(
+            learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs
+        )
         _optimizer = self.configure_optimizer(_opt_args)
         _scheduler = self.configure_scheduler(_optimizer, _opt_args)
 
@@ -506,7 +508,7 @@ class Estimator:
             with self.fabric.init_module():
                 self.model.configure_model()
 
-    def configure_opt_args(
+    def configure_optimization_args(
         self,
         learning_rate: float | None = None,
         optimizer: str | None = None,
@@ -694,28 +696,3 @@ class Estimator:
                     total_numel.append(param.numel())
 
         return sum(total_numel)
-
-    """
-    Private methods
-    """
-
-    def _setup_fit(
-        self,
-        train_loader: DataLoader | None,
-        validation_loader: DataLoader | None,
-        learning_rate: float | None,
-        optimizer: str | None,
-        optimizer_kwargs: dict | OptimizationArgs | None,
-        scheduler: str | None,
-        scheduler_kwargs: dict | SchedulerArgs | None,
-    ) -> tuple[_FabricModule, _FabricOptimizer, _LRScheduler | None, _FabricDataLoader, _FabricDataLoader | None]:
-        # configuration
-        _train_loader = self.configure_dataloader(train_loader)
-        _validation_loader = self.configure_dataloader(validation_loader)
-
-        self.configure_opt_args(learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs)
-        _optimizer = self.configure_optimizer()
-        _scheduler = self.configure_scheduler(_optimizer)
-        model, _optimizer = self.fabric.setup(self.model_instance, _optimizer)  # type: ignore
-
-        return model, _optimizer, _scheduler, _train_loader, _validation_loader  # type: ignore
