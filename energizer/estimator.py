@@ -99,6 +99,14 @@ class Estimator:
     @property
     def model(self) -> Model:
         return self._model
+    
+    @property
+    def model_instance(self) -> torch.nn.Module:
+        return self.model.model_instance
+
+    @property
+    def model_summary(self) -> str:
+        return self.model.summary
 
     @property
     def tracker(self) -> ProgressTracker:
@@ -144,22 +152,13 @@ class Estimator:
     @property
     def dtypes(self) -> set[str]:
         # need to setup for changes to take effect
-        model = self.fabric.setup(self.model.model_instance.model_instance)
+        model = self.fabric.setup(self.model_instance.model_instance)
         return {str(p.dtype) for p in model.parameters()}
 
     @property
     def loggers(self) -> list[Logger]:
         """Returns all loggers passed to Fabric."""
         return self.fabric.loggers
-
-    @property
-    def logger(self) -> Logger:
-        """Returns the first logger in the list passed to Fabric, which is considered the main logger."""
-        return self.fabric.logger
-
-    @property
-    def model_summary(self) -> str:
-        return self.model.summary
 
     @property
     def is_compiled(self) -> bool:
@@ -248,7 +247,7 @@ class Estimator:
 
         # configuration
         _eval_loader = self.configure_dataloader(loader)
-        model = self.fabric.setup(self.model.model_instance)  # type: ignore
+        model = self.fabric.setup(self.model_instance)  # type: ignore
 
         return self.run_evaluation(model, _eval_loader, RunningStage.TEST)  # type: ignore
 
@@ -554,7 +553,7 @@ class Estimator:
                 {
                     "params": [
                         p
-                        for n, p in self.model.model_instance.named_parameters()
+                        for n, p in self.model_instance.named_parameters()
                         if not any(nd in n for nd in opt_kw.no_decay) and p.requires_grad
                     ],
                     "weight_decay": opt_kw.weight_decay,
@@ -562,14 +561,14 @@ class Estimator:
                 {
                     "params": [
                         p
-                        for n, p in self.model.model_instance.named_parameters()
+                        for n, p in self.model_instance.named_parameters()
                         if any(nd in n for nd in opt_kw.no_decay) and p.requires_grad
                     ],
                     "weight_decay": 0.0,
                 },
             ]
         else:
-            params = filter(lambda p: p.requires_grad, self.model.model_instance.parameters())
+            params = filter(lambda p: p.requires_grad, self.model_instance.parameters())
 
         return OPTIMIZER_REGISTRY[opt_kw.name](params, lr=opt_kw.lr, **opt_kw.init_kwargs)  # type:ignore
 
@@ -618,11 +617,11 @@ class Estimator:
     def save_state_dict(self, cache_dir: str | Path, name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
-        self.fabric.save(state=self.model.model_instance.state_dict(), path=cache_dir / name)
+        self.fabric.save(state=self.model_instance.state_dict(), path=cache_dir / name)
 
     def load_state_dict(self, cache_dir: str | Path, name: str = "state_dict.pt", **kwargs) -> None:
         cache_dir = Path(cache_dir)
-        self.model.model_instance.load_state_dict(self.fabric.load(cache_dir / name))
+        self.model_instance.load_state_dict(self.fabric.load(cache_dir / name))
 
     def callback(self, hook: str, *args, **kwargs) -> Any | None:
         # if estimator has the method
@@ -649,10 +648,10 @@ class Estimator:
         set_deterministic(deterministic)
 
     def set_eval_mode(self) -> None:
-        self.model.model_instance.eval()
+        self.model_instance.eval()
 
     def set_train_mode(self, mode: bool = True) -> None:
-        self.model.model_instance.train(mode)
+        self.model_instance.train(mode)
 
     def num_parameters(self, only_trainable: bool = False, exclude_embeddings: bool = False) -> int:
         """Get number of (optionally, trainable or non-embeddings) parameters in the module.
@@ -673,16 +672,16 @@ class Estimator:
         if exclude_embeddings:
             embedding_param_names = [
                 f"{name}.weight"
-                for name, module_type in self.model.model_instance.named_modules()
+                for name, module_type in self.model_instance.named_modules()
                 if isinstance(module_type, torch.nn.Embedding)
             ]
             total_parameters = [
                 parameter
-                for name, parameter in self.model.model_instance.named_parameters()
+                for name, parameter in self.model_instance.named_parameters()
                 if name not in embedding_param_names
             ]
         else:
-            total_parameters = list(self.model.model_instance.parameters())
+            total_parameters = list(self.model_instance.parameters())
 
         total_numel = []
         is_loaded_in_4bit = self.is_quantized and "4" in self.quantization_mode  # type: ignore
@@ -718,6 +717,6 @@ class Estimator:
         self.configure_optimization_args(learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs)
         _optimizer = self.configure_optimizer()
         _scheduler = self.configure_scheduler(_optimizer)
-        model, _optimizer = self.fabric.setup(self.model.model_instance, _optimizer)  # type: ignore
+        model, _optimizer = self.fabric.setup(self.model_instance, _optimizer)  # type: ignore
 
         return model, _optimizer, _scheduler, _train_loader, _validation_loader  # type: ignore
