@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import bitsandbytes as bnb
-import numpy as np
 import torch
 from lightning.fabric import Fabric
 from lightning.fabric.accelerators.accelerator import Accelerator
@@ -29,7 +28,7 @@ from energizer.utilities import Args, move_to_cpu, set_deterministic
 
 @dataclass
 class SchedulerArgs(Args):
-    name: str | None = None
+    name: str
     num_warmup_steps: int | None = None
     num_training_steps: int | None = None
     init_kwargs: dict = field(default_factory=dict)
@@ -37,18 +36,25 @@ class SchedulerArgs(Args):
 
 @dataclass
 class OptimizationArgs(Args):
-    name: str | None = None
-    lr: float | None = None
-    weight_decay: float | None = None
-    no_decay: list[str] | None = None
     set_to_none: bool = False
     clip_val: float | int | None = None
     max_norm: float | int | None = None
     norm_type: float | int = 2.0
     init_kwargs: dict = field(default_factory=dict)
-    scheduler_kwargs: SchedulerArgs = field(default_factory=lambda: SchedulerArgs())
     backward_create_graph: bool = False
     backward_retain_graph: bool | None = None
+
+
+@dataclass
+class OptimizerArgs(OptimizationArgs):
+    name: str | None = None
+    lr: float | None = None
+    weight_decay: float | None = None
+    no_decay: list[str] | None = None
+
+
+DEFAULT_OPTIM = OptimizerArgs(name="adamw", lr=1e-4)
+DEFAULT_SCHED = SchedulerArgs(name="constant_schedule")
 
 
 class Estimator:
@@ -181,11 +187,8 @@ class Estimator:
         min_steps: int | None = None,
         validation_freq: str | None = "1:epoch",
         gradient_accumulation_steps: int | None = None,
-        learning_rate: float | None = None,
-        optimizer: str | None = None,
-        optimizer_kwargs: dict | OptimizationArgs | None = None,
-        scheduler: str | None = None,
-        scheduler_kwargs: dict | SchedulerArgs | None = None,
+        optimizer_kwargs: OptimizerArgs | dict | None = DEFAULT_OPTIM,
+        scheduler_kwargs: SchedulerArgs | dict | None = DEFAULT_SCHED,
         log_interval: int = 1,
         enable_progress_bar: bool = True,
         limit_train_batches: int | None = None,
@@ -199,7 +202,11 @@ class Estimator:
         """
         # self.fabric.launch()  # NOTE: do not support distributed yet
 
-        # start progress tracking
+        # setup dataloaders
+        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
+        _validation_loader = self.configure_dataloader(validation_loader)
+
+        # setup tracking
         self.tracker.setup(
             stage=RunningStage.TRAIN,
             num_train_batches=len(train_loader or []),
@@ -216,18 +223,24 @@ class Estimator:
             limit_validation_batches=limit_validation_batches,
         )
 
-        _train_loader: _FabricDataLoader = self.configure_dataloader(train_loader)  # type: ignore
-        _validation_loader = self.configure_dataloader(validation_loader)
-
-        _opt_args = self.configure_optimization_args(
-            learning_rate, optimizer, optimizer_kwargs, scheduler, scheduler_kwargs
+        # setup optimization arguments
+        _optim_kwargs = (
+            optimizer_kwargs
+            if isinstance(optimizer_kwargs, OptimizerArgs | None)
+            else OptimizerArgs(**optimizer_kwargs)
         )
-        _optimizer = self.configure_optimizer(_opt_args)
-        _scheduler = self.configure_scheduler(_optimizer, _opt_args)
+        _sched_kwargs = (
+            scheduler_kwargs
+            if isinstance(scheduler_kwargs, SchedulerArgs | None)
+            else SchedulerArgs(**scheduler_kwargs)
+        )
 
-        _model, _optimizer = self.fabric.setup(self.model_instance, _optimizer)  # type: ignore
+        # setup optimization
+        _optim = self.configure_optimizer(_optim_kwargs)
+        _scheduler = self.configure_scheduler(_optim, _sched_kwargs)
+        _model, _optim = self.fabric.setup(self.model_instance, _optim)  # type: ignore
 
-        return self.run_fit(_model, _optimizer, _scheduler, _opt_args, _train_loader, _validation_loader)
+        return self.run_fit(_model, _optim, _scheduler, _optim_kwargs, _train_loader, _validation_loader)
 
     def test(
         self,
@@ -263,17 +276,19 @@ class Estimator:
         model: _FabricModule,
         optimizer: _FabricOptimizer,
         scheduler: _LRScheduler | None,
-        opt_args: OptimizationArgs,
+        optimization_args: OptimizationArgs | None,
         train_loader: _FabricDataLoader,
         validation_loader: _FabricDataLoader | None,
     ) -> list[FIT_OUTPUT]:
+        _optim_kwargs = OptimizationArgs() if optimization_args is None else optimization_args
+
         self.tracker.start_fit()
 
         self.callback("on_fit_start", model=model)
 
         output = []
         while not self.tracker.is_fit_done:
-            out = self.run_epoch(model, optimizer, scheduler, opt_args, train_loader, validation_loader)
+            out = self.run_epoch(model, optimizer, scheduler, _optim_kwargs, train_loader, validation_loader)
             output.append(out)
 
             self.tracker.increment_epoch_idx()
@@ -289,7 +304,7 @@ class Estimator:
         model: _FabricModule,
         optimizer: _FabricOptimizer,
         scheduler: _LRScheduler | None,
-        opt_args: OptimizationArgs,
+        optimization_args: OptimizationArgs,
         train_loader: _FabricDataLoader,
         validation_loader: _FabricDataLoader | None,
     ) -> FIT_OUTPUT:
@@ -318,7 +333,9 @@ class Estimator:
             self.callback("on_train_batch_start", model=model, optimizer=optimizer, batch=batch, batch_idx=batch_idx)
 
             # run model on batch
-            batch_out = self.run_training_step(model, optimizer, scheduler, opt_args, batch, batch_idx, metrics)
+            batch_out = self.run_training_step(
+                model, optimizer, scheduler, optimization_args, batch, batch_idx, metrics
+            )
 
             # here globa_step == batch_idx + 1
             self.callback("on_train_batch_end", model=model, output=batch_out, batch=batch, batch_idx=batch_idx)
@@ -358,7 +375,7 @@ class Estimator:
         model: _FabricModule,
         optimizer: _FabricOptimizer,
         scheduler: _LRScheduler | None,
-        opt_args: OptimizationArgs,
+        optimization_args: OptimizationArgs,
         batch: Any,
         batch_idx: int,
         metrics: METRIC | None,
@@ -373,19 +390,19 @@ class Estimator:
             # compute gradients  (instead of loss.backward())
             self.fabric.backward(
                 loss / self.tracker.gradient_accumulation_steps,
-                create_graph=opt_args.backward_create_graph,
-                retain_graph=opt_args.backward_retain_graph,
+                create_graph=optimization_args.backward_create_graph,
+                retain_graph=optimization_args.backward_retain_graph,
             )
 
         if not self.tracker.is_accumulating:
             # clip gradients
-            if opt_args.clip_val or opt_args.max_norm:
+            if optimization_args.clip_val or optimization_args.max_norm:
                 self.fabric.clip_gradients(
                     model,
                     optimizer,
-                    clip_val=opt_args.clip_val,
-                    max_norm=opt_args.max_norm,
-                    norm_type=opt_args.norm_type,
+                    clip_val=optimization_args.clip_val,
+                    max_norm=optimization_args.max_norm,
+                    norm_type=optimization_args.norm_type,
                 )
 
             # update parameters
@@ -394,7 +411,7 @@ class Estimator:
             self.callback("on_after_optimizer", model=model, optimizer=optimizer)
 
             # reset the gradients
-            optimizer.zero_grad(set_to_none=opt_args.set_to_none)  # type: ignore
+            optimizer.zero_grad(set_to_none=optimization_args.set_to_none)  # type: ignore
 
             # update scheduler
             if scheduler is not None:
@@ -508,64 +525,30 @@ class Estimator:
             with self.fabric.init_module():
                 self.model.configure_model()
 
-    def configure_optimization_args(
-        self,
-        learning_rate: float | None = None,
-        optimizer: str | None = None,
-        optimizer_kwargs: dict | OptimizationArgs | None = None,
-        scheduler: str | None = None,
-        scheduler_kwargs: dict | SchedulerArgs | None = None,
-    ) -> OptimizationArgs:
-        # parse optimizer args
-        opt_args = optimizer_kwargs or {}  # if None
-        opt_args = opt_args.to_dict() if isinstance(opt_args, OptimizationArgs) else opt_args
-
-        assert (
-            optimizer is not None or opt_args.get("name") is not None
-        ), "optimizer or optimizer_kwargs['name'] must be set."
-        opt_args["name"] = optimizer or opt_args.get("name")
-
-        assert (
-            learning_rate is not None or opt_args.get("lr") is not None
-        ), "learning_rate or optimizer_kwargs['lr'] must be set."
-        opt_args["lr"] = learning_rate or opt_args.get("lr")
-
-        # parse scheduler args
-        sch_kwargs = scheduler_kwargs or {}  # if None
-        sch_kwargs = sch_kwargs.to_dict() if isinstance(sch_kwargs, SchedulerArgs) else sch_kwargs
-
-        # defaults to constant schedule
-        sch_kwargs["name"] = scheduler or sch_kwargs.get("name")
-
-        num_train_steps = self.tracker.step_counter.max
-        num_warmup_steps = sch_kwargs.get("num_warmup_steps")
-        if num_warmup_steps is not None and num_train_steps is not None:
-            num_warmup_steps = (
-                num_warmup_steps if num_warmup_steps >= 1.0 else int(np.ceil(num_warmup_steps * num_train_steps))
+    def configure_optimizer(self, optimizer_kwargs: OptimizerArgs | None) -> Optimizer:
+        if optimizer_kwargs is None:
+            raise ValueError(
+                "When you do not pass `optimizer_kwargs` you need to define your own `configure_optimizer` method."
             )
-        sch_kwargs["num_training_steps"] = num_train_steps
-        sch_kwargs["num_warmup_steps"] = num_warmup_steps
 
-        opt_args = {"scheduler_kwargs": SchedulerArgs(**sch_kwargs), **opt_args}
-        return OptimizationArgs(**opt_args)
-
-    def configure_optimizer(self, opt_args: OptimizationArgs) -> Optimizer:
         # weight decay
-        if opt_args.no_decay is not None and (opt_args.weight_decay is not None and opt_args.weight_decay > 0.0):
+        if optimizer_kwargs.no_decay is not None and (
+            optimizer_kwargs.weight_decay is not None and optimizer_kwargs.weight_decay > 0.0
+        ):
             params = [
                 {
                     "params": [
                         p
                         for n, p in self.model_instance.named_parameters()
-                        if not any(nd in n for nd in opt_args.no_decay) and p.requires_grad
+                        if not any(nd in n for nd in optimizer_kwargs.no_decay) and p.requires_grad
                     ],
-                    "weight_decay": opt_args.weight_decay,
+                    "weight_decay": optimizer_kwargs.weight_decay,
                 },
                 {
                     "params": [
                         p
                         for n, p in self.model_instance.named_parameters()
-                        if any(nd in n for nd in opt_args.no_decay) and p.requires_grad
+                        if any(nd in n for nd in optimizer_kwargs.no_decay) and p.requires_grad
                     ],
                     "weight_decay": 0.0,
                 },
@@ -573,23 +556,22 @@ class Estimator:
         else:
             params = filter(lambda p: p.requires_grad, self.model_instance.parameters())
 
-        return OPTIMIZER_REGISTRY[opt_args.name](params, lr=opt_args.lr, **opt_args.init_kwargs)  # type:ignore
+        return OPTIMIZER_REGISTRY[optimizer_kwargs.name](params, lr=optimizer_kwargs.lr, **optimizer_kwargs.init_kwargs)  # type:ignore
 
-    def configure_scheduler(self, optimizer: Optimizer, opt_args: OptimizationArgs) -> _LRScheduler | None:
-        sch_kw = opt_args.scheduler_kwargs
-        if sch_kw.name is None:
+    def configure_scheduler(self, optimizer: Optimizer, scheduler_kwargs: SchedulerArgs | None) -> _LRScheduler | None:
+        if scheduler_kwargs is None:
             return
 
-        sch_fn = SCHEDULER_REGISTRY[sch_kw.name]
+        sch_fn = SCHEDULER_REGISTRY[scheduler_kwargs.name]
         scheduler_fn_args = inspect.getfullargspec(sch_fn).args
 
-        kwargs = {**sch_kw.init_kwargs}
+        kwargs = {**scheduler_kwargs.init_kwargs}
         if "num_training_steps" in scheduler_fn_args:
-            kwargs["num_training_steps"] = sch_kw.num_training_steps
+            kwargs["num_training_steps"] = scheduler_kwargs.num_training_steps
         if "num_warmup_steps" in scheduler_fn_args:
-            kwargs["num_warmup_steps"] = sch_kw.num_warmup_steps
+            kwargs["num_warmup_steps"] = scheduler_kwargs.num_warmup_steps
 
-        return sch_fn(optimizer, **kwargs, **sch_kw.init_kwargs)
+        return sch_fn(optimizer, **kwargs, **scheduler_kwargs.init_kwargs)
 
     def configure_dataloader(self, loader: DataLoader | None) -> _FabricDataLoader | None:
         if loader is not None:
