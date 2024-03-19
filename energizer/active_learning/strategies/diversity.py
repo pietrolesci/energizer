@@ -9,12 +9,12 @@ from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDatastore
 from energizer.active_learning.registries import CLUSTERING_FUNCTIONS
-from energizer.active_learning.strategies.base import ActiveEstimator, PoolBasedMixin
+from energizer.active_learning.strategies.base import ActiveLearningStrategy, PoolBasedMixin
 from energizer.enums import OutputKeys, SpecialKeys
 from energizer.types import METRIC
 
 
-class DiversityBasedStrategy(ABC, ActiveEstimator):
+class DiversityBasedStrategy(ABC, ActiveLearningStrategy):
     """This does not run on pool.
 
     Here for now, but usually even diversity-based require running on the pool.

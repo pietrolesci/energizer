@@ -8,11 +8,11 @@ from numpy.random import RandomState
 from sklearn.utils import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDatastore, ActiveDatastoreWithIndex
-from energizer.active_learning.strategies.base import ActiveEstimator
+from energizer.active_learning.strategies.base import ActiveLearningStrategy
 from energizer.enums import SpecialKeys
 
 
-class BaseSubsetStrategy(ABC, ActiveEstimator):
+class BaseSubsetStrategy(ABC, ActiveLearningStrategy):
     """These strategies are applied in conjunction with a base query strategy. If the size of the pool
     falls below the given `k`, this implementation will not select a subset anymore and will just delegate
     to the base strategy instead.
@@ -20,9 +20,9 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
 
     rng: RandomState
     _subpool_size: int
-    _base_strategy: ActiveEstimator
+    _base_strategy: ActiveLearningStrategy
 
-    def __init__(self, base_strategy: ActiveEstimator, subpool_size: int, seed: int = 42) -> None:
+    def __init__(self, base_strategy: ActiveLearningStrategy, subpool_size: int, seed: int = 42) -> None:
         """Strategy that runs uncertainty sampling on a random subset of the pool.
 
         Args:
@@ -39,7 +39,7 @@ class BaseSubsetStrategy(ABC, ActiveEstimator):
         return self._subpool_size
 
     @property
-    def base_strategy(self) -> ActiveEstimator:
+    def base_strategy(self) -> ActiveLearningStrategy:
         return self._base_strategy
 
     def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:

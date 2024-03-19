@@ -7,31 +7,31 @@ import torch
 from lightning.fabric.wrappers import _FabricDataLoader, _FabricModule, _FabricOptimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
-from energizer.active_learning.datastores.base import ActiveDatastore
-from energizer.active_learning.trackers import ActiveProgressTracker
+from energizer.coresets.datastores.base import CoresetDatastore
+from energizer.coresets.trackers import CoresetProgressTracker
 from energizer.enums import InputKeys, OutputKeys, RunningStage, SpecialKeys
 from energizer.estimator import Estimator, OptimizationArgs, SchedulerArgs
 from energizer.types import BATCH_OUTPUT, METRIC, ROUND_OUTPUT
 from energizer.utilities import ld_to_dl
 
 
-class ActiveLearningStrategy(Estimator):
-    _tracker: ActiveProgressTracker
+class CoresetEstimator(Estimator):
+    _tracker: CoresetProgressTracker
 
     def init_tracker(self) -> None:
-        self._tracker = ActiveProgressTracker()
+        self._tracker = CoresetProgressTracker()
 
     @property
-    def tracker(self) -> ActiveProgressTracker:
+    def tracker(self) -> CoresetProgressTracker:
         return self._tracker
 
     """
-    Active learning loop
+    Coreset learning loop
     """
 
-    def active_fit(
+    def select_coreset(
         self,
-        datastore: ActiveDatastore,
+        datastore: CoresetDatastore,
         query_size: int,
         max_rounds: int | None = None,
         max_budget: int | None = None,
@@ -102,7 +102,7 @@ class ActiveLearningStrategy(Estimator):
         )
 
     def run_active_fit(
-        self, datastore: ActiveDatastore, reinit_model: bool, model_cache_dir: str | Path, **kwargs
+        self, datastore: CoresetDatastore, reinit_model: bool, model_cache_dir: str | Path, **kwargs
     ) -> Any:
         if reinit_model:
             self.save_state_dict(model_cache_dir)
@@ -146,7 +146,7 @@ class ActiveLearningStrategy(Estimator):
 
     def run_round(
         self,
-        datastore: ActiveDatastore,
+        datastore: CoresetDatastore,
         query_size: int,
         replay: bool,
         fit_loop_kwargs: dict,
@@ -186,7 +186,7 @@ class ActiveLearningStrategy(Estimator):
         return output
 
     def run_annotation(
-        self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, query_kwargs: dict, label_kwargs: dict
+        self, model: _FabricModule, datastore: CoresetDatastore, query_size: int, query_kwargs: dict, label_kwargs: dict
     ) -> int:
         # === QUERY === #
         self.callback("on_query_start", model=model, datastore=datastore)
@@ -221,17 +221,17 @@ class ActiveLearningStrategy(Estimator):
 
         return n_labelled
 
-    def run_query(self, model: _FabricModule, datastore: ActiveDatastore, query_size: int, **kwargs) -> list[int]:
+    def run_query(self, model: _FabricModule, datastore: CoresetDatastore, query_size: int, **kwargs) -> list[int]:
         raise NotImplementedError
 
-    def active_fit_end(self, datastore: ActiveDatastore, output: list[ROUND_OUTPUT]) -> Any:
+    def active_fit_end(self, datastore: CoresetDatastore, output: list[ROUND_OUTPUT]) -> Any:
         return output
 
-    def round_end(self, datastore: ActiveDatastore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
+    def round_end(self, datastore: CoresetDatastore, output: ROUND_OUTPUT) -> ROUND_OUTPUT:
         return output
 
     def _setup_round(
-        self, datastore: ActiveDatastore, replay: bool, fit_loop_kwargs: dict, fit_opt_kwargs: dict, test_kwargs: dict
+        self, datastore: CoresetDatastore, replay: bool, fit_loop_kwargs: dict, fit_opt_kwargs: dict, test_kwargs: dict
     ) -> tuple[
         _FabricModule,
         _FabricOptimizer,
@@ -299,7 +299,7 @@ class PoolBasedMixin(ABC):
     def pool_epoch_end(self, output: list[dict], metrics: METRIC | None) -> list[dict]:
         return output
 
-    def get_pool_loader(self, datastore: ActiveDatastore, **kwargs) -> _FabricDataLoader | None:
+    def get_pool_loader(self, datastore: CoresetDatastore, **kwargs) -> _FabricDataLoader | None:
         subpool_ids = kwargs.get("subpool_ids", None)
         loader = datastore.pool_loader(with_indices=subpool_ids) if subpool_ids is not None else datastore.pool_loader()
 
@@ -312,7 +312,7 @@ class PoolBasedMixin(ABC):
             )
             return pool_loader
 
-    def get_train_loader(self, datastore: ActiveDatastore, **kwargs) -> _FabricDataLoader | None:
+    def get_train_loader(self, datastore: CoresetDatastore, **kwargs) -> _FabricDataLoader | None:
         # NOTE: hack -- load train dataloader with the evaluation batch size
         assert datastore._loading_params is not None
         batch_size = datastore.loading_params.batch_size

@@ -5,10 +5,10 @@ from numpy.random import RandomState
 from sklearn.utils.validation import check_random_state
 
 from energizer.active_learning.datastores.base import ActiveDatastore
-from energizer.active_learning.strategies.base import ActiveEstimator
+from energizer.active_learning.strategies.base import ActiveLearningStrategy
 
 
-class RandomStrategy(ActiveEstimator):
+class RandomStrategy(ActiveLearningStrategy):
     rng: RandomState
 
     def __init__(self, *args, seed: int = 42, **kwargs) -> None:
