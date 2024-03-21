@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from ast import expr_context
 from pathlib import Path
 
 import torch
@@ -132,9 +133,15 @@ class HFModel(Model):
                 self._model_instance = self.AUTO_MODEL_CLASS.from_pretrained(**self.model_kwargs)
                 self._config = self.AUTO_CONFIG_CLASS.from_pretrained(**self.model_kwargs)
                 if self._load_tokenizer:
-                    self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
-                        self.model_kwargs["pretrained_model_name_or_path"], revision=self.model_kwargs["revision"]
-                    )
+                    try:
+                        self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
+                            self.model_kwargs["pretrained_model_name_or_path"], revision=self.model_kwargs["revision"]
+                        )
+                    except OSError:
+                        # if people only put tokenizer on main
+                        self._tokenizer = self.AUTO_TOKENIZER_CLASS.from_pretrained(
+                            self.model_kwargs["pretrained_model_name_or_path"], revision="main"
+                        )
 
             if self.adapters is not None:
                 for adapter_name, peft_config in self.adapters.items():
