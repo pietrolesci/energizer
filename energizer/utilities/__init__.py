@@ -69,6 +69,10 @@ def ld_to_dl(ld: list[dict]) -> dict[str, list]:
     return {k: [dic[k] for dic in ld] for k in ld[0]}
 
 
+def flatten_list(x: list[list[Any]]) -> list[Any]:
+    return [elem for nested_list in x for elem in nested_list]
+
+
 def dl_to_ld(dl: dict[str, list]) -> list[dict]:
     return [dict(zip(dl, t, strict=False)) for t in zip(*dl.values(), strict=False)]
 
